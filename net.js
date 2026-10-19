@@ -138,7 +138,7 @@
   async function client(code) {
     NET.mode = 'client'; await joinRoomCode(code);
     act.roster.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; roster = d.map((r) => Object.assign(r, { self: r.peer === selfId })); render(); };
-    act.start.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; myPid = d.pid; NET.started = true; NET.open = false; render(); snaps = []; };
+    act.start.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; myPid = d.pid; NET.started = true; NET.open = false; render(); snaps = []; document.getElementById('hint').style.opacity = 0; };
     act.snap.onMessage = async (d) => { NET.dbg.got++; let S; try { S = restore(await unpack(d instanceof Uint8Array ? d : new Uint8Array(d))); } catch (e) { NET.dbg.err = String(e); return; } snaps.push({ at: performance.now(), S }); if (snaps.length > 3) snaps.shift(); };
     act.hello.send({ hero: NET.hero });
     render();
