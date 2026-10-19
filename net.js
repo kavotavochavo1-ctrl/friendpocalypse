@@ -3,14 +3,14 @@
 // Client: sends its input (30 Hz, presses latched so quick taps are never lost) and renders snapshots interpolated by id.
 // Rooms are links: ?room=CODE. Whoever creates the room hosts; up to 8 players; free hero slots can be bots.
 (function () {
-  const APP = 'friendpocalypse-v1', SNAP_HZ = 30, IN_HZ = 20, TRYSTERO = 'https://cdn.jsdelivr.net/npm/trystero@0.26.0/+esm';
+  const APP = 'friendpocalypse-v1', SNAP_HZ = 30, IN_HZ = 30, TRYSTERO = 'https://cdn.jsdelivr.net/npm/trystero@0.26.0/+esm';
   const HEROES = ['hasan', 'danil', 'vitya', 'leha'], NAMES = { hasan: 'Хасан', danil: 'Данил', vitya: 'Витя', leha: 'Лёха' };
   const DESC = { hasan: 'Усы-хлысты, стягивает толпу. Хрупкий.', danil: 'Фотокарточки, метки, баффы. Дальний бой.',
     vitya: 'Ядовитые облака. Бьёт и своих. Не поднимает друзей.', leha: 'Танк. Пистолет → ПП → дробовик → РПГ. Щит.' };
   const q = new URLSearchParams(location.search);
   const NET = (window.NET = { mode: 'off', hero: localStorage.getItem('fp_hero') || q.get('hero') || 'hasan', bots: true, open: true });
   let room = null, act = {}, selfId = null, roster = [], peerToPid = {}, remote = {}, lastSnap = 0, myPid = 0;
-  let snaps = [], hostGone = false, ackOf = {}, pred = null, hist = [], seq = 0, corr = [0, 0], lastPred = 0, camL = null; NET.dbg = { sent: 0, got: 0, bytes: 0, err: '' };
+  let evBuf = [], snaps = [], hostGone = false, ackOf = {}, pred = null, hist = [], seq = 0, corr = [0, 0], lastPred = 0, camL = null; NET.dbg = { sent: 0, got: 0, bytes: 0, err: '' };
 
   // ---------------- compression (deflate-raw via CompressionStream) ----------------
   const pack = async (obj) => new Uint8Array(await new Response(new Blob([JSON.stringify(obj)]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());
@@ -18,15 +18,22 @@
 
   // ---------------- snapshot: what one client needs to draw and hear its part of the park ----------------
   const ET = Object.keys(SIM.ETYPES), r1 = (v) => Math.round(v), r2 = (v) => Math.round(v * 100) / 100;
-  const DROP = ['prev', 'hitSet', 'ups', 'ccd', 'st', 'queue'];
+  const HN = ['hasan', 'danil', 'vitya', 'leha'];
+  const PF = ['id', 'hero', 'bot', 'x', 'y', 'vx', 'vy', 'fx', 'fy', 'ax', 'ay', 'dir', 'dist', 'hp', 'hpMax', 'down', 'downT', 'revP', 'out', 'inv', 'hurtT',
+    'dashT', 'dashCD', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack'];
+  const evSince = {};
   function snapshot(S, pid) {
     const p = S.players.find((o) => o.id === pid) || S.players[0], R = 1500, nearP = (x, y, r = R) => Math.abs(x - p.x) < r * 1.4 && Math.abs(y - p.y) < r;
-    const players = S.players.map((o) => { const c = {}; for (const k in o) if (!DROP.includes(k)) c[k] = o[k]; c.x = r1(c.x); c.y = r1(c.y); c.cam = c.cam.map(r1); c.ack = ackOf[o.id] || 0; return c; });
+    // players as flat number rows (only what drawing, HUD, audio and prediction read); own row also carries cam + upgrade pick
+    const players = S.players.map((o) => { const row = PF.map((k) => { const v = o[k]; return typeof v === 'number' ? (Number.isInteger(v) ? v : r2(v)) : v; });
+      row[PF.indexOf('hero')] = HN.indexOf(o.hero); row[PF.indexOf('ack')] = ackOf[o.id] || 0;
+      return [row, [r2(o.m.area), r2(o.m.cd), r2(o.m.shield), r2(o.m.spd)], o.tokens, o.id === pid ? o.pick : 0, o.id === pid ? o.cam.map(r1) : 0]; });
     const E = []; for (const e of S.enemies) if (nearP(e.x, e.y)) E.push(e.id, ET.indexOf(e.type), r1(e.x), r1(e.y), r1(e.vx), r1(e.vy), r1(e.hp), r1(e.hpMax), r1(e.dist), r2(e.spawnT), r2(e.hitT), r2(e.biteT || -9), e.face);
     const G = []; for (const g of S.gems) if (nearP(g.x, g.y, 1200)) G.push(g.id, r1(g.x), r1(g.y), g.v);
     const B = S.proj.filter((b) => nearP(b.x, b.y)).map((b) => [b.id, b.kind, r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), b.c || 0, b.tox || 0]);
     const EB = S.eproj.filter((b) => nearP(b.x, b.y)).map((b) => [r1(b.x), r1(b.y), r2(b.ttl)]);
-    const ev = S.ev.filter((e) => e.x === undefined || nearP(e.x, e.y, 2000) || e.k === 'say');
+    const since = evSince[pid] ?? -1;                                       // only events this friend has not been sent yet
+    const ev = S.ev.filter((e) => e.t > since && (e.x === undefined || nearP(e.x, e.y, 2000) || e.k === 'say'));
     const enemyDots = S.enemies.length > 0 ? S.enemies.filter((e, i) => i % 3 === 0).map((e) => [r1(e.x / 8), r1(e.y / 8)]) : [];
     return { t: S.t, wave: S.wave, waveT: r2(S.waveT), brk: r2(S.brk), xp: S.xp, lvl: S.lvl, xpNext: S.xpNext, kills: S.kills, over: S.over, won: S.won,
       awards: S.awards, comboT: S.comboT, solo: S.solo, players, E, G, B, EB, clouds: S.clouds, marks: S.marks, ev, dots: enemyDots };
@@ -37,7 +44,10 @@
     const gems = []; for (let i = 0; i < n.G.length; i += 4) gems.push({ id: n.G[i], x: n.G[i + 1], y: n.G[i + 2], v: n.G[i + 3] });
     const proj = n.B.map((b) => ({ id: b[0], kind: b[1], x: b[2], y: b[3], vx: b[4], vy: b[5], c: b[6], tox: b[7] }));
     const eproj = n.EB.map((b) => ({ x: b[0], y: b[1], ttl: b[2] }));
-    return Object.assign({}, n, { enemies, gems, proj, eproj, dots: n.dots });
+    const players = n.players.map(([row, m, tokens, pick, cam]) => { const o = {}; PF.forEach((k, i) => (o[k] = row[i])); o.hero = HN[o.hero];
+      o.m = { area: m[0], cd: m[1], shield: m[2], spd: m[3] }; o.tokens = tokens || []; o.pick = pick || null; o.cam = cam || [o.x - 960, o.y - 600]; return o; });
+    for (const e of n.ev) evBuf.push(e); while (evBuf.length && evBuf[0].t < n.t - 3) evBuf.shift(); if (evBuf.length > 200) evBuf.splice(0, evBuf.length - 200);
+    return Object.assign({}, n, { players, enemies, gems, proj, eproj, dots: n.dots, ev: evBuf.slice() });
   }
   // interpolate between the two latest snapshots (one interval behind, so motion is smooth at 15 Hz)
   function view() {
@@ -126,7 +136,7 @@
     roster = [{ peer: selfId, hero: NET.hero, host: 1, self: 1 }];
     act.hello.onMessage = (d, { peerId }) => { let r = roster.find((x) => x.peer === peerId); if (!r) { if (roster.length >= 8) return; roster.push((r = { peer: peerId, hero: d.hero })); } r.hero = d.hero; sendRoster(); render();
       if (window.GAME.state() && NET.started) lateJoin(peerId, r); };
-    act.input.onMessage = (d, { peerId }) => { const pid = peerToPid[peerId]; if (pid === undefined) return; const prev = remote[pid] || {}; remote[pid] = Object.assign(d, { slot: d.slot || prev.slot || 0 }); };
+    act.input.onMessage = (d, { peerId }) => { const pid = peerToPid[peerId]; if (pid === undefined) return; const prev = remote[pid] || {}; if (d.ss) ackSnap[pid] = Math.max(ackSnap[pid] || 0, d.ss); remote[pid] = Object.assign(d, { slot: d.slot || prev.slot || 0 }); };
     render();
   }
   function hostStart() {
@@ -147,18 +157,24 @@
     NET.mode = 'client'; await joinRoomCode(code);
     act.roster.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; roster = d.map((r) => Object.assign(r, { self: r.peer === selfId })); render(); };
     act.start.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; myPid = d.pid; NET.started = true; NET.open = false; render(); snaps = []; document.getElementById('hint').style.opacity = 0; };
-    act.snap.onMessage = async (d) => { NET.dbg.got++; NET.dbg.bytes = d.byteLength || d.length || 0; let S; try { S = restore(await unpack(d instanceof Uint8Array ? d : new Uint8Array(d))); } catch (e) { NET.dbg.err = String(e); return; } snaps.push({ at: performance.now(), S }); if (snaps.length > 3) snaps.shift(); reconcile(S); };
+    act.snap.onMessage = async (d) => { NET.dbg.got++; NET.dbg.bytes = d.byteLength || d.length || 0; let S; try { S = restore(await unpack(d instanceof Uint8Array ? d : new Uint8Array(d))); } catch (e) { NET.dbg.err = String(e); return; } lastSq = Math.max(lastSq, S.sq || 0); snaps.push({ at: performance.now(), S }); if (snaps.length > 3) snaps.shift(); reconcile(S); };
     act.hello.send({ hero: NET.hero });
     render();
   }
 
   // ---------------- per-frame hooks used by index.html ----------------
   NET.inputs = (local) => { const out = { 0: local }; for (const pid in remote) { out[pid] = Object.assign({}, remote[pid]); ackOf[pid] = remote[pid].seq || 0; remote[pid].slot = 0; } return out; };
+  const inflight = {}, snapSq = {}, ackSnap = {};
   NET.hostTick = async (S) => { const now = performance.now(); if (now - lastSnap < 1000 / SNAP_HZ) return; lastSnap = now;
-    for (const peer in peerToPid) { if (peer === selfId) continue; try { const u8 = await pack(snapshot(S, peerToPid[peer])); NET.dbg.bytes = u8.length; act.snap.send(u8, { target: peer }); NET.dbg.sent++; } catch (e) { NET.dbg.err = String(e); } } };
+    for (const peer in peerToPid) { if (peer === selfId) continue; const pid = peerToPid[peer];
+      // backpressure: at most ~5 snapshots (~170 ms) on the wire per friend (acked through his input messages) — drop, never queue
+      if (inflight[peer] || (snapSq[peer] || 0) - (ackSnap[pid] || 0) > 5) { NET.dbg.skipped = (NET.dbg.skipped || 0) + 1; continue; }
+      inflight[peer] = 1;
+      try { const snap = snapshot(S, pid); snap.sq = snapSq[peer] = (snapSq[peer] || 0) + 1; evSince[pid] = S.t; const u8 = await pack(snap); NET.dbg.bytes = u8.length; NET.dbg.sent++;
+        Promise.resolve(act.snap.send(u8, { target: peer })).catch(() => {}).finally(() => (inflight[peer] = 0)); } catch (e) { NET.dbg.err = String(e); inflight[peer] = 0; } } };
   let lastIn = 0, latch = {};
   // ---- client: numbered input + local prediction of the own hero (moves at once; the host's answer reconciles it) ----
-  let lastSent = '';
+  let lastSent = '', lastSq = 0;
   NET.clientInput = (inp) => { for (const k of ['dash', 'jump', 'q', 'r', 'e']) if (inp[k]) latch[k] = 1; if (inp.slot) latch.slot = inp.slot;
     predict(inp);
     if (!act.input) return;
@@ -166,7 +182,7 @@
     for (const k of ['dash', 'jump', 'q', 'r', 'e']) d[k] = inp[k] || latch[k] ? 1 : 0; d.slot = latch.slot || 0;
     const key = JSON.stringify(d), now = performance.now();
     if (key === lastSent && now - lastIn < 1000 / IN_HZ) return;                     // unchanged: heartbeat only
-    lastIn = now; lastSent = key; latch = {}; d.seq = ++seq; act.input.send(d);
+    lastIn = now; lastSent = key; latch = {}; d.seq = ++seq; d.ss = lastSq; act.input.send(d);
     if (pred) { hist.push({ seq, x: pred.x, y: pred.y }); if (hist.length > 120) hist.shift(); } };
   const meSnap = () => { const b = snaps[snaps.length - 1]; return b && b.S.players.find((o) => o.id === myPid); };
   function predict(inp) {
