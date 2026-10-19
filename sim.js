@@ -508,7 +508,7 @@
     if (S.ev.length > 96) S.ev.splice(0, S.ev.length - 96);
     return S;
   }
-  const xpNeed = (S, l) => Math.round((4 + 3.5 * l + 0.22 * l * l) * (0.7 + 0.3 * S.players.length));
+  const xpNeed = (S, l) => Math.round((4 + 3.5 * l + 0.22 * l * l) * (0.1 + 0.35 * S.players.length));   // solo ~lvl 18, four players ~lvl 24 by the end
   function applyPick(S, p, id, t) {
     if (id === 'evo') p.evo = 1; else if (id === 'heal') p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.4);
     else { p.items[id] = lv(p, id) + 1; if (id === 'hp') p.hp += 20; }
