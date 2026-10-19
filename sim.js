@@ -15,10 +15,10 @@
 
   // ---------------- heroes ----------------
   const HEROES = {
-    hasan: { name: 'ХАСАН', hp: 85, spd: 275, col: [0.85, 0.55, 0.25], pick: 1.2 },
-    danil: { name: 'ДАНИЛ', hp: 100, spd: 262, col: [1.0, 0.35, 0.75], pick: 1.0 },
-    vitya: { name: 'ВИТЯ', hp: 100, spd: 266, col: [0.55, 0.95, 0.25], pick: 1.0 },
-    leha: { name: 'ЛЁХА', hp: 140, spd: 232, col: [0.6, 0.7, 0.35], pick: 1.0 },
+    hasan: { name: 'ХАСАН', hp: 85, spd: 252, col: [0.85, 0.55, 0.25], pick: 1.2 },
+    danil: { name: 'ДАНИЛ', hp: 100, spd: 242, col: [1.0, 0.35, 0.75], pick: 1.0 },
+    vitya: { name: 'ВИТЯ', hp: 100, spd: 245, col: [0.55, 0.95, 0.25], pick: 1.0 },
+    leha: { name: 'ЛЁХА', hp: 140, spd: 215, col: [0.6, 0.7, 0.35], pick: 1.0 },
   };
   const ORDER = ['hasan', 'danil', 'vitya', 'leha'];
   const QCD = { hasan: 16, danil: 20, vitya: 18, leha: 22 };
@@ -26,38 +26,60 @@
 
   // ---------------- enemies ----------------
   const ETYPES = {
-    ghoul: { hp: 22, spd: 112, r: 22, dmg: 9, xp: 1, sc: 1.0, from: 1 },
-    sprinter: { hp: 12, spd: 205, r: 18, dmg: 6, xp: 1, sc: 0.8, from: 2 },
-    brute: { hp: 130, spd: 72, r: 38, dmg: 18, xp: 5, sc: 1.65, from: 3 },
-    spitter: { hp: 28, spd: 90, r: 22, dmg: 8, xp: 2, sc: 1.05, from: 4, ranged: 1 },
-    bomber: { hp: 18, spd: 150, r: 22, dmg: 26, xp: 2, sc: 1.0, from: 5, bomb: 1 },
+    ghoul: { hp: 22, spd: 112, r: 22, dmg: 9, xp: 1, sc: 1.0, from: 1, w: 1 },
+    sprinter: { hp: 12, spd: 205, r: 18, dmg: 6, xp: 1, sc: 0.8, from: 2, w: 0.35 },
+    brute: { hp: 130, spd: 72, r: 38, dmg: 16, xp: 5, sc: 1.65, from: 3, w: 0.1 },
+    spitter: { hp: 28, spd: 90, r: 22, dmg: 7, xp: 2, sc: 1.05, from: 4, ranged: 1, w: 0.14 },
+    bomber: { hp: 18, spd: 150, r: 22, dmg: 18, xp: 2, sc: 1.0, from: 5, bomb: 1, w: 0.12 },
   };
   const WAVE_LEN = 60, BREAK = 9, WAVES = 10;
   const COOP = [1, 1, 1.65, 2.2, 2.7, 3.15, 3.55, 3.95, 4.3], COOP_HP = [1, 1, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35];
 
-  // ---------------- upgrades (3 cards per team level) ----------------
-  const UPG = {
-    dmg: { n: 'Злость', d: '+18% урона', f: (p) => (p.m.dmg *= 1.18) },
-    as: { n: 'Кофеин', d: '+14% скорости атаки', f: (p) => (p.m.as *= 1.14) },
-    area: { n: 'Размах', d: '+15% радиуса атак', f: (p) => (p.m.area *= 1.15) },
-    hp: { n: 'Шаурма', d: '+25 к макс. HP и лечение', f: (p) => { p.hpMax += 25; p.hp = Math.min(p.hpMax, p.hp + 40); } },
-    spd: { n: 'Кроссовки', d: '+9% скорости бега', f: (p) => (p.m.spd *= 1.09) },
-    pick: { n: 'Магнит', d: '+35% радиус сбора', f: (p) => (p.m.pick *= 1.35) },
-    armor: { n: 'Толстокожий', d: '-12% входящего урона', f: (p) => (p.m.armor *= 0.88) },
-    regen: { n: 'Энергетик', d: 'Реген 1.2 HP/с', f: (p) => (p.m.regen += 1.2) },
-    crit: { n: 'Везунчик', d: '+12% шанс крита (×2)', f: (p) => (p.m.crit += 0.12) },
-    cd: { n: 'Без перерыва', d: '-15% перезарядка Q', f: (p) => (p.m.cd *= 0.85) },
-    h_octo: { n: 'Осьминог', d: 'Хасан: +1 ус на удар', hero: 'hasan', f: (p) => (p.m.extra += 1) },
-    h_oil: { n: 'Масло для усов', d: 'Хасан: стягивание каждым 2-м ударом', hero: 'hasan', f: (p) => (p.m.pullN = 2) },
-    d_foil: { n: 'Фольга', d: 'Данил: +1 карточка за бросок', hero: 'danil', f: (p) => (p.m.extra += 1) },
-    d_rico: { n: 'Рикошет', d: 'Данил: +1 отскок карты', hero: 'danil', f: (p) => (p.m.rico += 1) },
-    v_chem: { n: 'Химик', d: 'Витя: облака дольше и злее', hero: 'vitya', f: (p) => { p.m.ttl *= 1.25; p.m.dmg *= 1.1; } },
-    v_deo: { n: 'Дезодорант', d: 'Витя: друзьям почти не больно', hero: 'vitya', f: (p) => (p.m.deo *= 0.35) },
-    v_beans: { n: 'Гороховый суп', d: 'Витя: пукает чаще', hero: 'vitya', f: (p) => (p.m.as *= 1.3) },
-    l_gun: { n: 'Оружейная лицензия', d: 'Лёха: следующее оружие', hero: 'leha', max: 3, f: (p) => (p.tier = Math.min(3, p.tier + 1)) },
-    l_plate: { n: 'Бронеплита', d: 'Лёха: щит дольше, -урон', hero: 'leha', f: (p) => { p.m.shield += 1.5; p.m.armor *= 0.9; } },
+  // ---------------- progression (Vampire Survivors / HoloCure style) ----------------
+  // Every item has 5 levels. Slots: the hero's own weapon + up to 2 shared weapons + up to 4 passives.
+  // Signature weapon at level 5 + its partner passive (level 2+) unlocks an EVOLUTION card.
+  const SIG = {
+    hasan: { n: 'Усы-хлысты', lv: ['Два уса хлещут ближайших', '+25% урона', '+1 ус за удар', '+25% радиус', 'Стягивание каждым 2-м ударом'], evo: 'pick', evoN: 'Усатый вихрь', evoD: 'Усы крутятся вокруг постоянно и стягивают толпу' },
+    danil: { n: 'Фотокарточки', lv: ['Карты с рикошетом', '+1 карта за бросок', '+1 рикошет', '+30% урона', '+1 карта, карты пробивают'], evo: 'crit', evoN: 'Коллекция ультраредок', evoD: 'Кольцо карт вращается вокруг и бьёт само' },
+    vitya: { n: 'Тихий, но смертельный', lv: ['Облако позади себя', 'Облако +20% больше', 'Пукает на 20% чаще', '+30% урона, яд замедляет', 'Два облака за раз'], evo: 'hp', evoN: 'Газовый циклон', evoD: 'Ходячий ядовитый смерч следует за Витей' },
+    leha: { n: 'Оружейная лицензия', lv: ['Пистолет', 'ПП: очередь', 'Дробовик: веер дроби', '+30% урона', 'РПГ: ракеты со взрывом'], evo: 'armor', evoN: 'Карманный апокалипсис', evoD: 'РПГ стреляет залпом из 3 ракет' },
   };
-  const UPG_IDS = Object.keys(UPG);
+  const WEAPONS = {
+    tapok: { n: 'Тапок', lv: ['Бумеранг-тапок летит и возвращается', '+1 тапок', '+30% урона', '+1 тапок', 'Летит быстрее, бьёт сильнее'] },
+    can: { n: 'Энергетик', lv: ['Банка-граната в толпу', 'Взрыв +25% больше', '+1 банка', '+30% урона', '+1 банка'] },
+    speaker: { n: 'Колонка', lv: ['Бас бьёт волной вокруг', '+15% радиус', '+30% урона', 'Бас на 20% чаще', 'Волна замедляет врагов'] },
+  };
+  const PASSIVES = {
+    dmg: { n: 'Злость', d: '+8% урона' }, as: { n: 'Кофеин', d: '+7% скорости атаки' }, area: { n: 'Размах', d: '+8% радиус атак' },
+    hp: { n: 'Шаурма', d: '+15 к макс. HP, лечит' }, spd: { n: 'Кроссовки', d: '+5% скорости бега' }, pick: { n: 'Магнит', d: '+25% радиус сбора' },
+    armor: { n: 'Толстокожий', d: '-5% входящего урона' }, regen: { n: 'Чай с мёдом', d: '+0.3 HP в секунду' }, crit: { n: 'Везунчик', d: '+4% шанс крита' },
+    cd: { n: 'Без перерыва', d: '-6% перезарядки Q и ульты' },
+    deo: { n: 'Дезодорант', d: 'Витя: на 35% меньше урона друзьям', hero: 'vitya', max: 3 }, plate: { n: 'Бронеплита', d: 'Лёха: щит +1.2 с, -4% урона', hero: 'leha', max: 3 },
+  };
+  const MAXW = 2, MAXP = 4;
+  const lv = (p, id) => (p.items && p.items[id]) || 0;
+  // derived stats from item levels (recomputed on every pick: no drifting multipliers)
+  function recalc(p) {
+    const H = HEROES[p.hero], m = p.m, L = (id) => lv(p, id);
+    Object.assign(m, { dmg: 1 + 0.08 * L('dmg'), as: 1 + 0.07 * L('as'), area: 1 + 0.08 * L('area'), spd: 1 + 0.05 * L('spd'), pick: H.pick * (1 + 0.25 * L('pick')),
+      armor: (1 - 0.05 * L('armor')) * (1 - 0.04 * L('plate')), regen: 0.3 * L('regen'), crit: 0.04 + 0.04 * L('crit'), cd: 1 - 0.06 * L('cd'),
+      deo: Math.pow(0.65, L('deo')), shield: 1.2 * L('plate'), extra: 0, rico: 1, pullN: 3, ttl: 1, sdmg: 1, sarea: 1, srate: 1, pierce: 0, double: 0 });
+    const g = L('sig');
+    if (p.hero === 'hasan') { if (g >= 2) m.sdmg = 1.25; if (g >= 3) m.extra = 1; if (g >= 4) m.sarea = 1.25; if (g >= 5) m.pullN = 2; }
+    if (p.hero === 'danil') { m.extra = (g >= 2 ? 1 : 0) + (g >= 5 ? 1 : 0); m.rico = g >= 3 ? 2 : 1; if (g >= 4) m.sdmg = 1.3; m.pierce = g >= 5 ? 1 : 0; }
+    if (p.hero === 'vitya') { if (g >= 2) m.sarea = 1.2; if (g >= 3) m.srate = 0.8; if (g >= 4) m.sdmg = 1.3; m.double = g >= 5 ? 1 : 0; }
+    if (p.hero === 'leha') { p.tier = [0, 1, 2, 2, 3][Math.max(0, g - 1)]; if (g >= 4) m.sdmg = 1.3; }
+    p.hpMax = H.hp + 15 * L('hp'); p.hp = Math.min(p.hp, p.hpMax);
+  }
+  // what a card offers: { id, kind: 'sig' | 'w' | 'p' | 'evo' | 'heal', n, d, tag }
+  function cardFor(p, id) {
+    if (id === 'evo') { const sg = SIG[p.hero]; return { id, kind: 'evo', n: sg.evoN, d: sg.evoD, tag: 'ЭВОЛЮЦИЯ' }; }
+    if (id === 'heal') return { id, kind: 'heal', n: 'Перекус', d: 'Лечит 40% HP', tag: '' };
+    if (id === 'sig') { const sg = SIG[p.hero], l = lv(p, 'sig'); return { id, kind: 'sig', n: sg.n, d: sg.lv[l], tag: 'Ур. ' + (l + 1) }; }
+    if (WEAPONS[id]) { const w = WEAPONS[id], l = lv(p, id); return { id, kind: 'w', n: w.n, d: w.lv[l], tag: l ? 'Ур. ' + (l + 1) : 'НОВОЕ' }; }
+    const q = PASSIVES[id], l = lv(p, id); return { id, kind: 'p', n: q.n, d: q.d, tag: l ? 'Ур. ' + (l + 1) : 'НОВОЕ' };
+  }
+  const UPG = { WEAPONS, PASSIVES, SIG };
 
   // ---------------- the level, as data ----------------
   // paved areas (drawn + spawn-safe): rects [cx, cy, w, h, rot] and sub-plazas [x, y, rx, ry]
@@ -119,17 +141,19 @@
       hp: H.hp, hpMax: H.hp, down: 0, downT: 0, revP: 0, out: 0, inv: 0, hurtT: -9, dashT: -9, dashCD: 0, qT: -99, qOn: 0, qCD: 0, ult: 0, ultT: -99,
       atkT: 0, atkN: 0, atkSide: 1, lastAtk: -9, tier: 0, tokens: [], set: -1, hitN: 0, hitSet: [], fastT: -9, stillT: 0,
       m: { dmg: 1, as: 1, area: 1, spd: 1, pick: H.pick, armor: 1, regen: 0, crit: 0.04, cd: 1, extra: 0, rico: 1, pullN: 3, ttl: 1, deo: 1, shield: 0 },
-      pick: null, pickT: 0, ups: {}, vcd: 0, gasT: -9, buffT: -9, selfRes: 1,
+      pick: null, pickT: 0, items: { sig: 1 }, evo: 0, ultLock: 0, wcd: {}, vcd: 0, gasT: -9, buffT: -9, selfRes: 1,
       st: { dmg: 0, ally: 0, allyHit: 0, rev: 0, downs: 0, xp: 0, kills: 0, gasIn: 0, combo: 0 },
       prev: {}, cam: [C[0] - VIEW.W / 2, C[1] - VIEW.H / 2], camV: [0, 0] }; };
+  const newPlayer = (id, hero, bot, i) => { const p = mkPlayer(id, hero, bot, i); recalc(p); return p; };
 
   function create(cfg = {}) {
     const heroes = cfg.heroes || ORDER, S = { t: 0, steps: 0, wt0: 0, mode: cfg.mode || 'play', seed: cfg.seed || 1,
       players: [], enemies: [], proj: [], eproj: [], clouds: [], gems: [], marks: [], booms: [], nid: 1,
-      wave: 1, waveT: 0, brk: 0, xp: 0, lvl: 1, xpNext: 12, spawnAcc: 0, over: 0, won: 0, freeze: 0, kills: 0,
+      wave: 1, waveT: 0, brk: 0, xp: 0, lvl: 1, xpNext: 6, eliteT: 20, chests: [], food: [], spawnAcc: 0, over: 0, won: 0, freeze: 0, kills: 0,
       comboT: -9, comboK: {}, sayT: -9, banter: 0, ev: [], awards: null, me: 0, solo: 0 };
-    heroes.forEach((h, i) => S.players.push(mkPlayer(i, h, cfg.humans ? !cfg.humans.includes(i) : 1, i)));
+    heroes.forEach((h, i) => S.players.push(newPlayer(i, h, cfg.humans ? !cfg.humans.includes(i) : 1, i)));
     S.solo = S.players.filter((p) => !p.bot).length <= 1 && S.players.length === 1 ? 1 : 0;
+    S.xpNext = xpNeed(S, 1);
     return S;
   }
   // play mode: the local human is player 0 (hero from cfg), the other heroes are bots unless cfg.heroes says otherwise
@@ -154,7 +178,7 @@
   const SAY_P = { gas: 0.5, q: 0.35, lvl: 0.5, low: 0.7, wave: 0.6, revive: 0.8, ally_down: 0.8, cant_revive: 0.6, gas_reply: 1, banter: 1 };
   const SAY_CD = { gas: 25, low: 30, q: 30, cant_revive: 30 };
   const say = (S, p, cat, force) => {
-    if (!p) return; p.ccd = p.ccd || {};
+    if (!p || p.out || (p.down && cat !== 'down')) return; p.ccd = p.ccd || {};             // knocked-out / downed heroes stay quiet
     if (!force && (S.t < p.vcd || S.t - S.sayT < 5 || S.t < (p.ccd[cat] || 0) || h2(S.steps, p.id + 3) > (SAY_P[cat] ?? 0.8))) return;
     if (force && S.t - S.sayT < 1.5) return;
     p.vcd = S.t + 16 + 10 * h2(S.steps, p.id); p.ccd[cat] = S.t + (SAY_CD[cat] || (cat.startsWith('combo') ? 60 : 12)); S.sayT = S.t; ev(S, { k: 'say', who: p.hero, cat, v: Math.floor(h2(S.steps, p.id + 7) * 4), x: p.x, y: p.y, pid: p.id });
@@ -169,16 +193,18 @@
     if (S.marks.length && S.marks.some((m) => m.id === e.id && S.t < m.until)) dmg *= 1.5;
     let crit = 0; if (p && h2(S.steps + e.id, dmg) < p.m.crit) { dmg *= 2; crit = 1; }
     e.hp -= dmg; e.hitT = S.t; e.kx += kx; e.ky += ky; e.lastHit = p ? p.id : -1; e.lastKind = kind;
-    if (p) { p.st.dmg += dmg; p.ult = Math.min(1, p.ult + dmg / 900);
+    if (p) { p.st.dmg += dmg;
       if (p.hero === 'hasan' && !p.hitSet.includes(e.id)) { p.hitSet.push(e.id); if (p.hitSet.length > 8) p.hitSet.shift(); } }
     if (crit) ev(S, { k: 'crit', x: e.x, y: e.y });
     if (e.hp <= 0) killEnemy(S, e, p, kind);
   };
   const killEnemy = (S, e, p, kind) => {
-    const T = ETYPES[e.type]; S.kills++; if (p) p.st.kills++;
+    const T = ETYPES[e.type]; S.kills++; if (p) { p.st.kills++; if (S.t > p.ultLock) p.ult = Math.min(1, p.ult + 0.0032 * T.xp); }
     ev(S, { k: 'kill', x: e.x, y: e.y, type: e.type, kind, pid: p ? p.id : -1, sc: T.sc });
     S.gems.push({ id: S.nid++, x: e.x, y: e.y - 4, v: T.xp, t0: S.t });
-    if (e.type === 'bomber') explode(S, e.x, e.y, 120, 0, null, 'bomb');
+    if (e.elite || h2(e.id, S.steps) < 0.015) S.food.push({ id: S.nid++, x: e.x + 20, y: e.y + 10, t0: S.t });
+    if (e.type === 'bomber') explode(S, e.x, e.y, 100, 0, null, 'bomb');
+    if (e.elite) { S.chests.push({ id: S.nid++, x: e.x, y: e.y, t0: S.t }); for (let i = 0; i < 6; i++) S.gems.push({ id: S.nid++, x: e.x + 80 * (h2(S.steps, i) - 0.5), y: e.y + 60 * (h2(S.steps, i + 3) - 0.5), v: 3, t0: S.t }); }
     // combos
     if (p && p.hero === 'leha' && S.marks.some((m) => m.id === e.id && S.t < m.until)) combo(S, 'headshot', e.x, e.y, p, 3);
     if (e.pullT && S.t - e.pullT < 1.6 && inGas(S, e.x, e.y)) { const hz = S.players.find((q) => q.id === e.pullBy); combo(S, 'gaswhip', e.x, e.y, hz, 4); }
@@ -187,14 +213,14 @@
     let gas = null; if (kind === 'rocket') { gas = inGas(S, x, y); if (gas) { r *= 1.6; dmg *= 1.5; gas.ttl = S.t - gas.t0 + 0.3; combo(S, 'gasboom', x, y, p, 3); } }
     ev(S, { k: 'boom', x, y, r, kind, gas: gas ? 1 : 0 });
     if (dmg > 0) near(x, y, r, (e) => { const d = dist(e.x, e.y, x, y) || 1; hurtEnemy(S, e, dmg * (1 - 0.4 * d / r), p, kind, (e.x - x) / d * 260, (e.y - y) / d * 260); });
-    if (kind === 'bomb') for (const q of S.players) if (alive(q) && dist(q.x, q.y, x, y) < r) hurtPlayer(S, q, 26, null);
+    if (kind === 'bomb') for (const q of S.players) if (alive(q) && dist(q.x, q.y, x, y) < r) hurtPlayer(S, q, 18 * (1 + 0.06 * (S.wave - 1)), null);
   };
   const hurtPlayer = (S, p, dmg, src, ally) => {
     if (!alive(p) || (!ally && S.t < p.inv)) return;
     let d = dmg * p.m.armor; if (p.hero === 'leha') { if (p.stillT > 2) d *= 0.75; if (S.t - p.qT < 4 + p.m.shield) d *= 0.4; }
     if (ally) { d = Math.min(d, p.hp - 1); if (d <= 0) return; } else p.inv = S.t + 0.45;
-    p.hp -= d; p.hurtT = S.t; ev(S, { k: 'hurt', x: p.x, y: p.y, pid: p.id, ally: ally ? 1 : 0 });
-    if (p.hp <= 0) { p.hp = 0; p.down = 1; p.downT = 30; p.revP = 0; p.st.downs++; ev(S, { k: 'down', x: p.x, y: p.y, pid: p.id });
+    p.hp -= d; p.hurtT = S.t; p.hurtBy = ally ? 'gas' : src ? src.type : 'boom/spit'; ev(S, { k: 'hurt', x: p.x, y: p.y, pid: p.id, ally: ally ? 1 : 0 });
+    if (p.hp <= 0) { p.hp = 0; p.down = 1; p.downT = 30; p.revP = 0; p.st.downs++; ev(S, { k: 'down', x: p.x, y: p.y, pid: p.id, by: p.hurtBy });
       say(S, p, 'down', true); const helper = S.players.find((q) => q !== p && alive(q) && q.hero !== 'vitya'); if (helper) S.allyDownSay = [S.t + 2.2, helper.id]; }
     else if (p.hp < p.hpMax * 0.25 && !ally) say(S, p, 'low');
   };
@@ -208,13 +234,13 @@
     if (tgt) { const d = dist(tgt.x, tgt.y, p.x, p.y) || 1; p.ax = (tgt.x - p.x) / d; p.ay = (tgt.y - p.y) / d; } else { p.ax = p.fx; p.ay = p.fy; }
     p.atkT -= DT;
     if (p.hero === 'hasan') {
-      if (p.atkT <= 0 && tgt) { p.atkT = 0.6 / as; p.atkN++; p.atkSide = -p.atkSide; p.lastAtk = t;
-        const ang = Math.atan2(p.ay, p.ax), R = 200 * area, pull = p.atkN % p.m.pullN === 0, n = 1 + p.m.extra;
+      if (p.atkT <= 0 && tgt) { p.atkT = 0.62 / as; p.atkN++; p.atkSide = -p.atkSide; p.lastAtk = t;
+        const ang = Math.atan2(p.ay, p.ax), R = 190 * area * p.m.sarea, pull = p.atkN % p.m.pullN === 0, n = 1 + p.m.extra;
         for (let k = 0; k < n; k++) { const a0 = ang + (k - (n - 1) / 2) * 0.55;
           near(p.x, p.y - 40, R, (e) => { const da = Math.atan2(e.y - (p.y - 40), e.x - p.x) - a0, dd = Math.abs(Math.atan2(Math.sin(da), Math.cos(da)));
             if (dd > 0.75) return; const ex = p.x + Math.cos(a0) * 70, ey = p.y - 40 + Math.sin(a0) * 70;
-            if (pull && ETYPES[e.type].sc < 1.5) { e.kx += (ex - e.x) * 5; e.ky += (ey - e.y) * 5; e.pullT = t; e.pullBy = p.id; } else if (pull) e.slowT = t + 1.2;
-            hurtEnemy(S, e, 15 * p.m.dmg, p, 'whip', Math.cos(a0) * 120, Math.sin(a0) * 120); }); }
+            if (pull && ETYPES[e.type].sc < 1.5 && !e.elite) { e.kx += (ex - e.x) * 5; e.ky += (ey - e.y) * 5; e.pullT = t; e.pullBy = p.id; } else if (pull) e.slowT = t + 1.2;
+            hurtEnemy(S, e, 14 * p.m.dmg * p.m.sdmg, p, 'whip', Math.cos(a0) * 120, Math.sin(a0) * 120); }); }
         ev(S, { k: 'whip', pid: p.id, x: p.x, y: p.y, ang, side: p.atkSide, pull: pull ? 1 : 0, n, R });
         if (p.hitSet.length >= 5 && t - p.fastT > 6) { p.fastT = t; p.hitSet = []; } }
       if (t - p.qT < 4) { if (Math.floor((t - p.qT) / 0.25) !== Math.floor((t - p.qT - DT) / 0.25))
@@ -226,9 +252,9 @@
         if (t - p.ultT + DT >= 3.2) near(ox, oy, 480 * area, (e) => { const d = dist(e.x, e.y, ox, oy) || 1; hurtEnemy(S, e, 40 * p.m.dmg, p, 'tornado', (e.x - ox) / d * 900, (e.y - oy) / d * 900); }); }
     }
     if (p.hero === 'danil') {
-      if (p.atkT <= 0 && tgt) { p.atkT = 0.44 / as * (p.set === 0 ? 0.8 : 1); p.lastAtk = t; const n = 1 + p.m.extra, ang = Math.atan2(p.ay, p.ax);
+      if (p.atkT <= 0 && tgt) { p.atkT = 0.55 / as * (p.set === 0 ? 0.85 : 1); p.lastAtk = t; const n = 1 + p.m.extra, ang = Math.atan2(p.ay, p.ax);
         for (let k = 0; k < n; k++) { const a = ang + (k - (n - 1) / 2) * 0.16;
-          S.proj.push({ id: S.nid++, own: p.id, kind: 'card', x: p.x + p.ax * 24, y: p.y - 50, vx: Math.cos(a) * 920, vy: Math.sin(a) * 920, dmg: 10 * p.m.dmg, ttl: 0.9, rico: p.m.rico + (p.set === 2 ? 1 : 0), hit: [], tox: 0, c: (p.atkN + k) % 3 }); }
+          S.proj.push({ id: S.nid++, own: p.id, kind: 'card', x: p.x + p.ax * 24, y: p.y - 50, vx: Math.cos(a) * 920, vy: Math.sin(a) * 920, dmg: 10 * p.m.dmg * p.m.sdmg, ttl: 0.9, rico: p.m.rico + (p.set === 2 ? 1 : 0), pierce: p.m.pierce || 0, hit: [], tox: 0, c: (p.atkN + k) % 3 }); }
         p.atkN++; ev(S, { k: 'throw', pid: p.id, x: p.x, y: p.y }); }
       if (t - p.ultT < 1.6 && Math.floor((t - p.ultT) / 0.5) !== Math.floor((t - p.ultT - DT) / 0.5))
         for (let k = 0; k < 22; k++) { const a = k / 22 * Math.PI * 2 + t; S.proj.push({ id: S.nid++, own: p.id, kind: 'card', x: p.x, y: p.y - 50, vx: Math.cos(a) * 820, vy: Math.sin(a) * 820, dmg: 16 * p.m.dmg, ttl: 0.9, rico: 1, hit: [], tox: 0, c: k % 3 }); }
@@ -236,19 +262,47 @@
     if (p.hero === 'vitya') {
       const solo = S.players.filter((q) => q !== p && alive(q) && dist(q.x, q.y, p.x, p.y) < 320).length;
       p.zone = 1 + 0.3 * Math.max(0, 1 - solo / 2);
-      if (p.atkT <= 0) { p.atkT = 3.4 / as; p.lastAtk = t; addCloud(S, p, p.x - p.fx * 30, p.y - 10 - p.fy * 20, 105 * area, 4.2); }
+      if (p.atkT <= 0) { p.atkT = 3.4 * p.m.srate / as; p.lastAtk = t; addCloud(S, p, p.x - p.fx * 30, p.y - 10 - p.fy * 20, 100 * area * p.m.sarea, 4.2);
+        if (p.m.double) addCloud(S, p, p.x + p.fy * 120, p.y - 10 - p.fx * 90, 90 * area * p.m.sarea, 4.2); }
       if (t - p.ultT > 0.95 && t - p.ultT - DT <= 0.95) addCloud(S, p, p.ux, p.uy, 400 * area, 6, 1);
     }
     if (p.hero === 'leha') {
-      const g = S.t - p.ultT < 7 ? 4 : p.tier, rate = [0.45, 0.12, 0.95, 1.4, 0.35][g];
+      const g = S.t - p.ultT < 7 ? 4 : p.tier, rate = [0.5, 0.13, 1.0, 1.5, 0.35][g];
       if (p.atkT <= 0 && tgt) { p.atkT = rate / as; p.lastAtk = t; p.atkN++; const ang = Math.atan2(p.ay, p.ax);
-        const shot = (a, sp, dmg, kind, ttl) => S.proj.push({ id: S.nid++, own: p.id, kind, x: p.x + Math.cos(a) * 46, y: p.y - 52 + Math.sin(a) * 30, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, dmg: dmg * p.m.dmg, ttl, rico: 0, hit: [] });
+        const shot = (a, sp, dmg, kind, ttl) => S.proj.push({ id: S.nid++, own: p.id, kind, x: p.x + Math.cos(a) * 46, y: p.y - 52 + Math.sin(a) * 30, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, dmg: dmg * p.m.dmg * p.m.sdmg, ttl, rico: 0, hit: [] });
         if (g === 0) shot(ang, 1300, 13, 'bullet', 0.6);
         if (g === 1) shot(ang + (h2(S.steps, 3) - 0.5) * 0.22, 1400, 6.5, 'bullet', 0.55);
         if (g === 2) for (let k = 0; k < 6; k++) shot(ang + (k - 2.5) * 0.11 + (h2(S.steps, k) - 0.5) * 0.06, 1150, 8, 'pellet', 0.32);
-        if (g >= 3) shot(ang, 820, g === 4 ? 52 : 42, 'rocket', 1.1);
+        if (g >= 3) { shot(ang, 820, g === 4 ? 52 : 42, 'rocket', 1.1); if (p.evo && g === 3) { shot(ang - 0.2, 800, 30, 'rocket', 1.1); shot(ang + 0.2, 800, 30, 'rocket', 1.1); } }
         ev(S, { k: 'shot', pid: p.id, x: p.x, y: p.y, ang, g }); }
     }
+  }
+
+  function gearStep(S, p, t) {
+    const as = p.m.as, area = p.m.area, every = (id, period) => { p.wcd[id] = (p.wcd[id] || 0) - DT; if (p.wcd[id] > 0) return false; p.wcd[id] = period; return true; };
+    const L = (id) => lv(p, id);
+    // Тапок: a boomerang that flies out and comes back, hitting everything on both passes
+    if (L('tapok') && every('tapok', 2.4 / as)) { const n = 1 + (L('tapok') >= 2) + (L('tapok') >= 4), fast = L('tapok') >= 5;
+      for (let k = 0; k < n; k++) { const e = nearest(S, p.x, p.y, 650, []); const a = e ? Math.atan2(e.y - p.y, e.x - p.x) + (k - (n - 1) / 2) * 0.6 : (k / n) * Math.PI * 2 + t;
+        const sp = fast ? 820 : 640; S.proj.push({ id: S.nid++, own: p.id, kind: 'tapok', x: p.x, y: p.y - 50, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, sp, t0: t, out: 0.55,
+          dmg: 12 * p.m.dmg * (L('tapok') >= 3 ? 1.3 : 1) * (fast ? 1.25 : 1), ttl: 3, hit: [], back: 0 }); }
+      ev(S, { k: 'throw', pid: p.id, x: p.x, y: p.y }); }
+    // Энергетик: a can lobbed into the crowd, explodes where it lands
+    if (L('can') && every('can', 3.2 / as)) { const n = 1 + (L('can') >= 3) + (L('can') >= 5), list = [];
+      near(p.x, p.y, 560, (e) => list.push(e));
+      for (let k = 0; k < n && list.length; k++) { const e = list[Math.floor(h2(S.steps, k + p.id) * list.length)];
+        S.proj.push({ id: S.nid++, own: p.id, kind: 'can', x: p.x, y: p.y - 50, vx: (e.x - p.x) / 0.6, vy: (e.y - 45 - p.y + 50) / 0.6, t0: t, ttl: 0.6, hit: [],
+          r: 95 * area * (L('can') >= 2 ? 1.25 : 1), dmg: 18 * p.m.dmg * (L('can') >= 4 ? 1.3 : 1) }); } }
+    // Колонка: a bass pulse around the hero
+    if (L('speaker') && every('speaker', 1.7 * (L('speaker') >= 4 ? 0.8 : 1) / as)) { const R = 150 * area * (L('speaker') >= 2 ? 1.15 : 1), d0 = 8 * p.m.dmg * (L('speaker') >= 3 ? 1.3 : 1);
+      near(p.x, p.y - 30, R, (e) => { const d = dist(e.x, e.y, p.x, p.y) || 1; hurtEnemy(S, e, d0, p, 'bass', (e.x - p.x) / d * 220, (e.y - p.y) / d * 220); if (L('speaker') >= 5) e.slowT = Math.max(e.slowT, t + 1); });
+      ev(S, { k: 'bass', pid: p.id, x: p.x, y: p.y, r: R }); }
+    if (!p.evo) return;
+    if (p.hero === 'hasan' && every('evo', 0.3)) near(p.x, p.y - 30, 170 * area, (e) => { const d = dist(e.x, e.y, p.x, p.y) || 1;
+      if (ETYPES[e.type].sc < 1.5 && !e.elite) { e.kx += (p.x - e.x) / d * 90; e.ky += (p.y - e.y) / d * 90; } hurtEnemy(S, e, 7 * p.m.dmg * p.m.sdmg, p, 'twirl'); });
+    if (p.hero === 'danil' && every('evo', 0.2)) for (let k = 0; k < 6; k++) { const a = t * 2.4 + k * Math.PI / 3, cx = p.x + Math.cos(a) * 130, cy = p.y - 40 + Math.sin(a) * 100;
+      near(cx, cy, 34, (e) => hurtEnemy(S, e, 9 * p.m.dmg * p.m.sdmg, p, 'card')); }
+    if (p.hero === 'vitya' && every('evo', 3.5)) { addCloud(S, p, p.x, p.y - 10, 170 * area, 4); S.clouds[S.clouds.length - 1].follow = p.id; S.clouds[S.clouds.length - 1].cyc = 1; }
   }
 
   function useQ(S, p, t) {
@@ -258,7 +312,7 @@
       near(p.x + p.fx * 200, p.y + p.fy * 160, 260, (e) => { e.kx += p.fx * 600; e.ky += p.fy * 600; e.poisT = t + 4; }); }
   }
   function useUlt(S, p, t) {
-    p.ult = 0; p.ultT = t; ev(S, { k: 'ult', pid: p.id, hero: p.hero, x: p.x, y: p.y }); say(S, p, 'ult', true);
+    p.ult = 0; p.ultT = t; p.ultLock = t + 35 * p.m.cd; ev(S, { k: 'ult', pid: p.id, hero: p.hero, x: p.x, y: p.y }); say(S, p, 'ult', true);
     if (p.hero === 'vitya') { p.ux = p.x; p.uy = p.y - 10; ev(S, { k: 'warn', x: p.ux, y: p.uy, r: 400 * p.m.area, until: t + 0.95 }); }
     if (p.hero === 'danil') for (const q of S.players) if (alive(q) && dist(q.x, q.y, p.x, p.y) < 450) q.buffT = t + 6;
   }
@@ -276,13 +330,15 @@
     const down = S.players.find((q) => q.down && !q.out && p.hero !== 'vitya'); if (down) { const d = dist(down.x, down.y, p.x, p.y) || 1; if (d > 40) { mx += (down.x - p.x) / d * 2.4; my += (down.y - p.y) / d * 2.4; } }
     let gb = null, gd = 260; for (const g of S.gems) { const d = dist(g.x, g.y, p.x, p.y); if (d < gd) { gd = d; gb = g; } }
     if (gb && !down) { mx += (gb.x - p.x) / gd * 0.7; my += (gb.y - p.y) / gd * 0.7; }
+    if (p.hp < p.hpMax * 0.6) for (const f of S.food) { const d = dist(f.x, f.y, p.x, p.y); if (d < 500) { mx += (f.x - p.x) / d * 1.5; my += (f.y - p.y) / d * 1.5; break; } }
     const wob = Math.sin(S.t * 0.9 + p.id * 2.1); mx += wob * 0.25; my += Math.cos(S.t * 0.7 + p.id) * 0.25;
     if (Math.abs(mx) > 0.25) inp[mx > 0 ? 'right' : 'left'] = 1; if (Math.abs(my) > 0.25) inp[my > 0 ? 'down' : 'up'] = 1;
     let cnt = 0; near(p.x, p.y, 240, () => cnt++);
     if (cnt >= 4 && p.qCD <= 0) inp.q = 1;
     if (p.ult >= 1 && cnt >= 6) inp.r = 1;
     if (cnt >= 7 && p.dashCD <= 0 && S.steps % 90 === p.id * 7) inp.dash = 1;
-    if (p.pick && S.t - p.pickT > 1.2) inp.slot = 1 + Math.floor(h2(S.steps, p.id) * 3);
+    if (p.pick && S.t - p.pickT > 1.2) { const rank = (c) => ({ evo: 0, sig: 1, w: c.tag === 'НОВОЕ' ? 3 : 2, p: c.tag === 'НОВОЕ' ? 5 : 4, heal: 6 })[c.kind];
+      let b = 0; p.pick.forEach((c, i) => { if (rank(c) < rank(p.pick[b])) b = i; }); inp.slot = b + 1; }                // bots pick like a sensible player
     return inp;
   }
 
@@ -298,24 +354,32 @@
       if (S.waveT >= WAVE_LEN) { if (S.wave >= WAVES) { S.over = t; S.won = 1; finishRun(S); return S; }
         S.brk = BREAK; ev(S, { k: 'break', n: S.wave }); for (const p of S.players) { p.tokens = []; if (p.down && !p.out) { p.down = 0; p.hp = p.hpMax * 0.5; } p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.3); }
         S.enemies.forEach((e) => (e.flee = 1)); S.banter = t + 2; } }
-    if (S.banter && t > S.banter) { S.banter = 0; const a = S.players[Math.floor(h1(S.wave + 3) * S.players.length)]; S.sayT = -9; a.vcd = 0; say(S, a, 'banter'); }
+    if (S.banter && t > S.banter) { S.banter = 0; const up = S.players.filter(alive), a = up[Math.floor(h1(S.wave + 3) * up.length)]; if (a) { S.sayT = -9; a.vcd = 0; say(S, a, 'banter'); } }
     if (S.allyDownSay && t > S.allyDownSay[0]) { const a = S.players.find((q) => q.id === S.allyDownSay[1]); S.allyDownSay = 0; if (a && alive(a)) { a.vcd = 0; say(S, a, 'ally_down'); } }
     // ---- spawning: hold a target count around the team, outside every camera ----
     const n = S.players.length, coop = COOP[Math.min(8, n)], humans = Math.max(1, n);
-    const want = S.brk > 0 ? 0 : Math.min(190, Math.round((9 + S.wave * 6 + S.waveT * (0.12 + S.wave * 0.03)) * coop * (S.solo ? 0.7 : 1)));
+    const want = S.brk > 0 ? 0 : Math.min(190, Math.round((7 + S.wave * 5 + S.waveT * (0.08 + S.wave * 0.025)) * coop * (S.solo ? 0.7 : 1)));
     S.spawnAcc += DT * (2 + S.wave * 0.8) * coop;
     const live = S.players.filter(alive);
     while (S.spawnAcc >= 1 && S.enemies.length < want && live.length) { S.spawnAcc -= 1;
       const k = S.steps * 13 + S.enemies.length, p = live[Math.floor(h1(k) * live.length)], a = h1(k + 1) * Math.PI * 2, r = 1150 + 250 * h1(k + 2);
       let x = clamp(p.x + Math.cos(a) * r, 80, WORLD.x1 - 80), y = clamp(p.y + Math.sin(a) * r * 0.75, 180, WORLD.y1 - 60);
       if (blocked(x, y, 30) || S.players.some((q) => dist(q.x, q.y, x, y) < 900)) continue;
-      const types = Object.keys(ETYPES).filter((ty) => ETYPES[ty].from <= S.wave), roll = h1(k + 3);
-      let ty = 'ghoul'; if (types.length > 1 && roll > 0.55) ty = types[1 + Math.floor(h1(k + 4) * (types.length - 1))];
-      if (ty === 'brute' && roll < 0.8) ty = 'ghoul';
-      const T = ETYPES[ty], hp = T.hp * (1 + 0.16 * (S.wave - 1)) * COOP_HP[Math.min(8, n)];
+      const types = Object.keys(ETYPES).filter((ty) => ETYPES[ty].from <= S.wave), cnt = {};
+      for (const o of S.enemies) cnt[o.type] = (cnt[o.type] || 0) + 1;
+      const wts = types.map((ty) => (ty === 'spitter' && (cnt.spitter || 0) > Math.max(3, S.enemies.length * 0.12)) || (ty === 'brute' && (cnt.brute || 0) > Math.max(2, S.enemies.length * 0.1)) ? 0 : ETYPES[ty].w);
+      let rw = h1(k + 3) * wts.reduce((a, b) => a + b, 0), ty = 'ghoul'; for (let i = 0; i < types.length; i++) { rw -= wts[i]; if (rw <= 0) { ty = types[i]; break; } }
+      const T = ETYPES[ty], w1 = S.wave - 1, hp = T.hp * (1 + 0.18 * w1 + 0.025 * w1 * w1) * COOP_HP[Math.min(8, n)];
       S.enemies.push({ id: S.nid++, type: ty, x, y, vx: 0, vy: 0, kx: 0, ky: 0, hp, hpMax: hp, r: T.r, hitT: -9, atkT: 0, slowT: -9, poisT: -9, born: t, dist: 0, face: 1, flee: 0, shotT: t + 2 + h1(k) * 2, spawnT: t });
     }
     if (S.spawnAcc > 3) S.spawnAcc = 3;
+    // an elite every ~25 s from wave 2: a golden brute that drops a chest (a free upgrade for whoever opens it)
+    if (S.brk <= 0 && S.wave >= 2 && live.length && (S.eliteT -= DT) <= 0) { S.eliteT = Math.max(14, 28 - S.wave);
+      const p = live[Math.floor(h1(S.steps) * live.length)], a = h1(S.steps + 5) * Math.PI * 2;
+      const x = clamp(p.x + Math.cos(a) * 1200, 80, WORLD.x1 - 80), y = clamp(p.y + Math.sin(a) * 900, 180, WORLD.y1 - 60), w1 = S.wave - 1;
+      if (!blocked(x, y, 40)) { const hp = 130 * 6 * (1 + 0.18 * w1 + 0.025 * w1 * w1) * COOP_HP[Math.min(8, n)];
+        S.enemies.push({ id: S.nid++, type: 'brute', elite: 1, x, y, vx: 0, vy: 0, kx: 0, ky: 0, hp, hpMax: hp, r: 46, hitT: -9, atkT: 0, slowT: -9, poisT: -9, born: t, dist: 0, face: 1, flee: 0, shotT: 9e9, spawnT: t });
+        ev(S, { k: 'elite', x, y }); } }
     // ---- players ----
     for (const p of S.players) {
       const inp = p.bot ? botInput(S, p) : (inps[p.id] || {});
@@ -325,15 +389,15 @@
       if (p.down) { const g = inGas(S, p.x, p.y); p.downT -= DT * (g ? 1.5 : 1); if (g) p.gasDown = t;
         if (S.solo && p.selfRes > 0 && (eE || p.bot)) { p.selfRes--; p.down = 0; p.hp = p.hpMax * 0.5; p.inv = t + 2; ev(S, { k: 'revive', pid: p.id, by: p.id, x: p.x, y: p.y }); }
         const helpers = S.players.filter((q) => q !== p && alive(q) && q.hero !== 'vitya' && dist(q.x, q.y, p.x, p.y) < 85);
-        if (helpers.length) { p.revP += DT / 2.4; if (p.revP >= 1) { p.down = 0; p.hp = p.hpMax * 0.5; p.inv = t + 1.5; p.revP = 0; helpers[0].st.rev++; helpers[0].ult = Math.min(1, helpers[0].ult + 0.15);
+        if (helpers.length) { p.revP += DT / 2.4; if (p.revP >= 1) { p.down = 0; p.hp = p.hpMax * 0.5; p.inv = t + 1.5; p.revP = 0; helpers[0].st.rev++; helpers[0].ult = Math.min(1, helpers[0].ult + 0.12);
           ev(S, { k: 'revive', pid: p.id, by: helpers[0].id, x: p.x, y: p.y }); say(S, helpers[0], 'revive'); } }
         else p.revP = Math.max(0, p.revP - DT * 0.3);
         const vt = S.players.find((q) => q.hero === 'vitya' && alive(q) && dist(q.x, q.y, p.x, p.y) < 85); if (vt && S.t - (p.cantT || -9) > 4) { p.cantT = S.t; say(S, vt, 'cant_revive'); }
         if (p.downT <= 0) { p.out = 1; ev(S, { k: 'out', pid: p.id, x: p.x, y: p.y }); }
         continue; }
       // upgrade pick
-      if (p.pick && inp.slot >= 1 && inp.slot <= 3) { const id = p.pick[inp.slot - 1]; UPG[id].f(p); p.ups[id] = (p.ups[id] || 0) + 1; p.pick = p.queue && p.queue > 0 ? rollPick(S, p) : null; if (p.queue) p.queue--; ev(S, { k: 'upgrade', pid: p.id, id }); }
-      if (p.pick && t - p.pickT > 14) { const id = p.pick[0]; UPG[id].f(p); p.ups[id] = (p.ups[id] || 0) + 1; p.pick = null; }
+      if (p.pick && inp.slot >= 1 && inp.slot <= p.pick.length) applyPick(S, p, p.pick[inp.slot - 1].id, t);
+      else if (p.pick && t - p.pickT > 15) applyPick(S, p, p.pick[0].id, t);                     // AFK: take the first card
       // move
       const ix = (inp.right ? 1 : 0) - (inp.left ? 1 : 0), iy = (inp.down ? 1 : 0) - (inp.up ? 1 : 0), il = Math.hypot(ix, iy) || 1;
       const slowLeha = p.hero === 'leha' ? 1 - 0.04 * p.tier : 1, fast = t - p.fastT < 2 ? 1.25 : 1;
@@ -342,15 +406,15 @@
       p.vx += clamp(tx - p.vx, -acc, acc); p.vy += clamp(ty - p.vy, -acc, acc);
       if (ix || iy) { p.fx = ix / il; p.fy = iy / il; p.dir = Math.abs(iy) > Math.abs(ix) * 1.2 ? (iy > 0 ? 0 : 2) : (ix > 0 ? 1 : 3); p.stillT = 0; } else p.stillT += DT;
       p.dashCD = Math.max(0, p.dashCD - DT); p.qCD = Math.max(0, p.qCD - DT);
-      if (dashE && p.dashCD <= 0) { p.dashT = t; p.dashCD = 1.1; p.inv = Math.max(p.inv, t + 0.25); ev(S, { k: 'dash', pid: p.id, x: p.x, y: p.y, dx: p.fx, dy: p.fy }); }
+      if (dashE && p.dashCD <= 0) { p.dashT = t; p.dashCD = 1.6; p.inv = Math.max(p.inv, t + 0.25); ev(S, { k: 'dash', pid: p.id, x: p.x, y: p.y, dx: p.fx, dy: p.fy }); }
       const dashing = t - p.dashT < 0.17, mx = dashing ? p.fx * 950 : p.vx, my = dashing ? p.fy * 950 : p.vy;
       p.x += mx * DT; p.y += my * DT; collide(p, 24);
       const moved = Math.hypot(mx, my) * DT; if (moved > 0.05) { const b = Math.floor(p.dist / 62); p.dist += moved; if (Math.floor(p.dist / 62) !== b) ev(S, { k: 'step', pid: p.id, x: p.x, y: p.y }); }
       if (qE && p.qCD <= 0) useQ(S, p, t);
       if (rE && p.ult >= 1) useUlt(S, p, t);
       if (p.m.regen) p.hp = Math.min(p.hpMax, p.hp + p.m.regen * DT);
-      p.ult = Math.min(1, p.ult + DT / 160);
-      heroStep(S, p, inp, t);
+      if (t > p.ultLock) p.ult = Math.min(1, p.ult + DT / 300);                // about one ultimate per 1.5-2 min of fighting
+      heroStep(S, p, inp, t); gearStep(S, p, t);
       // in Vitya's gas: allies take small damage (never lethal) and complain
       if (p.hero !== 'vitya') { const g = inGas(S, p.x, p.y);
         if (g) { const v = S.players.find((q) => q.id === g.owner); if (Math.floor((t - g.t0)) !== Math.floor((t - DT - g.t0)) || t - p.gasT > 1.0) {
@@ -385,18 +449,22 @@
       if (e.hp <= 0) continue;
       if (tg && !e.flee) {
         if (td < e.r + 30 && t > e.atkT) { e.atkT = t + 0.7; e.biteT = t;
-          if (T.bomb) { e.hp = 0; killEnemy(S, e, null, 'self'); } else hurtPlayer(S, tg, T.dmg * (1 + 0.06 * (S.wave - 1)), e); }
-        if (T.ranged && td < 640 && t > e.shotT) { e.shotT = t + 2.6 + h2(e.id, S.steps) * 1.4; const d = td || 1;
-          S.eproj.push({ x: e.x, y: e.y - 40, vx: (tg.x - e.x) / d * 420, vy: (tg.y - 40 - e.y + 40) / d * 420, ttl: 2.2, dmg: T.dmg }); ev(S, { k: 'spit', x: e.x, y: e.y }); }
+          if (T.bomb) { e.hp = 0; killEnemy(S, e, null, 'self'); } else hurtPlayer(S, tg, T.dmg * (1 + 0.07 * (S.wave - 1)) * (e.elite ? 1.5 : 1), e); }
+        if (T.ranged && td < 640 && t > e.shotT) { e.shotT = t + 3.6 + h2(e.id, S.steps) * 2; const d = td || 1;
+          S.eproj.push({ x: e.x, y: e.y - 40, vx: (tg.x - e.x) / d * 340, vy: (tg.y - 40 - e.y + 40) / d * 340, ttl: 2.4, dmg: T.dmg }); ev(S, { k: 'spit', x: e.x, y: e.y }); }
       }
       // gas damage
       const g = inGas(S, e.x, e.y); if (g && Math.floor((t - g.t0) / 0.5) !== Math.floor((t - DT - g.t0) / 0.5)) { const v = S.players.find((q) => q.id === g.owner);
-        hurtEnemy(S, e, (g.big ? 26 : 7) * (v ? v.m.dmg * (v.zone || 1) : 1), v, 'gas'); e.poisT = t + 1.5; }
+        hurtEnemy(S, e, (g.big ? 26 : 7) * (g.cyc ? 1.5 : 1) * (v ? v.m.dmg * v.m.sdmg * (v.zone || 1) : 1), v, 'gas'); e.poisT = t + 1.5; if (v && lv(v, 'sig') >= 4) e.slowT = Math.max(e.slowT, t + 0.6); }
     }
     S.enemies = S.enemies.filter((e) => e.hp > 0 && !(e.flee && dist(e.x, e.y, C[0], C[1]) > 3000));
     // ---- projectiles ----
-    for (const b of S.proj) { b.x += b.vx * DT; b.y += b.vy * DT; b.ttl -= DT; if (b.ttl <= 0) continue;
+    for (const b of S.proj) { b.x += b.vx * DT; b.y += b.vy * DT; b.ttl -= DT;
       const p = S.players.find((q) => q.id === b.own);
+      if (b.kind === 'can') { if (b.ttl <= 0 && p) explode(S, b.x, b.y + 45, b.r, b.dmg, p, 'can'); continue; }
+      if (b.ttl <= 0) continue;
+      if (b.kind === 'tapok' && p) { if (!b.back && t - b.t0 > b.out) { b.back = 1; b.hit = []; }
+        if (b.back) { const dx = p.x - b.x, dy = p.y - 50 - b.y, d = Math.hypot(dx, dy) || 1; b.vx = dx / d * b.sp * 1.1; b.vy = dy / d * b.sp * 1.1; if (d < 30) { b.ttl = 0; continue; } } }
       if (b.kind === 'card' && !b.tox && inGas(S, b.x, b.y + 50)) { b.tox = 1; b.dmg *= 1.5; if (!S.comboK['toxcard'] || S.t - S.comboK['toxcard'] > 25) combo(S, 'toxcard', b.x, b.y + 50, p, 1); }
       const e = nearest(S, b.x, b.y + 45, b.kind === 'rocket' ? 34 : 26, b.hit);
       if (e) { b.hit.push(e.id);
@@ -405,6 +473,8 @@
         if (b.kind === 'card') { p.hitN++; if (p.hitN % 15 === 0 && p.tokens.length < 3) { p.tokens.push(Math.floor(h2(S.steps, p.hitN) * 3)); ev(S, { k: 'token', pid: p.id });
             if (p.tokens.length === 3) { const tk = p.tokens; p.set = tk[0] === tk[1] && tk[1] === tk[2] ? 0 : new Set(tk).size === 3 ? 1 : 2; if (p.set === 1) p.m.crit += 0.1; ev(S, { k: 'set', pid: p.id, set: p.set }); } } }
         if (b.rico > 0) { const n2 = nearest(S, e.x, e.y, 300, b.hit); if (n2) { const d = dist(n2.x, n2.y, e.x, e.y) || 1; b.vx = (n2.x - e.x) / d * 900; b.vy = (n2.y - e.y) / d * 900; b.x = e.x; b.y = e.y - 45; b.rico--; b.dmg *= 0.65; b.ttl = 0.5; continue; } }
+        if (b.kind === 'tapok') continue;
+        if (b.pierce && b.hit.length <= b.pierce) continue;
         if (b.kind !== 'pellet' || b.hit.length > 1) b.ttl = 0; }
       if (b.kind === 'rocket' && b.ttl <= DT && b.ttl > 0) explode(S, b.x, b.y + 45, 130 * p.m.area, b.dmg, p, 'rocket');
     }
@@ -415,6 +485,7 @@
         if (lh) { b.ttl = 0; ev(S, { k: 'block', x: b.x, y: b.y }); break; }
         if (dist(p.x, p.y - 40, b.x, b.y) < 30) { hurtPlayer(S, p, b.dmg, null); b.ttl = 0; break; } } }
     S.eproj = S.eproj.filter((b) => b.ttl > 0);
+    for (const c of S.clouds) if (c.follow !== undefined) { const o = S.players.find((q) => q.id === c.follow); if (o && !o.out) { c.x += (o.x - c.x) * 2.5 * DT; c.y += (o.y - 10 - c.y) * 2.5 * DT; } }
     S.clouds = S.clouds.filter((c) => t < c.t0 + c.ttl);
     S.marks = S.marks.filter((m) => t < m.until);
     // ---- gems: magnet, team XP, level ups ----
@@ -423,8 +494,13 @@
       if (best) { const sp = 700 + 900 * (1 - bd / 400); g.x += (best.x - g.x) / bd * sp * DT; g.y += (best.y - 30 - g.y) / bd * sp * DT;
         if (bd < 26) { g.got = 1; S.xp += g.v; best.st.xp += g.v; ev(S, { k: 'gem', x: g.x, y: g.y, pid: best.id, v: g.v }); } } }
     S.gems = S.gems.filter((g) => !g.got && t - g.t0 < 60);
+    for (const c of S.chests) for (const p of S.players) if (alive(p) && !c.got && dist(p.x, p.y, c.x, c.y) < 70) { c.got = 1;
+      if (p.pick) p.queue = (p.queue || 0) + 1; else { p.pick = rollPick(S, p); p.pickT = t; } ev(S, { k: 'chest', pid: p.id, x: c.x, y: c.y }); say(S, p, 'lvl'); }
+    S.chests = S.chests.filter((c) => !c.got);
+    for (const f of S.food) for (const p of S.players) if (alive(p) && !f.got && p.hp < p.hpMax && dist(p.x, p.y, f.x, f.y) < 55) { f.got = 1; p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.25); ev(S, { k: 'food', pid: p.id, x: f.x, y: f.y }); }
+    S.food = S.food.filter((f) => !f.got && t - f.t0 < 40);
     if (S.gems.length > 260) S.gems.splice(0, S.gems.length - 260);
-    while (S.xp >= S.xpNext) { S.xp -= S.xpNext; S.lvl++; S.xpNext = Math.round(12 + S.lvl * 7 + S.lvl * S.lvl * 0.6); ev(S, { k: 'lvl', n: S.lvl });
+    while (S.xp >= S.xpNext) { S.xp -= S.xpNext; S.lvl++; S.xpNext = xpNeed(S, S.lvl); ev(S, { k: 'lvl', n: S.lvl });
       for (const p of S.players) { if (p.out) continue; if (p.pick) p.queue = (p.queue || 0) + 1; else { p.pick = rollPick(S, p); p.pickT = t; } }
       const p = S.players[Math.floor(h1(S.lvl) * S.players.length)]; say(S, p, 'lvl'); }
     // ---- defeat ----
@@ -432,12 +508,25 @@
     if (S.ev.length > 96) S.ev.splice(0, S.ev.length - 96);
     return S;
   }
+  const xpNeed = (S, l) => Math.round((4 + 3.5 * l + 0.22 * l * l) * (0.7 + 0.3 * S.players.length));
+  function applyPick(S, p, id, t) {
+    if (id === 'evo') p.evo = 1; else if (id === 'heal') p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.4);
+    else { p.items[id] = lv(p, id) + 1; if (id === 'hp') p.hp += 20; }
+    recalc(p); ev(S, { k: 'upgrade', pid: p.id, id, x: p.x, y: p.y, evo: id === 'evo' ? 1 : 0 });
+    if (p.queue > 0) { p.queue--; p.pick = rollPick(S, p); p.pickT = t; } else p.pick = null;
+  }
   function rollPick(S, p) {
-    const pool = UPG_IDS.filter((id) => (!UPG[id].hero || UPG[id].hero === p.hero) && !(UPG[id].max && (p.ups[id] || 0) >= UPG[id].max));
-    const out = []; for (let k = 0; out.length < 3 && k < 40; k++) { const id = pool[Math.floor(h2(S.steps + k * 31, p.id + S.lvl) * pool.length)];
-      if (!out.includes(id)) out.push(id); }
-    const own = pool.filter((id) => UPG[id].hero === p.hero && !out.includes(id)); if (own.length && !out.some((id) => UPG[id].hero)) out[2] = own[Math.floor(h2(S.lvl, p.id) * own.length)];
-    return out;
+    const cand = [], W = Object.keys(WEAPONS), P = Object.keys(PASSIVES).filter((id) => !PASSIVES[id].hero || PASSIVES[id].hero === p.hero);
+    const ownW = W.filter((id) => lv(p, id)), ownP = P.filter((id) => lv(p, id));
+    if (lv(p, 'sig') < 5) cand.push(['sig', 4]);
+    for (const id of W) if (lv(p, id) ? lv(p, id) < 5 : ownW.length < MAXW) cand.push([id, lv(p, id) ? 3 : 1.2]);
+    for (const id of P) { const mx = PASSIVES[id].max || 5; if (lv(p, id) ? lv(p, id) < mx : ownP.length < MAXP) cand.push([id, lv(p, id) ? 2.5 : 1.5]); }
+    const out = [];
+    if (!p.evo && lv(p, 'sig') >= 5 && lv(p, SIG[p.hero].evo) >= 2) out.push('evo');           // evolution always offered once unlocked
+    for (let k = 0; out.length < 3 && cand.length && k < 50; k++) { const tot = cand.reduce((a, c) => a + c[1], 0); let r = h2(S.steps + k * 17, p.id * 7 + S.lvl) * tot;
+      for (let i = 0; i < cand.length; i++) { r -= cand[i][1]; if (r <= 0) { out.push(cand[i][0]); cand.splice(i, 1); break; } } }
+    while (out.length < 3) out.push('heal');
+    return out.slice(0, 3).map((id) => cardFor(p, id));
   }
   // funny awards for the results screen
   function finishRun(S) {
@@ -458,7 +547,7 @@
   function at(t) {
     const loop = Math.floor(t / L), q = t - loop * L, n = Math.round(q / DT);
     if (!cache || cache.loop !== loop || cache.S.steps > n) { const S0 = create({ mode: 'demo' }); S0.wt0 = loop * L; S0.wave = 3; S0.lvl = 4; cache = { loop, S: S0 };
-      for (const p of S0.players) { p.ult = 0.55 + 0.1 * p.id; p.tier = p.hero === 'leha' ? 2 : 0; } }
+      for (const p of S0.players) { p.ult = 0.55 + 0.1 * p.id; p.items.sig = 3; p.items[['tapok', 'can', 'speaker', 'tapok'][p.id]] = 2; recalc(p); } }
     const S = cache.S; while (S.steps < n) step(S, {});
     return Object.assign({}, S, { loop, q });
   }
@@ -468,6 +557,6 @@
     for (const [x, y] of LAMPS) if (onPave(x, y) && dist(x, y, C[0], C[1]) < 200) f.push('lamp in plaza centre'); };
 
   root.SIM = { DT, L, VIEW, WORLD, HINT, C, PLAZA, PATHS, SUBS, PROPS, SOLIDS, POND, LAMPS, HEROES, ORDER, ETYPES, UPG, QCD, LEHA_GUNS, WAVE_LEN, BREAK, WAVES,
-    onPave, inGas, collide, create, spawn, respawn, outOfPlay, step, at, scriptInput, demoCheck, selfCheck, botInput };
+    onPave, inGas, collide, cardFor, lv, create, spawn, respawn, outOfPlay, step, at, scriptInput, demoCheck, selfCheck, botInput };
   if (typeof module !== 'undefined') module.exports = root.SIM;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -24,7 +24,7 @@ const load = (src) => new Promise((res, rej) => { const s = document.createEleme
 (async () => {
   // sizes.js: window.SIZES (display size per sprite in view px, engine.md §7); audio.js: sound from the event bus (stub until used)
   try { await document.fonts.load('20px "Press Start 2P"'); } catch (e) {}
-  for (const f of ['assets.js', 'sizes.js', 'rigs.js', 'gl.js', 'lib.js', 'rig.js', 'sim.js', 'scene.js', 'audio/vo.js', 'audio.js', 'net.js']) await load(f);
+  for (const f of ['assets.js', 'sizes.js', 'rigs.js', 'gl.js', 'lib.js', 'rig.js', 'sim.js', 'scene.js', 'settings.js', 'audio/vo.js', 'audio.js', 'net.js']) await load(f);
   const q = new URLSearchParams(location.search), render = q.has('render');
   const VW = (SIM.VIEW || {}).W || 1920, VH = (SIM.VIEW || {}).H || 1080;             // view size and aspect come from the sim
   document.documentElement.style.setProperty('--ar', VW / VH); if (SIM.HINT) document.getElementById('hint').textContent = SIM.HINT;
@@ -41,7 +41,8 @@ const load = (src) => new Promise((res, rej) => { const s = document.createEleme
   const SPEEDS = [0.1, 0.25, 0.5, 1];
   let CFG = { hero: q.get('hero') || 'hasan', solo: q.has('solo') };
   const start = () => { const s = SIM.spawn(simT, CFG); s.me = 0; return s; };
-  window.GAME = { start: (cfg) => { CFG = cfg; play = start(); hint.style.opacity = 0; }, set: (S) => { play = S; hint.style.opacity = 0; }, state: () => play };
+  window.GAME = { start: (cfg) => { CFG = cfg; play = start(); hint.style.opacity = 0; }, set: (S) => { play = S; hint.style.opacity = 0; }, state: () => play,
+    toMenu: () => { if (NET.mode !== 'client') play = null; SCENE.state = null; NET.openLobby(); } };
   let play = null, acc = 0, simT = 0, speed = 1, paused = false, stepOnce = false, fps = 60;
   try { const sv = JSON.parse(sessionStorage.getItem('live') || 'null');                     // restore across live reloads
     if (sv) { simT = sv.simT; speed = sv.speed; paused = sv.paused; if (sv.play) { play = Object.assign(SIM.create(), sv.play); hint.style.opacity = 0; }
@@ -54,7 +55,7 @@ const load = (src) => new Promise((res, rej) => { const s = document.createEleme
     if (c === 'Period') { stepOnce = true; paused = true; e.preventDefault(); return; }
     if (c === 'BracketLeft') { speed = SPEEDS[Math.max(0, SPEEDS.indexOf(speed) - 1)]; return; }
     if (c === 'BracketRight') { speed = SPEEDS[Math.min(SPEEDS.length - 1, SPEEDS.indexOf(speed) + 1)]; return; }
-    if (c === 'Escape') { if (NET.mode === 'off') { play = null; SCENE.state = null; } NET.openLobby(); return; }
+    if (c === 'Escape') { if (!NET.open) SETTINGS.toggle(); return; }                     // settings / pause
     keys[c] = 1;
     const dg = /^Digit(\d)$/.exec(c); if (dg) pend.slot = +dg[1] || 10;                     // 1–9, 0 → inp.slot (hotbars)
     if (play && c === 'Backspace' && NET.mode === 'off') play = start();
@@ -77,7 +78,8 @@ const load = (src) => new Promise((res, rej) => { const s = document.createEleme
   // who alt-tabs keeps the game running for everyone (rAF stops and main-thread timers throttle in background tabs).
   const advance = () => {
     const now = performance.now(), wall = Math.min(0.25, (now - last) / 1000); last = now;
-    const dt = paused ? (stepOnce ? 1 / 60 : 0) : wall * speed; stepOnce = false;
+    const hold = paused || (window.SETTINGS && SETTINGS.isOpen() && NET.mode === 'off' && play);   // solo: settings pause the run
+    const dt = hold ? (stepOnce ? 1 / 60 : 0) : wall * speed; stepOnce = false;
     simT += dt;
     if (NET.mode === 'client' && !NET.open) { const inp = mkInp(); NET.clientInput(inp); pend.slot = 0; SCENE.state = NET.view(); }
     else if (play) {
@@ -100,7 +102,7 @@ const load = (src) => new Promise((res, rej) => { const s = document.createEleme
   { const clock = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 16)'], { type: 'text/javascript' })));
     clock.onmessage = () => { if (performance.now() - last > 60) advance(); }; }
   if (STATIC) { dev.style.display = 'none'; return; }
-  const WATCH = ['index.html', 'scene.js', 'sim.js', 'lib.js', 'gl.js', 'assets.js', 'sizes.js', 'audio.js', 'net.js', 'rig.js', 'rigs.js'], stamp = {};
+  const WATCH = ['index.html', 'scene.js', 'sim.js', 'lib.js', 'gl.js', 'assets.js', 'sizes.js', 'audio.js', 'net.js', 'rig.js', 'rigs.js', 'settings.js'], stamp = {};
   const poll = async () => {
     for (const f of WATCH) {
       try { const r = await fetch(f + '?poll=' + Date.now(), { method: 'HEAD', cache: 'no-store' }); const m = r.headers.get('last-modified') + r.headers.get('content-length');

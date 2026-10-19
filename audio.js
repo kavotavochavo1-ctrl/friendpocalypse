@@ -7,8 +7,9 @@
   const buffers = {}, loading = {};
   const VO = new Set(window.VO || []);
   const MUSIC_LONG = new Set(window.MUSIC_LONG || []);   // full-length versions listed in audio/vo.js when they exist
-  const vol = { master: 0.9, music: 0.34, sfx: 0.38, vo: 1.0 };
-  try { Object.assign(vol, JSON.parse(localStorage.getItem('fp_vol') || '{}')); } catch (e) {}
+  const vol = { master: 0.9, music: 0.35, sfx: 0.4, vo: 1.0 };
+  const applyVol = () => { if (!ctx) return; master.gain.value = vol.master; musicBus.gain.value = vol.music; sfxBus.gain.value = vol.sfx; voBus.gain.value = vol.vo; };
+  if (window.SETTINGS) SETTINGS.onChange((V) => { vol.master = V.master / 100; vol.music = V.music / 100; vol.sfx = V.sfx / 100; vol.vo = V.vo / 100; applyVol(); });
 
   const init = () => {
     if (ctx) return; ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -20,7 +21,6 @@
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   };
   addEventListener('keydown', init); addEventListener('pointerdown', init);
-  addEventListener('keydown', (e) => { if (e.code === 'KeyM' && ctx) { vol.music = vol.music > 0 ? 0 : 0.38; musicBus.gain.value = vol.music; try { localStorage.setItem('fp_vol', JSON.stringify(vol)); } catch (x) {} } });
 
   const load = (url) => { if (buffers[url]) return Promise.resolve(buffers[url]); if (loading[url]) return loading[url];
     return (loading[url] = fetch(url).then((r) => r.arrayBuffer()).then((a) => ctx.decodeAudioData(a)).then((b) => (buffers[url] = b)).catch(() => null)); };
@@ -33,15 +33,18 @@
   const playMusic = (name) => { if (!ctx || want === name) return; want = name;
     load('audio/music/' + TRACK(name) + '.ogg').then((b) => { if (!b || want !== name || music.name === name) return;
       const src = ctx.createBufferSource(), g = ctx.createGain(); src.buffer = b; src.loop = name !== 'victory'; src.connect(g); g.connect(musicBus);
-      g.gain.setValueAtTime(0, ctx.currentTime); g.gain.linearRampToValueAtTime(1, ctx.currentTime + 1.2); src.start();
-      const old = music;
-      if (old.src) { old.gain.gain.cancelScheduledValues(ctx.currentTime); old.gain.gain.setValueAtTime(old.gain.gain.value, ctx.currentTime); old.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.2); try { old.src.stop(ctx.currentTime + 1.3); } catch (e) {} }
+      // sequential, not a crossfade: the old track fades out first, the new one comes in after it (two busy tracks never mix)
+      const old = music, now = ctx.currentTime, gap = old.src ? 0.7 : 0;
+      if (old.src) { old.gain.gain.cancelScheduledValues(now); old.gain.gain.setValueAtTime(old.gain.gain.value, now); old.gain.gain.linearRampToValueAtTime(0, now + 0.6); try { old.src.stop(now + 0.65); } catch (e) {} }
+      g.gain.setValueAtTime(0, now + gap); g.gain.linearRampToValueAtTime(1, now + gap + 0.9); src.start(now + gap);
       music = { name, src, gain: g }; }); };
 
   // ---------------- voice lines ----------------
   let voUntil = 0;
-  const say = (who, cat, v, pan) => {
-    const ids = []; for (let i = 0; i < 6; i++) if (VO.has(`${who}_${cat}_${i}`)) ids.push(`${who}_${cat}_${i}`);
+  const NEEDS = window.VO_NEEDS || {};
+  const say = (who, cat, v, pan, present) => {
+    // only lines whose mentioned heroes are actually in this run (no "Лёха, …" when there is no Лёха)
+    const ids = []; for (let i = 0; i < 6; i++) { const id = `${who}_${cat}_${i}`; if (VO.has(id) && (!present || (NEEDS[id] || []).every((h) => present.has(h)))) ids.push(id); }
     if (!ids.length || ctx.currentTime < voUntil - 0.2) return;
     const id = ids[v % ids.length];
     load('audio/vo/' + id + '.ogg').then((b) => { if (!b) return; const s = ctx.createBufferSource(), p = ctx.createStereoPanner(); s.buffer = b; p.pan.value = pan * 0.6;
@@ -78,6 +81,11 @@
     wave: (t, d) => { tone(t, 0.6, 110, 110, 'sawtooth', 0.3, d, 0.05); tone(t, 0.6, 165, 165, 'sawtooth', 0.2, d, 0.05); },
     combo: (t, d) => [659, 784, 988, 1318].forEach((f, i) => tone(t + i * 0.06, 0.18, f, f, 'square', 0.14, d)),
     spit: (t, d) => { noise(t, 0.2, 800, 300, 3, 0.3, d); tone(t, 0.15, 400, 150, 'sine', 0.15, d); },
+    bass: (t, d) => { tone(t, 0.35, 70, 45, 'sine', 0.9, d); noise(t, 0.12, 300, 120, 1, 0.25, d, 'lowpass'); },
+    chest: (t, d) => [523, 659, 784, 1046, 1318].forEach((f, i) => tone(t + i * 0.07, 0.3, f, f, 'triangle', 0.16, d)),
+    food: (t, d) => { tone(t, 0.12, 300, 500, 'square', 0.12, d); tone(t + 0.1, 0.15, 500, 800, 'square', 0.1, d); },
+    elite: (t, d) => { tone(t, 0.7, 90, 70, 'sawtooth', 0.35, d, 0.05); tone(t, 0.7, 135, 105, 'sawtooth', 0.25, d, 0.05); },
+    evo: (t, d) => [392, 523, 659, 784, 1046, 1318, 1568].forEach((f, i) => tone(t + i * 0.06, 0.4, f, f * 1.01, 'square', 0.12, d)),
     block: (t, d) => { tone(t, 0.15, 1400, 1100, 'triangle', 0.2, d); noise(t, 0.1, 5000, 3000, 2, 0.2, d, 'highpass'); },
     // the star of the show: a brrrapp with a fluttering pitch, wet noise and a squeaky tail; every one is different
     fart: (t, d, r, big) => { const dur = (big ? 1.6 : 0.35 + 0.45 * r), o = ctx.createOscillator(), lfo = ctx.createOscillator(), lg = ctx.createGain(),
@@ -97,7 +105,7 @@
   const preloadFarts = () => { if (fartsReady || !ctx) return; fartsReady = true; [...FARTS, ...BIG].forEach(load); };
   const fartSample = (t, d, r, big) => { preloadFarts(); const list = big ? BIG : FARTS, url = list[Math.floor(r * list.length) % list.length], b = buffers[url]; if (!b) return false;
     const s = ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = 0.82 + 0.4 * ((r * 7.31) % 1); s.connect(d); s.start(t); return true; };
-  const lastKind = {}, GAP = { whip: 0.2, throw: 0.16, shot0: 0.14, shot1: 0.11, shot2: 0.3, shot3: 0.3, kill: 0.14, hit: 0.25, gem: 0.07, boom: 0.18, spit: 0.5, fart: 0.25, dash: 0.2, block: 0.3, revive: 0.5, down: 0.5 };
+  const lastKind = {}, GAP = { bass: 0.3, whip: 0.2, throw: 0.16, shot0: 0.14, shot1: 0.11, shot2: 0.3, shot3: 0.3, kill: 0.14, hit: 0.25, gem: 0.07, boom: 0.18, spit: 0.5, fart: 0.25, dash: 0.2, block: 0.3, revive: 0.5, down: 0.5 };
   const h = (x) => { const v = Math.sin(x * 127.1) * 43758.5453; return v - Math.floor(v); };
 
   // ---------------- per-frame: consume new events ----------------
@@ -108,15 +116,20 @@
     if (S.t < lastT - 0.5) lastT = S.t;                                            // a new run (restart / new room)
     const me = S.players[S.me || 0], cam = me.cam, now = ctx.currentTime;
     playMusic(S.over ? (S.won ? 'victory' : 'calm') : S.brk > 0 ? 'calm' : S.wave >= 8 ? 'intense' : 'battle');
+    const present = new Set(S.players.filter((p) => !p.out).map((p) => p.hero));
     let n = 0, maxT = lastT;
     for (const e of S.ev) { if (e.t <= lastT) continue; if (e.t > maxT) maxT = e.t; if (S.t - e.t > 0.6) continue;   // stale (joined late / tab was hidden)
       const ex = (e.x || 0) - cam[0] - 960, ey = (e.y || 0) - cam[1] - 540, dd = Math.hypot(ex, ey), pan = Math.max(-1, Math.min(1, ex / 1100));
       const near = Math.max(0, 1 - dd / 1600), r = h(e.t * 13 + (e.x || 0));
-      if (e.k === 'say') { say(e.who, e.cat, e.v, pan); continue; }
+      if (e.k === 'say') { if (Math.random() < (window.SETTINGS ? SETTINGS.voiceRate() : 1)) say(e.who, e.cat, e.v, pan, present); continue; }
       if (e.k === 'win' || e.k === 'lose') { say('ann', e.k, 0, 0); continue; }
       if (e.k === 'wave') { FX.wave(now, out(0, 0.7)); if (r < 0.5) say('ann', 'wave', 0, 0); continue; }
       if (e.k === 'combo') { FX.combo(now, out(0, 0.8)); continue; }
       if (e.k === 'lvl') { FX.lvl(now, out(0, 0.7)); continue; }
+      if (e.k === 'upgrade' && e.evo) { FX.evo(now, out(0, 0.8)); continue; }
+      if (e.k === 'elite') { FX.elite(now, out(pan, 0.7)); continue; }
+      if (e.k === 'chest' && e.pid === me.id) { FX.chest(now, out(0, 0.8)); continue; }
+      if (e.k === 'food' && e.pid === me.id) { FX.food(now, out(0, 0.7)); continue; }
       // a crowd fight is a texture, not 200 sounds: my own actions at full volume, allies' quieter, each kind rate-limited
       const mine = e.pid === me.id, kind = e.k === 'shot' ? 'shot' + e.g : e.k;
       if (near <= 0.05 || (e.pid !== undefined && !mine && dd > 900) || n >= 4) continue;
@@ -138,6 +151,7 @@
       else if (e.k === 'revive') FX.revive(now, d);
       else if (e.k === 'fart') fartSample(now, d, r, e.big) || FX.fart(now, d, r, e.big);
       else if (e.k === 'spit') FX.spit(now, d);
+      else if (e.k === 'bass') FX.bass(now, d);
       else if (e.k === 'block') FX.block(now, d);
     }
     lastT = maxT;

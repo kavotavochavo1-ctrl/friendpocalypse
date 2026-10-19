@@ -57,7 +57,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       if (e.k === 'boom') tr = Math.max(tr, (e.kind === 'rocket' ? 0.5 : 0.7) * (1 - a / 0.4) * SS(1100, 300, Math.hypot(e.x - me.x, e.y - me.y)));
       if (e.k === 'hurt' && e.pid === me.id && !e.ally) tr = Math.max(tr, 0.45 * (1 - a / 0.3));
       if (e.k === 'ult' && e.pid === me.id) tr = Math.max(tr, 0.4 * (1 - a / 0.4)); }
-    const sh = tr * tr * 22;
+    const sh = tr * tr * 22 * (window.SETTINGS ? SETTINGS.shake() : 1);
     const cx = Math.round(me.cam[0] + sh * Math.sin(GT * 83)), cy = Math.round(me.cam[1] + sh * Math.sin(GT * 101 + 1));
     const sx = (x) => x - cx, sy = (y) => y - cy, vis = (x, y, m = 300) => x > cx - m && x < cx + W + m && y > cy - m && y < cy + H + m;
 
@@ -83,6 +83,14 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       L.shadow(sx(c.x), sy(c.y), c.r * 0.95, c.r * 0.7, 0.18 * life); }
     for (const e of ST.ev) if (e.k === 'warn' && GT < e.until && GT >= e.t) { const q = (GT - e.t) / (e.until - e.t);
       L.ring(sx(e.x), sy(e.y), e.r, e.r * 0.75, [1, 0.3, 0.15], 0.5 + 0.5 * Math.sin(GT * 30), 0.02); L.ring(sx(e.x), sy(e.y), e.r * q, e.r * 0.75 * q, GAS2, 0.6, 0.05); }
+    // chests (elite drops) and shawarma
+    for (const c of ST.chests || []) { if (!vis(c.x, c.y, 60)) continue; const b = 3 * Math.sin(t * 3 + c.id), x = sx(c.x), y = sy(c.y);
+      L.glow(x, y - 20, 70, [1, 0.8, 0.3], 0.45 + 0.15 * Math.sin(t * 4), 2); L.shadow(x, y + 4, 26, 8, 0.5);
+      L.rrect(x - 24, y - 34 + b, 48, 32, 5, [0.75, 0.45, 0.15], [0.45, 0.25, 0.08]); L.rrect(x - 24, y - 40 + b, 48, 12, 4, [0.95, 0.7, 0.25], [0.7, 0.45, 0.12]);
+      L.solid(x - 4, y - 32 + b, 8, 10, [1, 0.9, 0.4]); L.star(x + 14, y - 40 + b, 10 + 4 * Math.sin(t * 6 + c.id), [1, 0.95, 0.6], 0.9); }
+    for (const f of ST.food || []) { if (!vis(f.x, f.y, 40)) continue; const b = 3 * Math.sin(t * 3.4 + f.id), x = sx(f.x), y = sy(f.y);
+      L.shadow(x, y + 3, 16, 5, 0.45); L.glow(x, y - 12, 34, [1, 0.6, 0.3], 0.25, 2);
+      L.rrect(x - 9, y - 30 + b, 18, 26, 8, [0.95, 0.85, 0.6], [0.8, 0.6, 0.35]); L.solid(x - 8, y - 22 + b, 16, 4, [0.85, 0.3, 0.2]); L.solid(x - 7, y - 14 + b, 14, 3, [0.4, 0.7, 0.3]); }
     // gems (on the ground, before the y-sort)
     for (const g of ST.gems) { if (!vis(g.x, g.y, 40)) continue; const b = 4 * Math.sin(t * 4 + g.id), big = g.v > 1, r = big ? 11 : 7, col = big ? [0.75, 0.4, 1.0] : [0.3, 0.85, 1.0];
       L.shadow(sx(g.x), sy(g.y) + 6, r, r * 0.4, 0.4); L.solid(sx(g.x) - r * 0.7, sy(g.y) - r * 0.7 + b - 6, r * 1.4, r * 1.4, col, Math.PI / 4, r * 0.7, r * 0.7);
@@ -115,10 +123,11 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     for (const e of ST.enemies) { if (!vis(e.x, e.y, 120)) continue; const T = SIM.ETYPES[e.type];
       Y.push([e.y, () => { const sp = Math.hypot(e.vx, e.vy), ph = e.dist / 34 * Math.PI, born = SS(0, 0.35, GT - e.spawnT);
         const view = Math.abs(e.vy) > Math.abs(e.vx) * 1.3 ? (e.vy > 0 ? 'ghoul_front' : 'ghoul_back') : 'ghoul_side';
-        const h = 84 * T.sc * born, w = L.hsz(view, h), x = sx(e.x), y = sy(e.y), bob = Math.abs(Math.sin(ph)) * 4 * Math.min(1, sp / 60);
+        const h = 84 * T.sc * born * (e.elite ? 1.25 : 1), w = L.hsz(view, h), x = sx(e.x), y = sy(e.y), bob = Math.abs(Math.sin(ph)) * 4 * Math.min(1, sp / 60);
         const hit = SS(0.12, 0, GT - e.hitT), u = shade(x, y - h / 2), tn = EV_TINT[e.type]; u.grade[1] = Math.max(0.78, u.grade[1]); u.rim = [0.55, e.face > 0 ? 0.004 : -0.004, -0.005, 1]; u.rimCol = [1, 0.45, 0.6];
         if (hit > 0) { u.grade = [1, 1, hit * 0.85, 1]; u.haze = [1, 0.95, 0.95]; }
-        u.tint = [tn[0], tn[1], tn[2], tn[3]];
+        u.tint = e.elite ? [1.5, 1.15, 0.45, 0.85] : [tn[0], tn[1], tn[2], tn[3]];
+        if (e.elite) L.glow(x, y - h * 0.5, h * 0.9, [1, 0.75, 0.25], 0.22 + 0.08 * Math.sin(GT * 5), 2);
         L.shadow(x, y, w * 0.32, 9 * T.sc, 0.5);
         const sq = 1 + 0.06 * Math.sin(2 * ph) * Math.min(1, sp / 60), lean = (e.vx / 300) * 0.12 + (GT - e.biteT < 0.2 ? 0.25 * e.face * Math.sin((GT - e.biteT) / 0.2 * Math.PI) : 0);
         if (RIG.has(view)) { const k = h / RIGS[view].h, ba = GT - (e.biteT || -9);
@@ -145,6 +154,10 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     for (const b of ST.proj) { const x = sx(b.x), y = sy(b.y), an = Math.atan2(b.vy, b.vx);
       if (b.kind === 'card') { const cols = [[1, 0.35, 0.75], [0.3, 0.9, 1], [1, 0.85, 0.3]], col = b.tox ? GAS2 : cols[b.c || 0], sp = GT * 18 + b.id;
         L.glow(x, y, 26, col, 0.5, 2.5); L.rrect(x - 9, y - 12, 18, 24, 3, [0.98, 0.98, 1], col); L.solid(x - 7, y - 10, 14, 4, col, sp, 7, 10); }
+      else if (b.kind === 'tapok') { const sp = GT * 14 + b.id; L.shadow(x, y + 46, 12, 4, 0.35);
+        L.rrect(x - 13, y - 7, 26, 14, 7, [0.25, 0.45, 0.95], [0.15, 0.25, 0.65]); L.solid(x - 9, y - 1, 18, 2, [0.95, 0.95, 1], sp, 9, 1); L.solid(x - 1, y - 6, 2, 12, [0.95, 0.95, 1], sp, 1, 6); }
+      else if (b.kind === 'can') { const q = 1 - Math.max(0, b.ttl) / 0.6, hgt = 120 * 4 * q * (1 - q);
+        L.shadow(x, y + 46, 10, 4, 0.4); L.rrect(x - 7, y - 11 - hgt, 14, 22, 3, [0.3, 0.95, 0.9], [0.1, 0.55, 0.5]); L.solid(x - 7, y - 4 - hgt, 14, 5, [0.95, 0.3, 0.5], GT * 9, 7, 2.5); }
       else if (b.kind === 'rocket') { L.solid(x - 16, y - 5, 32, 10, [0.4, 0.42, 0.3], an, 16, 5); L.glow(x - Math.cos(an) * 18, y - Math.sin(an) * 18, 30, [1, 0.6, 0.2], 0.9, 2.5);
         for (let j = 1; j < 5; j++) L.puff(x - Math.cos(an) * 22 * j, y - Math.sin(an) * 22 * j, 8 + 3 * j, [0.6, 0.55, 0.5], 0.3 / j, b.id + j); }
       else { L.solid(x - 14, y - 2, 28, 4, [1, 0.9, 0.55], an, 14, 2); L.glow(x, y, 16, [1, 0.8, 0.4], 0.5, 2.5); } }
@@ -176,6 +189,12 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         L.ring(ex, ey, 40 + 60 * q, 30 + 45 * q, [0.6, 1, 0.6], 1 - q, 0.1); }
       if (e.k === 'lvl' && a < 1.2) for (const p of ST.players) if (!p.out) { const q = a / 1.2; L.ring(sx(p.x), sy(p.y), 30 + 70 * q, 22 + 50 * q, [0.45, 0.7, 1], 1 - q, 0.08); L.glow(sx(p.x), sy(p.y) - 60, 90, [0.5, 0.7, 1], 0.5 * (1 - q), 2); }
       if (e.k === 'spit' && a < 0.2) L.glow(ex, ey - 40, 30, [0.8, 0.3, 1], 1 - a / 0.2, 2);
+      if (e.k === 'bass' && a < 0.45) { const q = a / 0.45; L.ring(ex, ey - 20, e.r * (0.3 + 0.7 * q), e.r * 0.75 * (0.3 + 0.7 * q), [0.75, 0.55, 1], 0.7 * (1 - q), 0.06); }
+      if (e.k === 'chest' && a < 1.2) { const q = a / 1.2; for (let j = 0; j < 10; j++) L.star(ex + Math.cos(j * 0.63) * 90 * q, ey - 40 - 120 * q + Math.sin(j * 0.63) * 30, 14, [1, 0.85, 0.35], 1 - q);
+        L.glow(ex, ey - 40, 160, [1, 0.8, 0.3], 0.6 * (1 - q), 2); }
+      if (e.k === 'food' && a < 0.8) { const q = a / 0.8; L.ring(ex, ey, 20 + 50 * q, 14 + 36 * q, [0.5, 1, 0.5], 1 - q, 0.1); }
+      if (e.k === 'elite' && a < 1.5) L.ring(ex, ey, 60 + 30 * Math.sin(a * 12), 45, [1, 0.75, 0.2], 1 - a / 1.5, 0.08);
+      if (e.k === 'upgrade' && e.evo && a < 1.6) { const q = a / 1.6; L.glow(ex, ey - 60, 260, [1, 0.85, 0.4], 0.9 * (1 - q), 2); for (let j = 0; j < 14; j++) L.star(ex + Math.cos(j * 0.45 + a * 3) * 140 * q, ey - 60 + Math.sin(j * 0.45 + a * 3) * 100 * q, 16, [1, 0.95, 0.6], 1 - q); }
       if (e.k === 'block' && a < 0.3) { L.ring(ex, ey, 30 + 40 * a, 30 + 40 * a, [0.5, 0.9, 1], 1 - a / 0.3, 0.15); }
       if (e.k === 'shot' && a < 0.05) { const p = ST.players.find((o) => o.id === e.pid); if (p) L.glow(sx(p.x) + Math.cos(e.ang) * 48, sy(p.y) - 52 + Math.sin(e.ang) * 30, 30 + 10 * e.g, [1, 0.8, 0.4], 0.6, 2.4); }
     }
@@ -191,8 +210,12 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       if (p.hero === 'danil' && qa < 5) { const ca = GT * 2.5; L.glow(x + Math.cos(ca) * 70, y - 120 + Math.sin(ca) * 20, 18, [1, 1, 1], 0.6, 2); L.rrect(x + Math.cos(ca) * 70 - 12, y - 128 + Math.sin(ca) * 20, 24, 16, 3, [0.2, 0.2, 0.25], [0.35, 0.35, 0.4]); }
       if (p.hero === 'leha' && qa < 4 + p.m.shield) { const R = 110; L.ring(x + p.fx * 40, y - 40 + p.fy * 30, R, R * 0.8, [0.45, 0.85, 1], 0.6 + 0.2 * Math.sin(GT * 10), 0.06); L.glow(x, y - 40, 140, [0.4, 0.8, 1], 0.15, 2); }
       if (GT < p.buffT) L.ring(x, y, 46, 18, [1, 0.5, 0.85], 0.6, 0.15);
+      if (p.evo && p.hero === 'hasan') for (let k = 0; k < 2; k++) { const R = 170 * p.m.area;
+        G.blend('add'); G.draw(L.P.slash, { u_col: [1, 0.55, 0.15], u_amt: 0.75, u_ac: GT * 7 + k * Math.PI, u_hs: 1.0, u_w: 0.08, u_core: 1 }, G.xf(x - R, y - 30 - R * 0.75, 2 * R, 1.5 * R)); G.blend(); }
+      if (p.evo && p.hero === 'danil') for (let k = 0; k < 6; k++) { const a = GT * 2.4 + k * Math.PI / 3, cx = x + Math.cos(a) * 130, cy = y - 40 + Math.sin(a) * 100, col = [[1, 0.35, 0.75], [0.3, 0.9, 1], [1, 0.85, 0.3]][k % 3];
+        L.glow(cx, cy, 26, col, 0.5, 2.5); L.rrect(cx - 9, cy - 12, 18, 24, 3, [0.98, 0.98, 1], col); }
     }
-    L.finish(t, { bloom: [0.26, 0.22], vignette: 0.86, warm: 0.6, roll: 1, dither: 0 });
+    { const fl = window.SETTINGS ? SETTINGS.flash() : 1; L.finish(t, { bloom: [0.26 * fl, 0.22 * fl], vignette: 0.86, warm: 0.6, roll: 1, dither: 0 }); }
 
     drawHUD(ST, me, GT, t, sx, sy);
   };
@@ -228,7 +251,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         aim: act ? aim : null, act, lean: lean + (dash ? 0.15 * (p.fx || 0) : 0), gun: g >= 0 ? GUNS[g] : null, gunLen: [34, 50, 72, 92][g] });
     } else L.sprite(view, 0, 0, { m: M.of(M.t(x, y - bob), M.r(lean), M.s((flip ? -1 : 1) / Math.sqrt(sq), sq)), w, h, pivot: [w / 2, h], u });
     if (p.hero === 'hasan' && p.hp < p.hpMax * 0.3) L.star(x + 6, y - h * 0.72, 10 + 4 * Math.sin(GT * 12), [1, 0.8, 0.3], 0.8);
-    if (!mine) { const nw = labW('nm' + p.id, SIM.HEROES[p.hero].name, { size: 18, font: FONT }); lab('nm' + p.id, SIM.HEROES[p.hero].name, x, y - h - 26, { size: 18, al: 0.5, col: '#f6e7c8', font: FONT });
+    if (!mine && !ST.over && (!window.SETTINGS || SETTINGS.get('names'))) { const nw = labW('nm' + p.id, SIM.HEROES[p.hero].name, { size: 18, font: FONT }); lab('nm' + p.id, SIM.HEROES[p.hero].name, x, y - h - 26, { size: 18, al: 0.5, col: '#f6e7c8', font: FONT });
       L.solid(x - 30, y - h - 12, 60, 7, [0.08, 0.03, 0.04]); L.solid(x - 29, y - h - 11, 58 * p.hp / p.hpMax, 5, [0.9, 0.2, 0.25]); }
   }
 
@@ -246,11 +269,18 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     bar(184, 108, 296, 22, ST.xp / ST.xpNext, [0.35, 0.55, 1], [0.2, 0.3, 0.8]);
     lab('myxp', `${Math.floor(ST.xp)} / ${ST.xpNext}`, 470, 119, Object.assign({ size: 16, al: 1 }, F));
     lab('mylv', `Ур. ${ST.lvl}`, 184, 150, Object.assign({ size: 24, col: '#ffd76a' }, F));
+    { const it = me.items || {}, W2 = Object.keys(SIM.UPG.WEAPONS).filter((k) => it[k]), P2 = Object.keys(SIM.UPG.PASSIVES).filter((k) => it[k]);
+      const slots = [['sig', SIM.UPG.SIG[me.hero].n, it.sig || 1, 1], ...W2.map((k) => [k, SIM.UPG.WEAPONS[k].n, it[k], 2]), ...P2.map((k) => [k, SIM.UPG.PASSIVES[k].n, it[k], 3])];
+      panel('items', 24, 178, 470, 46, 0.7);
+      slots.forEach(([k, n, l, kind], i) => { const x = 32 + i * 66, y = 184, col = kind === 1 ? hcol(me.hero) : kind === 2 ? [0.45, 0.8, 1] : [0.85, 0.75, 0.6];
+        L.rrect(x, y, 60, 34, 6, col.map((v) => v * 0.45), col.map((v) => v * 0.25)); if (kind === 1 && me.evo) L.glow(x + 30, y + 17, 40, [1, 0.8, 0.3], 0.4, 2);
+        lab('it' + i, n.slice(0, 4), x + 30, y + 13, Object.assign({ size: 15, al: 0.5 }, F));
+        for (let j = 0; j < 5; j++) L.solid(x + 6 + j * 10, y + 26, 8, 4, j < l ? [1, 0.85, 0.35] : [0.2, 0.15, 0.15]); }); }
     if (me.hero === 'danil') for (let k = 0; k < 3; k++) { const c = me.tokens[k], cols = [[1, 0.35, 0.75], [0.3, 0.9, 1], [1, 0.85, 0.3]];
       L.rrect(300 + k * 30, 138, 22, 28, 4, c === undefined ? [0.2, 0.15, 0.18] : cols[c], c === undefined ? [0.15, 0.1, 0.12] : cols[c]); }
     if (me.hero === 'leha') lab('gun', SIM.LEHA_GUNS[GT - me.ultT < 7 ? 3 : me.tier], 300, 150, Object.assign({ size: 18, col: '#c9d68a' }, F));
     // ---- allies (left column) ----
-    let ay = 200; for (const p of ST.players) { if (p.id === me.id) continue; panel('al' + p.id, 24, ay, 210, 72, 0.75);
+    let ay = 236; for (const p of ST.players) { if (p.id === me.id) continue; panel('al' + p.id, 24, ay, 210, 72, 0.75);
       L.sprite('portrait_' + p.hero, 30, ay + 5, { w: 62, h: 62, u: { alpha: p.out ? 0.3 : 1, grade: p.down ? [0.2, 0.7, 0, 1] : [1, 1, 0, 1] } });
       lab('aln' + p.id, SIM.HEROES[p.hero].name + (p.bot ? ' (бот)' : ''), 100, ay + 20, Object.assign({ size: 16 }, F));
       bar(100, ay + 38, 124, 16, p.out ? 0 : p.hp / p.hpMax, [0.9, 0.2, 0.25], [0.6, 0.1, 0.15]);
@@ -278,12 +308,14 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     // ---- abilities (bottom centre): Space dash, Q, R ult ----
     if (!ST.over) { const slots = [['Space', 'Рывок', me.dashCD / 1.1, 0], ['Q', { hasan: 'Подкрутил усы', danil: 'Фанкам', vitya: 'Залп по ветру', leha: 'Прикрыл!' }[me.hero], me.qCD / (SIM.QCD[me.hero] * me.m.cd), 0],
       ['R', { hasan: 'Усатое торнадо', danil: 'Камбэк года', vitya: 'Катастрофа', leha: 'До зубов' }[me.hero], 1 - me.ult, 1]];
+    const ultPct = Math.floor(me.ult * 100);
     slots.forEach(([key, name, cd, ult], i) => { const x = W / 2 - 200 + i * 140, y = H - 150, s = 112;
       panel('ab' + i, x, y, s, s, 0.88);
       if (ult) { L.sprite('portrait_' + me.hero, x + 6, y + 6, { w: s - 12, h: s - 12, u: { grade: cd > 0 ? [0.2, 0.5, 0, 1] : [1, 1, 0, 1] } }); if (cd <= 0) L.glow(x + s / 2, y + s / 2, 80, hcol(me.hero), 0.35 + 0.2 * Math.sin(GT * 6), 2); }
       else L.glow(x + s / 2, y + s / 2, 40, i ? hcol(me.hero) : [0.8, 0.8, 0.9], cd > 0 ? 0.15 : 0.6, 2);
       if (cd > 0) { L.solid(x + 4, y + 4 + (s - 8) * (1 - cd), s - 8, (s - 8) * cd, [0, 0, 0], 0, 0, 0, 0.55); }
       lab('abk' + i, key, x + s / 2, y + s + 6, Object.assign({ size: 20, al: 0.5, col: '#ffd76a' }, F));
+      if (ult && cd > 0) lab('ultp', ultPct + '%', x + s / 2, y + s / 2, Object.assign({ size: 26, al: 0.5, col: '#ffffff' }, F));
       lab('abn' + i, name, x + s / 2, y - 18, Object.assign({ size: 15, al: 0.5 }, F)); }); }
     // ---- combo banner ----
     if (GT - ST.comboT < 2.2) { const e = [...ST.ev].reverse().find((v) => v.k === 'combo'); if (e) { const a = GT - e.t, k = SS(0, 0.15, a) * SS(2.2, 1.7, a), s = 54 + 20 * SS(0.15, 0, a);
@@ -298,11 +330,14 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     if (me.pick && !me.down && !ST.over) { const cw = 420, ch = 190, x0 = W / 2 - (cw * 3 + 40) / 2, y0 = H - 470;
       lab('pickt', 'Новый уровень! Выбери улучшение (1 / 2 / 3)', W / 2, y0 - 34, Object.assign({ size: 28, al: 0.5, col: '#9fd0ff' }, F));
       L.uiBox('pickt', W / 2 - labW('pickt', 'Новый уровень! Выбери улучшение (1 / 2 / 3)', Object.assign({ size: 28 }, F)) / 2 - 10, y0 - 60, labW('pickt', 'Новый уровень! Выбери улучшение (1 / 2 / 3)', Object.assign({ size: 28 }, F)) + 20, 52);
-      me.pick.forEach((id, i) => { const U = SIM.UPG[id], x = x0 + i * (cw + 20), own = !!U.hero;
-        panel('card' + i, x, y0, cw, ch, 0.92); if (own) L.glow(x + cw / 2, y0 + 30, 120, hcol(me.hero), 0.25, 2);
+      me.pick.forEach((c, i) => { const x = x0 + i * (cw + 20), evo = c.kind === 'evo', own = c.kind === 'sig' || evo;
+        const partner = c.kind === 'p' && SIM.UPG.SIG[me.hero].evo === c.id && !me.evo;
+        panel('card' + i, x, y0, cw, ch, 0.92); if (own) L.glow(x + cw / 2, y0 + 30, evo ? 220 : 120, evo ? [1, 0.8, 0.3] : hcol(me.hero), evo ? 0.5 + 0.2 * Math.sin(GT * 5) : 0.25, 2);
         lab('ck' + i, String(i + 1), x + 26, y0 + 34, Object.assign({ size: 34, col: '#ffd76a' }, F));
-        lab('cn' + i, U.n, x + 64, y0 + 34, Object.assign({ size: 24, col: own ? '#ffb0e0' : '#f6e7c8' }, F));
-        wrap(U.d, 24).forEach((ln, j) => lab('cd' + i + '_' + j, ln, x + 22, y0 + 96 + j * 32, Object.assign({ size: 20, col: '#d8c8b0' }, F))); }); }
+        lab('cn' + i, c.n, x + 64, y0 + 34, Object.assign({ size: 22, col: evo ? '#ffd76a' : own ? '#ffb0e0' : c.kind === 'w' ? '#9fe0ff' : '#f6e7c8' }, F));
+        if (c.tag) lab('ct' + i, c.tag, x + cw - 18, y0 + 72, Object.assign({ size: 18, al: 1, col: c.tag === 'НОВОЕ' ? '#8fff8f' : evo ? '#ffd76a' : '#c8b8a0' }, F));
+        wrap(c.d, 26).forEach((ln, j) => lab('cd' + i + '_' + j, ln, x + 22, y0 + 104 + j * 30, Object.assign({ size: 19, col: '#d8c8b0' }, F)));
+        if (partner) lab('ce' + i, '→ нужно для эволюции', x + 22, y0 + ch - 20, Object.assign({ size: 16, col: '#ffd76a' }, F)); }); }
     // ---- downed / out ----
     if (me.down && !me.out && !ST.over) { const s = ST.solo && me.selfRes > 0 ? 'Тебя вырубило! E — встать' : 'Тебя вырубило! Ждём, пока поднимут…';
       const tw = labW('dn', s, Object.assign({ size: 34 }, F)); L.rrect(W / 2 - tw / 2 - 30, H * 0.62 - 40, tw + 60, 110, 14, [0.3, 0.05, 0.05], [0.15, 0.02, 0.02], 0.8); L.uiBox('dn', W / 2 - tw / 2 - 30, H * 0.62 - 40, tw + 60, 110);
@@ -324,7 +359,9 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     const base = (f) => { const s = SIM.spawn(0, { hero: 'danil' }); for (let i = 0; i < 600; i++) SIM.step(s, { right: i < 200 ? 1 : 0 }); if (f) f(s); return s; };
     const match = SIM.at(20);
     return { states: [['match', Object.assign({}, match, { me: 0 })], ['play', base()],
-      ['pick', base((s) => { s.players[0].pick = ['h_oil', 'v_deo', 'l_gun']; s.players[0].hero = 'leha'; })],
+      ['pick', base((s) => { const p = s.players[0]; p.hero = 'leha'; p.items = { sig: 5, tapok: 5, speaker: 3, dmg: 5, armor: 1, cd: 2, plate: 3, pick: 4 };
+        p.pick = [SIM.cardFor(p, 'evo'), SIM.cardFor(p, 'armor'), SIM.cardFor(p, 'can')]; })],
+      ['pick_hint', base((s) => { const p = s.players[0]; p.hero = 'hasan'; p.items = { sig: 4 }; p.pick = [SIM.cardFor(p, 'sig'), SIM.cardFor(p, 'pick'), SIM.cardFor(p, 'heal')]; })],
       ['down', base((s) => { s.players[0].down = 1; s.players[0].downT = 22; s.players[1].down = 1; })],
       ['combo', base((s) => { s.comboT = s.t; s.ev.push({ k: 'combo', key: 'toxcard', t: s.t - 0.3, x: 2600, y: 1900 }); })],
       ['results', base((s) => { s.over = s.t; s.won = 1; s.awards = [{ pid: 2, t: 'Главный токсик', d: '999 раз окурил своих' }, { pid: 1, t: 'Профессиональный лежун', d: 'падал 99 раз' }, { pid: 0, t: 'Пылесос усов', d: 'собрал 99999 опыта' }, { pid: 3, t: 'Мясник парка', d: '999999 урона' }, { pid: 1, t: 'Ангел-хранитель', d: 'поднял друзей 99 раз' }, { pid: 0, t: 'Любитель ароматов', d: '999 сек в облаке Вити' }, { pid: 2, t: 'Командный игрок', d: '99 комбо' }]; })]],

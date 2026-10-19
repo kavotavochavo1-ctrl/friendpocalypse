@@ -20,32 +20,33 @@
   const ET = Object.keys(SIM.ETYPES), r1 = (v) => Math.round(v), r2 = (v) => Math.round(v * 100) / 100;
   const HN = ['hasan', 'danil', 'vitya', 'leha'];
   const PF = ['id', 'hero', 'bot', 'x', 'y', 'vx', 'vy', 'fx', 'fy', 'ax', 'ay', 'dir', 'dist', 'hp', 'hpMax', 'down', 'downT', 'revP', 'out', 'inv', 'hurtT',
-    'dashT', 'dashCD', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack'];
+    'dashT', 'dashCD', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo'];
   const evSince = {};
   function snapshot(S, pid) {
     const p = S.players.find((o) => o.id === pid) || S.players[0], R = 1500, nearP = (x, y, r = R) => Math.abs(x - p.x) < r * 1.4 && Math.abs(y - p.y) < r;
     // players as flat number rows (only what drawing, HUD, audio and prediction read); own row also carries cam + upgrade pick
     const players = S.players.map((o) => { const row = PF.map((k) => { const v = o[k]; return typeof v === 'number' ? (Number.isInteger(v) ? v : r2(v)) : v; });
       row[PF.indexOf('hero')] = HN.indexOf(o.hero); row[PF.indexOf('ack')] = ackOf[o.id] || 0;
-      return [row, [r2(o.m.area), r2(o.m.cd), r2(o.m.shield), r2(o.m.spd)], o.tokens, o.id === pid ? o.pick : 0, o.id === pid ? o.cam.map(r1) : 0]; });
-    const E = []; for (const e of S.enemies) if (nearP(e.x, e.y)) E.push(e.id, ET.indexOf(e.type), r1(e.x), r1(e.y), r1(e.vx), r1(e.vy), r1(e.hp), r1(e.hpMax), r1(e.dist), r2(e.spawnT), r2(e.hitT), r2(e.biteT || -9), e.face);
+      return [row, [r2(o.m.area), r2(o.m.cd), r2(o.m.shield), r2(o.m.spd)], o.tokens, o.id === pid ? o.pick : 0, o.id === pid ? o.cam.map(r1) : 0, o.id === pid ? o.items : 0]; });
+    const E = []; for (const e of S.enemies) if (nearP(e.x, e.y)) E.push(e.id, ET.indexOf(e.type) + (e.elite ? 10 : 0), r1(e.x), r1(e.y), r1(e.vx), r1(e.vy), r1(e.hp), r1(e.hpMax), r1(e.dist), r2(e.spawnT), r2(e.hitT), r2(e.biteT || -9), e.face);
     const G = []; for (const g of S.gems) if (nearP(g.x, g.y, 1200)) G.push(g.id, r1(g.x), r1(g.y), g.v);
-    const B = S.proj.filter((b) => nearP(b.x, b.y)).map((b) => [b.id, b.kind, r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), b.c || 0, b.tox || 0]);
+    const B = S.proj.filter((b) => nearP(b.x, b.y)).map((b) => [b.id, b.kind, r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), b.c || 0, b.tox || 0, b.kind === 'can' ? r2(b.ttl) : 0]);
     const EB = S.eproj.filter((b) => nearP(b.x, b.y)).map((b) => [r1(b.x), r1(b.y), r2(b.ttl)]);
     const since = evSince[pid] ?? -1;                                       // only events this friend has not been sent yet
     const ev = S.ev.filter((e) => e.t > since && (e.x === undefined || nearP(e.x, e.y, 2000) || e.k === 'say'));
     const enemyDots = S.enemies.length > 0 ? S.enemies.filter((e, i) => i % 3 === 0).map((e) => [r1(e.x / 8), r1(e.y / 8)]) : [];
     return { t: S.t, wave: S.wave, waveT: r2(S.waveT), brk: r2(S.brk), xp: S.xp, lvl: S.lvl, xpNext: S.xpNext, kills: S.kills, over: S.over, won: S.won,
-      awards: S.awards, comboT: S.comboT, solo: S.solo, players, E, G, B, EB, clouds: S.clouds, marks: S.marks, ev, dots: enemyDots };
+      awards: S.awards, comboT: S.comboT, solo: S.solo, players, E, G, B, EB, clouds: S.clouds, marks: S.marks, ev, dots: enemyDots,
+      chests: S.chests.map((c) => ({ id: c.id, x: r1(c.x), y: r1(c.y) })), food: S.food.filter((f) => nearP(f.x, f.y)).map((f) => ({ id: f.id, x: r1(f.x), y: r1(f.y) })) };
   }
   function restore(n) {
     const enemies = []; for (let i = 0; i < n.E.length; i += 13) { const a = n.E;
-      enemies.push({ id: a[i], type: ET[a[i + 1]], x: a[i + 2], y: a[i + 3], vx: a[i + 4], vy: a[i + 5], hp: a[i + 6], hpMax: a[i + 7], dist: a[i + 8], spawnT: a[i + 9], hitT: a[i + 10], biteT: a[i + 11], face: a[i + 12], r: SIM.ETYPES[ET[a[i + 1]]].r }); }
+      enemies.push({ id: a[i], type: ET[a[i + 1] % 10], elite: a[i + 1] >= 10 ? 1 : 0, x: a[i + 2], y: a[i + 3], vx: a[i + 4], vy: a[i + 5], hp: a[i + 6], hpMax: a[i + 7], dist: a[i + 8], spawnT: a[i + 9], hitT: a[i + 10], biteT: a[i + 11], face: a[i + 12], r: SIM.ETYPES[ET[a[i + 1] % 10]].r }); }
     const gems = []; for (let i = 0; i < n.G.length; i += 4) gems.push({ id: n.G[i], x: n.G[i + 1], y: n.G[i + 2], v: n.G[i + 3] });
-    const proj = n.B.map((b) => ({ id: b[0], kind: b[1], x: b[2], y: b[3], vx: b[4], vy: b[5], c: b[6], tox: b[7] }));
+    const proj = n.B.map((b) => ({ id: b[0], kind: b[1], x: b[2], y: b[3], vx: b[4], vy: b[5], c: b[6], tox: b[7], ttl: b[8] }));
     const eproj = n.EB.map((b) => ({ x: b[0], y: b[1], ttl: b[2] }));
-    const players = n.players.map(([row, m, tokens, pick, cam]) => { const o = {}; PF.forEach((k, i) => (o[k] = row[i])); o.hero = HN[o.hero];
-      o.m = { area: m[0], cd: m[1], shield: m[2], spd: m[3] }; o.tokens = tokens || []; o.pick = pick || null; o.cam = cam || [o.x - 960, o.y - 600]; return o; });
+    const players = n.players.map(([row, m, tokens, pick, cam, items]) => { const o = {}; PF.forEach((k, i) => (o[k] = row[i])); o.hero = HN[o.hero];
+      o.m = { area: m[0], cd: m[1], shield: m[2], spd: m[3] }; o.tokens = tokens || []; o.pick = pick || null; o.items = items || { sig: 1 }; o.cam = cam || [o.x - 960, o.y - 600]; return o; });
     for (const e of n.ev) evBuf.push(e); while (evBuf.length && evBuf[0].t < n.t - 3) evBuf.shift(); if (evBuf.length > 200) evBuf.splice(0, evBuf.length - 200);
     return Object.assign({}, n, { players, enemies, gems, proj, eproj, dots: n.dots, ev: evBuf.slice() });
   }
@@ -97,7 +98,7 @@
     el.innerHTML = `<div class="box"><h1>FRIENDPOCALYPSE</h1><div class="sub">${inRoom ? (isHost ? 'Ты хост. Код комнаты: <b style="color:#ffd76a;font-size:18px">' + NET.code + '</b> — продиктуй друзьям или кинь ссылку' : 'Комната <b>' + NET.code + '</b>' + (NET.mode === 'client' ? ' — ждём старта от хоста' : '')) : 'Выбери героя'}</div>
       <div class="heroes">${HEROES.map((h) => `<div class="h ${NET.hero === h ? 'on' : ''}" data-h="${h}"><img src="assets/portrait_${h}.png"><b>${NAMES[h]}</b><small>${DESC[h]}</small></div>`).join('')}</div>
       ${inRoom ? `<div class="peers">${roster.map((r) => `<div class="peer">${r.self ? '★ ' : ''}${NAMES[r.hero]}${r.host ? ' (хост)' : ''}</div>`).join('')}</div>` : ''}
-      <div class="row">${!inRoom ? `<button id="solo">Играть (с ботами)</button><button id="soloalone" class="alt">Соло без ботов</button><button id="mk" class="alt">Создать комнату для друзей</button>` : ''}
+      <div class="row">${!inRoom ? `<button id="solo">Играть (с ботами)</button><button id="soloalone" class="alt">Соло без ботов</button><button id="mk" class="alt">Создать комнату для друзей</button>` : ''}<button id="opts" class="alt">Настройки</button>
         ${!inRoom ? `</div><div class="row"><input id="code" maxlength="5" placeholder="КОД КОМНАТЫ ОТ ДРУГА" style="text-transform:uppercase;flex:0 1 260px"><button id="join" class="alt">Войти</button>` : ''}
         ${isHost ? `<input id="lnk" readonly value="${link}"><button id="cp" class="alt">Копировать ссылку</button>` : ''}</div>
       ${isHost ? `<div class="row"><label><input type="checkbox" id="bots" ${NET.bots ? 'checked' : ''} style="min-width:0;flex:0"> Боты на свободных героях</label><button id="go">Старт (${roster.length} игр.)</button></div>` : ''}
@@ -107,6 +108,7 @@
     if ($('solo')) $('solo').onclick = () => startLocal(false);
     if ($('soloalone')) $('soloalone').onclick = () => startLocal(true);
     if ($('mk')) $('mk').onclick = () => host();
+    if ($('opts')) $('opts').onclick = () => SETTINGS.show();
     if ($('join')) { const go = () => { const c = $('code').value.trim().toUpperCase(); if (c.length >= 4) client(c); }; $('join').onclick = go; $('code').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') go(); }; }
     if ($('cp')) $('cp').onclick = () => { navigator.clipboard.writeText(link).then(() => say('Ссылка скопирована — кидай друзьям')); };
     if ($('bots')) $('bots').onchange = (e) => (NET.bots = e.target.checked);
@@ -212,7 +214,8 @@
   // ---- F3: network / performance overlay (what a laggy friend should screenshot) ----
   const ov = document.createElement('div'); ov.style.cssText = 'position:absolute;right:8px;top:8px;z-index:7;font:11px monospace;color:#cfe;background:#000b;padding:6px 9px;border-radius:6px;white-space:pre;display:none';
   document.body.appendChild(ov); let fN = 0, fT = performance.now(), fps = 0, gotPrev = 0, sentPrev = 0, snapHz = 0;
-  addEventListener('keydown', (e) => { if (e.code === 'F3') { ov.style.display = ov.style.display === 'none' ? 'block' : 'none'; e.preventDefault(); } });
+  addEventListener('keydown', (e) => { if (e.code === 'F3') { SETTINGS.set('netinfo', SETTINGS.get('netinfo') ? 0 : 1); e.preventDefault(); } });
+  SETTINGS.onChange((V) => (ov.style.display = V.netinfo ? 'block' : 'none'));
   const tickOv = () => { requestAnimationFrame(tickOv); fN++; const now = performance.now();
     if (now - fT >= 1000) { fps = fN; fN = 0; snapHz = NET.mode === 'client' ? NET.dbg.got - gotPrev : NET.dbg.sent - sentPrev; gotPrev = NET.dbg.got; sentPrev = NET.dbg.sent; fT = now;
       if (NET.mode === 'client' && act.ping && NET.hostPeer) act.ping.send({ t: now }, { target: NET.hostPeer }); }
