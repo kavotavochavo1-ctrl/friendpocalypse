@@ -49,7 +49,9 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
   const sz = (n) => Z[n] || [G.tex(n).w, G.tex(n).h];
   const COMBO = { gaswhip: 'УСАТЫЙ ГАЗ!', headshot: 'ХЕДШОТ-КАМБЭК!', gasboom: 'ГАЗ РВАНУЛ!', toxcard: 'ТОКСИЧНЫЕ КАРТОЧКИ!' };
   // ---- FX kit: painted effect sprites (art/gen fx_*) + Arcada Effector flipbooks (fxa_*, exported atlases: cols, rows, frames) ----
-  const FXA = { fxa_boom: [3, 3, 9], fxa_sparks: [4, 2, 8], fxa_shock: [4, 2, 8], fxa_fan: [4, 2, 8], fxa_gas: [4, 2, 8] };
+  const FXA = { fxa_boom: [3, 3, 9], fxa_sparks: [4, 2, 8], fxa_shock: [4, 2, 8], fxa_fan: [4, 2, 8], fxa_gas: [4, 2, 8],
+    fxa_evo: [4, 3, 12], fxa_vortex: [4, 4, 16], fxa_holo: [4, 4, 16], fxa_cyclone: [4, 4, 16], fxa_rank: [4, 4, 16] };          // evolution set (art/effector/*.json)
+  const loopQ = (t, k = 0) => (((t + k) % 1) + 1) % 1;                                      // looping Effector atlases: 1 s per cycle
   const book = (n, q, x, y, w, h, o = {}) => { if (q < 0 || q >= 1) return; const [c, r, f] = FXA[n], i = Math.min(f - 1, Math.floor(q * f)), cx = i % c, cy = Math.floor(i / c);
     if (o.add) G.blend('add'); L.sprite(n, x - w / 2, y - h / 2, { w, h, src: [cx / c, cy / r, (cx + 1) / c, (cy + 1) / r], u: { alpha: o.a ?? 1, tint: o.tint || [1, 1, 1, 0] } }); if (o.add) G.blend(); };
   const spr = (n, x, y, w, h, rot = 0, o = {}) => { if (o.add) G.blend('add');
@@ -206,6 +208,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     for (const c of ST.clouds) { if (!vis(c.x, c.y, c.r)) continue; const a = GT - c.t0, life = SS(0, 0.3, a) * SS(c.ttl, c.ttl - 0.8, a);
       const ally = ST.players.some((p) => p.hero !== 'vitya' && !p.out && ((p.x - c.x) / c.r) ** 2 + ((p.y - c.y) / (c.r * 0.75)) ** 2 < 1);
       drawCloud(c.id, sx(c.x), sy(c.y), c.r, life, a, ally, c.big);
+      if (c.cyc) book('fxa_cyclone', loopQ(GT * 0.9, c.id * 0.13), sx(c.x), sy(c.y) - 14, c.r * 3, c.r * 3, { a: 0.85 * life });
       if (c.big) for (let j = 0; j < 10; j++) { const an = GT * 2.2 + j * 0.63, rr = c.r * (0.3 + 0.5 * rnd(c.id, j + 200));          // debris in the storm
         L.solid(sx(c.x) + Math.cos(an) * rr, sy(c.y) - 40 + Math.sin(an) * rr * 0.5 - 30 * rnd(c.id, j), 10, 5, j % 2 ? [0.45, 0.28, 0.12] : [0.6, 0.45, 0.15], GT * 5 + j, 5, 2.5, life); } }
     // Hasan's tornado: a funnel of mustaches spinning on a dust shadow, wind arcs per tier
@@ -307,7 +310,10 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         L.glow(ex, ey - 40, 160, [1, 0.8, 0.3], 0.6 * (1 - q), 2); }
       if (e.k === 'food' && a < 0.8) { const q = a / 0.8; L.ring(ex, ey, 20 + 50 * q, 14 + 36 * q, [0.5, 1, 0.5], 1 - q, 0.1); }
       if (e.k === 'elite' && a < 1.5) L.ring(ex, ey, 60 + 30 * Math.sin(a * 12), 45, [1, 0.75, 0.2], 1 - a / 1.5, 0.08);
-      if (e.k === 'upgrade' && e.evo && a < 1.6) { const q = a / 1.6; L.glow(ex, ey - 60, 260, [1, 0.85, 0.4], 0.9 * (1 - q), 2); for (let j = 0; j < 14; j++) L.star(ex + Math.cos(j * 0.45 + a * 3) * 140 * q, ey - 60 + Math.sin(j * 0.45 + a * 3) * 100 * q, 16, [1, 0.95, 0.6], 1 - q); }
+      // evolution: the Effector «Evo Burst» (flash, gold shock ring, spark spray, rising stars) + its name over the hero
+      if (e.k === 'upgrade' && e.evo && a < 1.8) { const p = ST.players.find((o) => o.id === e.pid), q = a / 1.8; L.glow(ex, ey - 60, 220, [1, 0.85, 0.4], 0.6 * (1 - q) ** 2, 2);
+        book('fxa_evo', a / 0.95, ex, ey - 70, 480, 480, { add: 1 });
+        if (p) lab('evo' + p.id, 'ЭВОЛЮЦИЯ: ' + SIM.UPG.SIG[p.hero].evoN, Math.max(260, Math.min(W - 260, ex)), Math.max(150, ey - 210 - 30 * SS(0, 0.3, q)), { size: 30, al: 0.5, col: '#ffe066', a: SS(0, 0.08, q) * SS(1, 0.75, q), font: FONT }); }
       if (e.k === 'block' && a < 0.3) book('fxa_sparks', a / 0.3, ex, ey, 70, 70, { add: 1, tint: e.by === 'leha' ? [0.5, 0.9, 1.4, 0.9] : undefined });
       if (e.k === 'shot' && a < 0.05) { const p = ST.players.find((o) => o.id === e.pid); if (p) { const mz = RIG.muzzle['p' + p.id]; L.glow(mz ? mz.tip[0] : sx(p.x) + Math.cos(e.ang) * 48, mz ? mz.tip[1] : sy(p.y) - 52 + Math.sin(e.ang) * 30, 30 + 10 * e.g, [1, 0.8, 0.4], 0.6, 2.4); } }
     }
@@ -318,7 +324,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         G.blend('add'); G.draw(L.P.slash, { u_col: [1, 0.62, 0.2], u_amt: 0.55 * amt, u_ac: an - 0.5, u_hs: 0.7, u_w: 0.07, u_core: 0.7 }, G.xf(x - R, y - 60 - R * 0.75, 2 * R, 1.5 * R)); G.blend();
         ribbon('fx_whip_s', x, y - 112, Math.atan2(ey + 52, ex) + 0.35, Math.hypot(ex, ey + 52) * 0.95, 30, -0.8, amt); } };
       if (p.hero === 'hasan' && qa < 4) { blades(150 * p.m.area, 11, SS(4, 3.6, qa) * SS(0, 0.15, qa)); if (Math.floor(GT * 12) % 2) L.puff(x + rnd(GT, 1) * 60 - 30, y - 6, 16, [0.55, 0.42, 0.3], 0.3, GT); }
-      else if (p.evo && p.hero === 'hasan') blades(165 * p.m.area, 7, 0.75);
+      if (p.evo && p.hero === 'hasan') { const R = 165 * p.m.area; book('fxa_vortex', loopQ(GT * 0.8), x, y - 24, R * 2.7, R * 2.7, { add: 1, a: 0.9 }); if (qa >= 4) blades(R, 7, 0.75); }
       // «Камбэк года»: the stage — 8 giant idol cards circling him, spotlights from above
       if (p.hero === 'danil' && ua < 5) { const k0 = SS(0, 0.3, ua) * SS(5, 4.7, ua), R = 150 * p.m.area;
         for (let k = 0; k < 3; k++) { const a = -0.9 + k * 0.9 + 0.3 * Math.sin(GT * 2 + k); L.solid(x - 30, y - 600, 60, 600, [1, 0.6, 0.9], a, 30, 600, 0.1 * k0); }
@@ -327,7 +333,9 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         cards.sort((u, v) => u[1] - v[1]).forEach(([cx, cy, k, c]) => { L.shadow(cx, cy + 30, 22, 6, 0.4 * k0); L.glow(cx, cy - 10, 46, CARDC[k % 4], 0.35 * k0, 2.5);
           spr('fx_card' + (k % 4), cx, cy - 12 + 4 * Math.sin(GT * 4 + k), 52 * (0.6 + 0.4 * Math.abs(c)) * k0, 76 * k0, 0.1 * Math.sin(GT * 2 + k)); }); }
       if (p.hero === 'danil' && p.evo) for (let k = 0; k < 6; k++) { const a = GT * 2.4 + k * Math.PI / 3, cx = x + Math.cos(a) * 130, cy = y - 40 + Math.sin(a) * 100;
-        L.glow(cx, cy, 24, CARDC[k % 4], 0.45, 2.5); spr('fx_card' + (k % 4), cx, cy, 24 * (0.5 + 0.5 * Math.abs(Math.cos(a))), 36); }
+        book('fxa_holo', loopQ(GT, k / 6), cx, cy, 120, 120, { add: 1 }); L.glow(cx, cy, 24, CARDC[k % 4], 0.45, 2.5); spr('fx_card' + (k % 4), cx, cy, 24 * (0.5 + 0.5 * Math.abs(Math.cos(a))), 36); }
+      // Лёха: rank-up aura, gold chevrons rising off the ground while he carries the pocket apocalypse
+      if (p.hero === 'leha' && p.evo) book('fxa_rank', loopQ(GT), x, y - 30, 240, 240, { add: 1 });
       if (GT < p.buffT) for (let k = 0; k < 3; k++) { const an = GT * 3 + k * 2.094; spr('fx_heart', x + Math.cos(an) * 34, y - 10 + Math.sin(an) * 12, 13, 12, 0, { a: 0.85 }); }
     }
     { const fl = window.SETTINGS ? SETTINGS.flash() : 1; L.finish(t, { bloom: [0.26 * fl, 0.22 * fl], vignette: 0.86, warm: 0.6, roll: 1, dither: 0 }); }
@@ -398,11 +406,25 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         L.sprite(kind === 1 && me.evo ? icon(me.hero, 'evo') : icon(me.hero, k), x + 4, y, { w: 52, h: 52 });
         const mx = kind === 3 && SIM.UPG.PASSIVES[k].max ? SIM.UPG.PASSIVES[k].max : 5;
         for (let j = 0; j < mx; j++) L.solid(x + 6 + j * 10, y + 58, 8, 6, j < l ? [1, 0.85, 0.35] : [0.2, 0.15, 0.15]); }); }
+    // evolution progress: signature weapon level 5 + its partner passive level 2 → the evolution card shows up on the next level-up
+    { const it = me.items || {}, sg = SIM.UPG.SIG[me.hero], pid = sg.evo, ls = it.sig || 1, lp = it[pid] || 0, y = 262;
+      panel('evo', 24, y, 470, 50, 0.7);
+      if (me.evo) { L.glow(56, y + 25, 40, [1, 0.8, 0.3], 0.5 + 0.2 * Math.sin(GT * 4), 2); L.sprite(icon(me.hero, 'evo'), 34, y + 4, { w: 42, h: 42 });
+        lab('evon', 'ЭВОЛЮЦИЯ: ' + sg.evoN, 86, y + 25, Object.assign({ size: 18, col: '#ffe066' }, F)); }
+      else { const full = Object.keys(SIM.UPG.PASSIVES).filter((k) => it[k] && k !== pid).length >= 4 && !lp, ready = ls >= 5 && lp >= 2;
+        L.sprite(icon(me.hero, 'sig'), 32, y + 6, { w: 38, h: 38 }); lab('evs', `${Math.min(ls, 5)}/5`, 74, y + 25, Object.assign({ size: 16, col: ls >= 5 ? '#8fff8f' : '#f6e7c8' }, F));
+        lab('evp', '+', 122, y + 25, Object.assign({ size: 18, al: 0.5, col: '#c8b8a0' }, F));
+        L.sprite('it_' + pid, 136, y + 6, { w: 38, h: 38, u: { grade: lp ? [1, 1, 0, 1] : [0.55, 0.3, 0, 1], tint: full ? [1.4, 0.4, 0.35, 0.7] : [1, 1, 1, 0] } });
+        lab('evq', full ? 'нет места' : `${Math.min(lp, 2)}/2`, 178, y + 25, Object.assign({ size: 16, col: full ? '#ff7a6a' : lp >= 2 ? '#8fff8f' : '#f6e7c8' }, F));
+        lab('eva', '→', 236 + (full ? 62 : 0), y + 25, Object.assign({ size: 18, al: 0.5, col: '#c8b8a0' }, F));
+        const ex2 = 252 + (full ? 62 : 0); if (ready) L.glow(ex2 + 19, y + 25, 40, [1, 0.8, 0.3], 0.5 + 0.3 * Math.sin(GT * 6), 2);
+        L.sprite(icon(me.hero, 'evo'), ex2, y + 6, { w: 38, h: 38, u: { grade: ready ? [1, 1, 0, 1] : [0.45, 0.2, 0, 1] } });
+        lab('evt', ready ? 'на след. уровне!' : 'эволюция', ex2 + 46, y + 25, Object.assign({ size: 14, col: ready ? '#ffe066' : '#a89880' }, F)); } }
     if (me.hero === 'danil') for (let k = 0; k < 3; k++) { const c = me.tokens[k];
       if (c === undefined) L.rrect(300 + k * 30, 136, 22, 30, 4, [0.2, 0.15, 0.18], [0.15, 0.1, 0.12]); else L.sprite('fx_card' + (c % 4), 300 + k * 30, 136, { w: 22, h: 30 }); }
     if (me.hero === 'leha') lab('gun', SIM.LEHA_GUNS[GT - me.ultT < 7 ? 3 : me.tier], 300, 150, Object.assign({ size: 18, col: '#c9d68a' }, F));
     // ---- allies (left column) ----
-    let ay = 266; for (const p of ST.players) { if (p.id === me.id) continue; panel('al' + p.id, 24, ay, 210, 72, 0.75);
+    let ay = 320; for (const p of ST.players) { if (p.id === me.id) continue; panel('al' + p.id, 24, ay, 210, 72, 0.75);
       L.sprite('portrait_' + p.hero, 30, ay + 5, { w: 62, h: 62, u: { alpha: p.out ? 0.3 : 1, grade: p.down ? [0.2, 0.7, 0, 1] : [1, 1, 0, 1] } });
       lab('aln' + p.id, p.bot ? SIM.HEROES[p.hero].name + ' (бот)' : pname(p), 100, ay + 20, Object.assign({ size: 16 }, F));
       bar(100, ay + 38, 124, 16, p.out ? 0 : p.hp / p.hpMax, [0.9, 0.2, 0.25], [0.6, 0.1, 0.15]);
@@ -516,6 +538,11 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     ['danil_cards', abil('danil', null, 0.2)], ['danil_q', abil('danil', 'q', 0.25)], ['danil_r', abil('danil', 'r', 1.2)],
     ['vitya_gas', abil('vitya', null, 1.0, (s, p) => { p.items.sig = 5; p.m.double = 1; })], ['vitya_q', abil('vitya', 'q', 0.3)], ['vitya_r', abil('vitya', 'r', 1.6)],
     ['leha_smg', (() => { const s = abil('leha', null, 0.1, (s, p) => { p.items.sig = 2; p.tier = 1; }), p = s.players[0]; p.lastAtk = s.t - 0.02; p.ax = 1; p.ay = 0.2; s.ev.push({ k: 'shot', pid: 0, x: p.x, y: p.y, ang: Math.atan2(0.2, 1), g: 1, t: s.t - 0.01 }); return s; })()], ['leha_shotgun', (() => { const s = abil('leha', null, 0.6, (s, p) => { p.items.sig = 3; p.tier = 2; }), p = s.players[0]; s.ev.push({ k: 'shot', pid: 0, x: p.x, y: p.y, ang: 0.2, g: 2, t: s.t - 0.02 }); return s; })()],
+    ['evo_track', abil('danil', null, 0.1, (s, p) => { p.items = { sig: 5, crit: 1, dmg: 2 }; })],
+    ['evo_full', abil('vitya', null, 0.1, (s, p) => { p.items = { sig: 3, dmg: 1, as: 1, area: 2, deo: 1 }; })],
+    ...['hasan', 'danil', 'vitya', 'leha'].map((h) => ['evo_' + h, (() => { const s = abil(h, null, 3.6, (s, p) => { p.evo = 1; p.items.sig = 5; p.tier = 3; }), p = s.players[0];
+      s.ev.push({ k: 'upgrade', pid: 0, id: 'evo', x: p.x, y: p.y, evo: 1, t: s.t - 0.3 }); return s; })()]),
+    ...['hasan', 'danil', 'vitya', 'leha'].map((h) => ['evoaura_' + h, abil(h, null, 3.6, (s, p) => { p.evo = 1; p.items.sig = 5; p.tier = 3; })]),
     ['leha_q', abil('leha', 'q', 0.4)], ['leha_r', abil('leha', 'r', 1.0)]];
   // walk cycles per actor and view (engine.md §7, animation.md §14): one stride, the actor really travelling, camera following
   const walkQA = () => {
