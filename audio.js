@@ -6,6 +6,7 @@
   let ctx = null, master, musicBus, sfxBus, voBus, noiseBuf, lastT = -1, lastRun = null, music = { name: null, src: null, gain: null };
   const buffers = {}, loading = {};
   const VO = new Set(window.VO || []);
+  const MUSIC_LONG = new Set(window.MUSIC_LONG || []);   // full-length versions listed in audio/vo.js when they exist
   const vol = { master: 0.9, music: 0.34, sfx: 0.38, vo: 1.0 };
   try { Object.assign(vol, JSON.parse(localStorage.getItem('fp_vol') || '{}')); } catch (e) {}
 
@@ -25,11 +26,16 @@
     return (loading[url] = fetch(url).then((r) => r.arrayBuffer()).then((a) => ctx.decodeAudioData(a)).then((b) => (buffers[url] = b)).catch(() => null)); };
 
   // ---------------- music: crossfade between loops by phase ----------------
-  const playMusic = (name) => { if (!ctx || music.name === name) return; music.name = name; const old = music;
-    load('audio/music/' + name + '.ogg').then((b) => { if (!b || music.name !== name) return;
+  // one track at a time: `want` is the latest request, `music` what is really playing. When a load finishes it only starts
+  // if it is still wanted, and it always fades out whatever is playing at that moment (no stale `old` → no doubled tracks).
+  let want = null;
+  const TRACK = (n) => (MUSIC_LONG.has(n) ? n + '_long' : n);
+  const playMusic = (name) => { if (!ctx || want === name) return; want = name;
+    load('audio/music/' + TRACK(name) + '.ogg').then((b) => { if (!b || want !== name || music.name === name) return;
       const src = ctx.createBufferSource(), g = ctx.createGain(); src.buffer = b; src.loop = name !== 'victory'; src.connect(g); g.connect(musicBus);
       g.gain.setValueAtTime(0, ctx.currentTime); g.gain.linearRampToValueAtTime(1, ctx.currentTime + 1.2); src.start();
-      if (old.src) { old.gain.gain.cancelScheduledValues(ctx.currentTime); old.gain.gain.setValueAtTime(old.gain.gain.value, ctx.currentTime); old.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.2); old.src.stop(ctx.currentTime + 1.3); }
+      const old = music;
+      if (old.src) { old.gain.gain.cancelScheduledValues(ctx.currentTime); old.gain.gain.setValueAtTime(old.gain.gain.value, ctx.currentTime); old.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.2); try { old.src.stop(ctx.currentTime + 1.3); } catch (e) {} }
       music = { name, src, gain: g }; }); };
 
   // ---------------- voice lines ----------------
@@ -85,13 +91,19 @@
       noise(t, dur * 0.9, 300, 150, 2, big ? 0.5 : 0.3, d);
       if (r > 0.6 || big) tone(t + dur * 0.92, 0.12, 420 + 300 * r, 900 + 400 * r, 'square', 0.08, d); },
   };
+  // recorded farts: 8 short + 3 big takes, each played at a random pitch so no two in a row sound alike
+  const FARTS = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => 'audio/sfx/fart_' + i + '.ogg'), BIG = [0, 1, 2].map((i) => 'audio/sfx/fart_big_' + i + '.ogg');
+  let fartsReady = false;
+  const preloadFarts = () => { if (fartsReady || !ctx) return; fartsReady = true; [...FARTS, ...BIG].forEach(load); };
+  const fartSample = (t, d, r, big) => { preloadFarts(); const list = big ? BIG : FARTS, url = list[Math.floor(r * list.length) % list.length], b = buffers[url]; if (!b) return false;
+    const s = ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = 0.82 + 0.4 * ((r * 7.31) % 1); s.connect(d); s.start(t); return true; };
   const lastKind = {}, GAP = { whip: 0.2, throw: 0.16, shot0: 0.14, shot1: 0.11, shot2: 0.3, shot3: 0.3, kill: 0.14, hit: 0.25, gem: 0.07, boom: 0.18, spit: 0.5, fart: 0.25, dash: 0.2, block: 0.3, revive: 0.5, down: 0.5 };
   const h = (x) => { const v = Math.sin(x * 127.1) * 43758.5453; return v - Math.floor(v); };
 
   // ---------------- per-frame: consume new events ----------------
   const tick = () => {
     requestAnimationFrame(tick);
-    if (!ctx) return;
+    if (!ctx) return; preloadFarts();
     const S = window.SCENE && SCENE.state; if (!S) { playMusic('calm'); return; }
     if (S.t < lastT - 0.5) lastT = S.t;                                            // a new run (restart / new room)
     const me = S.players[S.me || 0], cam = me.cam, now = ctx.currentTime;
@@ -124,7 +136,7 @@
       else if (e.k === 'dash') FX.dash(now, d);
       else if (e.k === 'down') FX.down(now, d);
       else if (e.k === 'revive') FX.revive(now, d);
-      else if (e.k === 'fart') FX.fart(now, d, r, e.big);
+      else if (e.k === 'fart') fartSample(now, d, r, e.big) || FX.fart(now, d, r, e.big);
       else if (e.k === 'spit') FX.spit(now, d);
       else if (e.k === 'block') FX.block(now, d);
     }

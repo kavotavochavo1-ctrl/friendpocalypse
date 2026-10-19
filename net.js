@@ -3,14 +3,14 @@
 // Client: sends its input (30 Hz, presses latched so quick taps are never lost) and renders snapshots interpolated by id.
 // Rooms are links: ?room=CODE. Whoever creates the room hosts; up to 8 players; free hero slots can be bots.
 (function () {
-  const APP = 'friendpocalypse-v1', SNAP_HZ = 15, IN_HZ = 30, TRYSTERO = 'https://cdn.jsdelivr.net/npm/trystero@0.26.0/+esm';
+  const APP = 'friendpocalypse-v1', SNAP_HZ = 30, IN_HZ = 20, TRYSTERO = 'https://cdn.jsdelivr.net/npm/trystero@0.26.0/+esm';
   const HEROES = ['hasan', 'danil', 'vitya', 'leha'], NAMES = { hasan: 'Хасан', danil: 'Данил', vitya: 'Витя', leha: 'Лёха' };
   const DESC = { hasan: 'Усы-хлысты, стягивает толпу. Хрупкий.', danil: 'Фотокарточки, метки, баффы. Дальний бой.',
     vitya: 'Ядовитые облака. Бьёт и своих. Не поднимает друзей.', leha: 'Танк. Пистолет → ПП → дробовик → РПГ. Щит.' };
   const q = new URLSearchParams(location.search);
   const NET = (window.NET = { mode: 'off', hero: localStorage.getItem('fp_hero') || q.get('hero') || 'hasan', bots: true, open: true });
   let room = null, act = {}, selfId = null, roster = [], peerToPid = {}, remote = {}, lastSnap = 0, myPid = 0;
-  let snaps = [], hostGone = false; NET.dbg = { sent: 0, got: 0, bytes: 0, err: '' };
+  let snaps = [], hostGone = false, ackOf = {}, pred = null, hist = [], seq = 0, corr = [0, 0], lastPred = 0, camL = null; NET.dbg = { sent: 0, got: 0, bytes: 0, err: '' };
 
   // ---------------- compression (deflate-raw via CompressionStream) ----------------
   const pack = async (obj) => new Uint8Array(await new Response(new Blob([JSON.stringify(obj)]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());
@@ -21,7 +21,7 @@
   const DROP = ['prev', 'hitSet', 'ups', 'ccd', 'st', 'queue'];
   function snapshot(S, pid) {
     const p = S.players.find((o) => o.id === pid) || S.players[0], R = 1500, nearP = (x, y, r = R) => Math.abs(x - p.x) < r * 1.4 && Math.abs(y - p.y) < r;
-    const players = S.players.map((o) => { const c = {}; for (const k in o) if (!DROP.includes(k)) c[k] = o[k]; c.x = r1(c.x); c.y = r1(c.y); c.cam = c.cam.map(r1); return c; });
+    const players = S.players.map((o) => { const c = {}; for (const k in o) if (!DROP.includes(k)) c[k] = o[k]; c.x = r1(c.x); c.y = r1(c.y); c.cam = c.cam.map(r1); c.ack = ackOf[o.id] || 0; return c; });
     const E = []; for (const e of S.enemies) if (nearP(e.x, e.y)) E.push(e.id, ET.indexOf(e.type), r1(e.x), r1(e.y), r1(e.vx), r1(e.vy), r1(e.hp), r1(e.hpMax), r1(e.dist), r2(e.spawnT), r2(e.hitT), r2(e.biteT || -9), e.face);
     const G = []; for (const g of S.gems) if (nearP(g.x, g.y, 1200)) G.push(g.id, r1(g.x), r1(g.y), g.v);
     const B = S.proj.filter((b) => nearP(b.x, b.y)).map((b) => [b.id, b.kind, r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), b.c || 0, b.tox || 0]);
@@ -48,6 +48,12 @@
     const f = Math.min(1, k);
     S.players = lerpL(a.S.players, b.S.players, f); S.enemies = lerpL(a.S.enemies, b.S.enemies, f);
     S.t = a.S.t + (b.S.t - a.S.t) * k; S.me = myPid; S.net = 1;
+    const mi = S.players.findIndex((o) => o.id === myPid);
+    if (mi >= 0 && pred && !S.players[mi].down && !S.players[mi].out) {
+      const W = SIM.VIEW.W, H = SIM.VIEW.H, Wd = SIM.WORLD, cl = (v, a0, a1) => Math.max(a0, Math.min(a1, v));
+      const tx = cl(pred.x - W / 2 + pred.vx * 0.25, Wd.x0, Wd.x1 - W), ty = cl(pred.y - 60 - H / 2 + pred.vy * 0.2, Wd.y0, Wd.y1 - H);
+      if (!camL) camL = [tx, ty]; camL[0] += (tx - camL[0]) * 0.12; camL[1] += (ty - camL[1]) * 0.12;
+      S.players[mi] = Object.assign({}, S.players[mi], { x: pred.x, y: pred.y, vx: pred.vx, vy: pred.vy, cam: camL.slice(), dist: pred.dist, dir: pred.dir, fx: pred.fx || 0, fy: pred.fy || 1 }); }
     return S;
   }
 
@@ -103,7 +109,9 @@
     say('Подключаюсь к комнате…', 0);
     const T = await import(TRYSTERO); selfId = T.selfId; NET.code = code;
     room = T.joinRoom({ appId: APP }, 'room-' + code);
-    for (const n of ['hello', 'roster', 'start', 'snap', 'input', 'bye']) act[n] = room.makeAction(n);
+    for (const n of ['hello', 'roster', 'start', 'snap', 'input', 'bye', 'ping', 'pong']) act[n] = room.makeAction(n);
+    act.ping.onMessage = (d, { peerId }) => act.pong.send(d, { target: peerId });                     // host answers pings
+    act.pong.onMessage = (d) => { NET.dbg.rtt = Math.round(performance.now() - d.t); };
     room.onPeerJoin = (id) => { if (NET.mode === 'host') { say('Игрок подключился'); } else if (NET.mode === 'client') act.hello.send({ hero: NET.hero }, { target: id }); };
     room.onPeerLeave = (id) => { if (NET.mode === 'host') { const r = roster.find((x) => x.peer === id); roster = roster.filter((x) => x.peer !== id); sendRoster(); render();
         const pid = peerToPid[id]; if (pid !== undefined && window.GAME.state()) { const p = window.GAME.state().players.find((o) => o.id === pid); if (p) p.bot = 1; } if (r) say(NAMES[r.hero] + ' вышел — его ведёт бот'); }
@@ -139,21 +147,69 @@
     NET.mode = 'client'; await joinRoomCode(code);
     act.roster.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; roster = d.map((r) => Object.assign(r, { self: r.peer === selfId })); render(); };
     act.start.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; myPid = d.pid; NET.started = true; NET.open = false; render(); snaps = []; document.getElementById('hint').style.opacity = 0; };
-    act.snap.onMessage = async (d) => { NET.dbg.got++; let S; try { S = restore(await unpack(d instanceof Uint8Array ? d : new Uint8Array(d))); } catch (e) { NET.dbg.err = String(e); return; } snaps.push({ at: performance.now(), S }); if (snaps.length > 3) snaps.shift(); };
+    act.snap.onMessage = async (d) => { NET.dbg.got++; NET.dbg.bytes = d.byteLength || d.length || 0; let S; try { S = restore(await unpack(d instanceof Uint8Array ? d : new Uint8Array(d))); } catch (e) { NET.dbg.err = String(e); return; } snaps.push({ at: performance.now(), S }); if (snaps.length > 3) snaps.shift(); reconcile(S); };
     act.hello.send({ hero: NET.hero });
     render();
   }
 
   // ---------------- per-frame hooks used by index.html ----------------
-  NET.inputs = (local) => { const out = { 0: local }; for (const pid in remote) { out[pid] = Object.assign({}, remote[pid]); remote[pid].slot = 0; } return out; };
+  NET.inputs = (local) => { const out = { 0: local }; for (const pid in remote) { out[pid] = Object.assign({}, remote[pid]); ackOf[pid] = remote[pid].seq || 0; remote[pid].slot = 0; } return out; };
   NET.hostTick = async (S) => { const now = performance.now(); if (now - lastSnap < 1000 / SNAP_HZ) return; lastSnap = now;
     for (const peer in peerToPid) { if (peer === selfId) continue; try { const u8 = await pack(snapshot(S, peerToPid[peer])); NET.dbg.bytes = u8.length; act.snap.send(u8, { target: peer }); NET.dbg.sent++; } catch (e) { NET.dbg.err = String(e); } } };
   let lastIn = 0, latch = {};
+  // ---- client: numbered input + local prediction of the own hero (moves at once; the host's answer reconciles it) ----
+  let lastSent = '';
   NET.clientInput = (inp) => { for (const k of ['dash', 'jump', 'q', 'r', 'e']) if (inp[k]) latch[k] = 1; if (inp.slot) latch.slot = inp.slot;
-    const now = performance.now(); if (now - lastIn < 1000 / IN_HZ || !act.input) return; lastIn = now;
+    predict(inp);
+    if (!act.input) return;
     const d = { left: inp.left ? 1 : 0, right: inp.right ? 1 : 0, up: inp.up ? 1 : 0, down: inp.down ? 1 : 0 };
-    for (const k of ['dash', 'jump', 'q', 'r', 'e']) d[k] = inp[k] || latch[k] ? 1 : 0; d.slot = latch.slot || 0; latch = {}; act.input.send(d); };
+    for (const k of ['dash', 'jump', 'q', 'r', 'e']) d[k] = inp[k] || latch[k] ? 1 : 0; d.slot = latch.slot || 0;
+    const key = JSON.stringify(d), now = performance.now();
+    if (key === lastSent && now - lastIn < 1000 / IN_HZ) return;                     // unchanged: heartbeat only
+    lastIn = now; lastSent = key; latch = {}; d.seq = ++seq; act.input.send(d);
+    if (pred) { hist.push({ seq, x: pred.x, y: pred.y }); if (hist.length > 120) hist.shift(); } };
+  const meSnap = () => { const b = snaps[snaps.length - 1]; return b && b.S.players.find((o) => o.id === myPid); };
+  function predict(inp) {
+    const me = meSnap(), now = performance.now(); if (!me) return;
+    if (!pred || me.down || me.out) { pred = { x: me.x, y: me.y, vx: 0, vy: 0, dashT: -9, dashCD: 0, prevDash: 0, dist: me.dist || 0, dir: me.dir || 0 }; hist = []; corr = [0, 0]; lastPred = now; return; }
+    let dt = Math.min(0.1, (now - lastPred) / 1000); lastPred = now;
+    const H = SIM.HEROES[me.hero], spd = H.spd * ((me.m && me.m.spd) || 1) * (me.hero === 'leha' ? 1 - 0.04 * (me.tier || 0) : 1);
+    const ix = (inp.right ? 1 : 0) - (inp.left ? 1 : 0), iy = (inp.down ? 1 : 0) - (inp.up ? 1 : 0), il = Math.hypot(ix, iy) || 1;
+    const dashE = (inp.dash || inp.jump) && !pred.prevDash; pred.prevDash = inp.dash || inp.jump ? 1 : 0;
+    if (ix || iy) { pred.fx = ix / il; pred.fy = iy / il; pred.dir = Math.abs(iy) > Math.abs(ix) * 1.2 ? (iy > 0 ? 0 : 2) : (ix > 0 ? 1 : 3); }
+    while (dt > 0) { const h = Math.min(SIM.DT, dt); dt -= h;
+      const acc = 2600 * h; pred.vx += Math.max(-acc, Math.min(acc, ix / il * spd - pred.vx)); pred.vy += Math.max(-acc, Math.min(acc, iy / il * spd - pred.vy));
+      pred.dashCD = Math.max(0, pred.dashCD - h);
+      if (dashE && pred.dashCD <= 0 && pred.dashT < now - 50) { pred.dashT = now; pred.dashCD = 1.1; }
+      const dashing = now - pred.dashT < 170, mx = dashing ? (pred.fx || 0) * 950 : pred.vx, my = dashing ? (pred.fy || 0) * 950 : pred.vy;
+      const ox = pred.x, oy = pred.y; pred.x += mx * h; pred.y += my * h; SIM.collide(pred, 24); pred.dist += Math.hypot(pred.x - ox, pred.y - oy); }
+    // ease the reconciliation error in over ~150 ms (a hard snap only when far off)
+    const cx = corr[0] * 0.12, cy = corr[1] * 0.12; pred.x += cx; pred.y += cy; corr[0] -= cx; corr[1] -= cy;
+  }
+  function reconcile(S) {
+    const me = S.players.find((o) => o.id === myPid); if (!me || !pred) return;
+    const i = hist.findIndex((h) => h.seq === me.ack); if (i < 0) return;
+    const ex = me.x - hist[i].x, ey = me.y - hist[i].y; hist = hist.slice(i + 1).map((h) => ({ seq: h.seq, x: h.x + ex, y: h.y + ey }));
+    if (Math.hypot(ex, ey) > 260) { pred.x += ex; pred.y += ey; corr = [0, 0]; } else { corr[0] += ex; corr[1] += ey; }
+  }
   NET.view = view;
+  // ---- F3: network / performance overlay (what a laggy friend should screenshot) ----
+  const ov = document.createElement('div'); ov.style.cssText = 'position:absolute;right:8px;top:8px;z-index:7;font:11px monospace;color:#cfe;background:#000b;padding:6px 9px;border-radius:6px;white-space:pre;display:none';
+  document.body.appendChild(ov); let fN = 0, fT = performance.now(), fps = 0, gotPrev = 0, sentPrev = 0, snapHz = 0;
+  addEventListener('keydown', (e) => { if (e.code === 'F3') { ov.style.display = ov.style.display === 'none' ? 'block' : 'none'; e.preventDefault(); } });
+  const tickOv = () => { requestAnimationFrame(tickOv); fN++; const now = performance.now();
+    if (now - fT >= 1000) { fps = fN; fN = 0; snapHz = NET.mode === 'client' ? NET.dbg.got - gotPrev : NET.dbg.sent - sentPrev; gotPrev = NET.dbg.got; sentPrev = NET.dbg.sent; fT = now;
+      if (NET.mode === 'client' && act.ping && NET.hostPeer) act.ping.send({ t: now }, { target: NET.hostPeer }); }
+    if (ov.style.display === 'none') return;
+    const S = window.SCENE && SCENE.state;
+    ov.textContent = `fps ${fps}   ${NET.mode}${NET.code ? ' ' + NET.code : ''}
+` + (NET.mode === 'client' ? `ping ${NET.dbg.rtt ?? '?'} ms   snaps ${snapHz}/s
+snap ${(NET.dbg.bytes / 1024).toFixed(1)} KB   ~${(snapHz * NET.dbg.bytes / 1024).toFixed(0)} KB/s
+pred err ${Math.round(Math.hypot(corr[0], corr[1]))} px` :
+      NET.mode === 'host' ? `snaps out ${snapHz}/s to ${Object.keys(peerToPid).length - 1} friend(s)
+snap ${(NET.dbg.bytes / 1024).toFixed(1)} KB` : '') + (S ? `
+enemies ${S.enemies.length}` : ''); };
+  tickOv();
   NET.openLobby = () => { if (NET.mode === 'client' && !hostGone) return; NET.open = true; render(); };
 
   const code = q.get('room');
