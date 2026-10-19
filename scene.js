@@ -37,6 +37,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
   const SS = L.SS;
   const INK = [0.12, 0.06, 0.05], GAS = [0.55, 0.78, 0.18], GAS2 = [0.78, 0.86, 0.3], WARM = [1.0, 0.62, 0.26];
   const hcol = (h) => SIM.HEROES[h].col;
+  const pname = (p) => p.nick || SIM.HEROES[p.hero].name;                   // a friend's nick from the room, else the hero's name
   const FONT = '"Press Start 2P", "Trebuchet MS", sans-serif', FS = 0.62;   // Press Start 2P: clean Cyrillic pixel font, wide → scale sizes
   const lab = (id, str, x, y, o = {}) => L.label(id, str, x, y, Object.assign({}, o, { size: Math.round((o.size || 30) * FS), font: FONT, weight: 'normal' }));
   const labW = (id, str, o = {}) => L.labelW(id, str, Object.assign({}, o, { size: Math.round((o.size || 30) * FS), font: FONT, weight: 'normal' }));
@@ -366,7 +367,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     } else L.sprite(view, 0, 0, { m: M.of(M.t(x, y - bob), M.r(lean), M.s((flip ? -1 : 1) / Math.sqrt(sq), sq)), w, h, pivot: [w / 2, h], u });
     if (p.hero === 'hasan' && p.hp < p.hpMax * 0.3) L.star(x + 6, y - h * 0.72, 10 + 4 * Math.sin(GT * 12), [1, 0.8, 0.3], 0.8);
     const ny = y - h - 26, clearHud = ny > 150 && x > 80 && x < W - 80 && !(ny < 330 && (x < 520 || x > W - 340)) && !(ny < 290 && Math.abs(x - W / 2) < 420);   // nameplates never sit under the HUD panels
-    if (!mine && !ST.over && clearHud && (!window.SETTINGS || SETTINGS.get('names'))) { const nw = labW('nm' + p.id, SIM.HEROES[p.hero].name, { size: 18, font: FONT }); lab('nm' + p.id, SIM.HEROES[p.hero].name, x, y - h - 26, { size: 18, al: 0.5, col: '#f6e7c8', font: FONT });
+    if (!mine && !ST.over && clearHud && (!window.SETTINGS || SETTINGS.get('names'))) { const nw = labW('nm' + p.id, pname(p), { size: 18, font: FONT }); lab('nm' + p.id, pname(p), x, y - h - 26, { size: 18, al: 0.5, col: '#f6e7c8', font: FONT });
       L.solid(x - 30, y - h - 12, 60, 7, [0.08, 0.03, 0.04]); L.solid(x - 29, y - h - 11, 58 * p.hp / p.hpMax, 5, [0.9, 0.2, 0.25]); }
   }
 
@@ -403,7 +404,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     // ---- allies (left column) ----
     let ay = 266; for (const p of ST.players) { if (p.id === me.id) continue; panel('al' + p.id, 24, ay, 210, 72, 0.75);
       L.sprite('portrait_' + p.hero, 30, ay + 5, { w: 62, h: 62, u: { alpha: p.out ? 0.3 : 1, grade: p.down ? [0.2, 0.7, 0, 1] : [1, 1, 0, 1] } });
-      lab('aln' + p.id, SIM.HEROES[p.hero].name + (p.bot ? ' (бот)' : ''), 100, ay + 20, Object.assign({ size: 16 }, F));
+      lab('aln' + p.id, p.bot ? SIM.HEROES[p.hero].name + ' (бот)' : pname(p), 100, ay + 20, Object.assign({ size: 16 }, F));
       bar(100, ay + 38, 124, 16, p.out ? 0 : p.hp / p.hpMax, [0.9, 0.2, 0.25], [0.6, 0.1, 0.15]);
       if (p.down) lab('ald' + p.id, p.out ? 'выбыл' : 'УПАЛ ' + Math.ceil(p.downT), 100, ay + 62, Object.assign({ size: 14, col: '#ff6060' }, F));
       ay += 84; }
@@ -464,7 +465,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         wrap(c.d, 26).forEach((ln, j) => lab('cd' + i + '_' + j, ln, x + 22, y0 + 104 + j * 30, Object.assign({ size: 19, col: '#d8c8b0' }, F)));
         if (partner) lab('ce' + i, '→ нужно для эволюции', x + 22, y0 + ch - 20, Object.assign({ size: 16, col: '#ffd76a' }, F)); }); }
     // ---- pick pause: who is still choosing ----
-    if (ST.pause && !ST.over) { const wait = (ST.pend || []).map((id) => ST.players.find((q) => q.id === id)).filter(Boolean).map((q) => SIM.HEROES[q.hero].name);
+    if (ST.pause && !ST.over) { const wait = (ST.pend || []).map((id) => ST.players.find((q) => q.id === id)).filter(Boolean).map(pname);
       const s1 = me.pick ? 'ПАУЗА — все выбирают улучшение' : 'Ты выбрал! Ждём друзей…', s2 = wait.length ? 'Ждём: ' + wait.join(', ') : '';
       const tw = Math.max(labW('pz1', s1, Object.assign({ size: 26 }, F)), labW('pz2', s2 || ' ', Object.assign({ size: 20 }, F)));
       L.rrect(W / 2 - tw / 2 - 26, 124, tw + 52, s2 ? 92 : 56, 12, [0.12, 0.08, 0.16], [0.07, 0.04, 0.1], 0.88); L.uiBox('pz', W / 2 - tw / 2 - 26, 124, tw + 52, s2 ? 92 : 56);
@@ -480,8 +481,8 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       ST.awards.forEach((a, i) => { const p = ST.players.find((q) => q.id === a.pid), y = 230 + i * 100;
         L.sprite('portrait_' + p.hero, W / 2 - 490, y, { w: 84, h: 84 });
         lab('aw' + i, a.t, W / 2 - 390, y + 26, Object.assign({ size: 32, col: '#ffd76a' }, F));
-        lab('ad' + i, `${SIM.HEROES[p.hero].name}: ${a.d}`, W / 2 - 390, y + 64, Object.assign({ size: 22 }, F)); });
-      lab('rr', 'Backspace — ещё раз', W / 2, 250 + ST.awards.length * 100, Object.assign({ size: 26, al: 0.5, col: '#9fd0ff' }, F)); }
+        lab('ad' + i, `${pname(p)}: ${a.d}`, W / 2 - 390, y + 64, Object.assign({ size: 22 }, F)); });
+      lab('rr', ST.net ? 'Ждём, пока хост вернёт всех в комнату…' : window.NET && NET.mode === 'host' ? 'Backspace — в комнату' : 'Backspace — ещё раз', W / 2, 250 + ST.awards.length * 100, Object.assign({ size: 26, al: 0.5, col: '#9fd0ff' }, F)); }
     // demo caption
   }
 

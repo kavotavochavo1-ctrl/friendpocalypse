@@ -20,7 +20,7 @@
   const ET = Object.keys(SIM.ETYPES), r1 = (v) => Math.round(v), r2 = (v) => Math.round(v * 100) / 100;
   const HN = ['hasan', 'danil', 'vitya', 'leha'];
   const PF = ['id', 'hero', 'bot', 'x', 'y', 'vx', 'vy', 'fx', 'fy', 'ax', 'ay', 'dir', 'dist', 'hp', 'hpMax', 'down', 'downT', 'revP', 'out', 'inv', 'hurtT',
-    'qa', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo'];
+    'qa', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo', 'nick'];
   const evSince = {};
   function snapshot(S, pid) {
     const p = S.players.find((o) => o.id === pid) || S.players[0], R = 1500, nearP = (x, y, r = R) => Math.abs(x - p.x) < r * 1.4 && Math.abs(y - p.y) < r;
@@ -69,84 +69,161 @@
     return S;
   }
 
-  // ---------------- lobby UI ----------------
+  // ---------------- lobby UI: main menu + waiting room ----------------
+  // Waiting room: everyone sees who is in the room (nick, hero, connection, ping, ready). The host starts once every friend is ready.
+  // The shell is built once per screen; only the dynamic parts are refreshed, so typing a nick or a code never loses focus.
   const css = document.createElement('style'); css.textContent = `
 #lobby{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Press Start 2P",monospace;color:#f6e7c8;z-index:5;pointer-events:none}
-#lobby .box{pointer-events:auto;background:rgba(18,10,14,.88);border:3px solid #8a5a32;border-radius:14px;padding:22px 26px;min-width:min(820px,92vw);box-shadow:0 10px 40px #000a}
-#lobby h1{margin:0 0 4px;font-size:30px;color:#ffd76a;letter-spacing:2px;text-shadow:0 3px 0 #3a1a10}
-#lobby .sub{font-size:12px;opacity:.8;margin-bottom:16px}
-#lobby .heroes{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-#lobby .h{background:#22141a;border:3px solid #4a2e22;border-radius:10px;padding:8px;cursor:pointer;text-align:center;transition:transform .1s}
+#lobby .box{pointer-events:auto;background:rgba(18,10,14,.9);border:3px solid #8a5a32;border-radius:14px;padding:20px 24px;width:min(880px,94vw);max-height:94vh;overflow:auto;box-shadow:0 10px 40px #000a;box-sizing:border-box}
+#lobby h1{margin:0 0 4px;font-size:28px;color:#ffd76a;letter-spacing:2px;text-shadow:0 3px 0 #3a1a10}
+#lobby .sub{font-size:12px;opacity:.85;margin-bottom:12px;line-height:1.6}
+#lobby .code{color:#ffd76a;font-size:22px;letter-spacing:4px}
+#lobby .heroes{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+#lobby .h{background:#22141a;border:3px solid #4a2e22;border-radius:10px;padding:7px;cursor:pointer;text-align:center;transition:transform .1s;position:relative}
 #lobby .h:hover{transform:translateY(-3px)} #lobby .h.on{border-color:#ffd76a;background:#3a2218}
 #lobby .h img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;image-rendering:pixelated}
-#lobby .h b{display:block;font-size:15px;margin-top:4px} #lobby .h small{display:block;font-size:9px;line-height:1.5;opacity:.8;min-height:34px}
-#lobby .row{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;align-items:center}
+#lobby .h b{display:block;font-size:14px;margin-top:4px} #lobby .h small{display:block;font-size:8px;line-height:1.5;opacity:.8;min-height:30px}
+#lobby .box.room .h{display:grid;grid-template-columns:56px 1fr;gap:8px;align-items:center;text-align:left;padding:6px}
+#lobby .box.room .h img{width:56px;height:56px} #lobby .box.room .h b{margin:0;font-size:12px} #lobby .box.room .h small{display:none} #lobby .box.room .h .who{left:auto;right:6px;top:4px;justify-content:flex-end}
+#lobby .h .who{position:absolute;left:6px;right:6px;top:6px;display:flex;flex-wrap:wrap;gap:3px}
+#lobby .h .who span{font-size:7px;background:#000c;border-radius:4px;padding:3px 4px;color:#9fe0ff}
+#lobby .row{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;align-items:center}
 #lobby button{font:inherit;font-size:12px;padding:10px 18px;border-radius:9px;border:2px solid #8a5a32;background:#5a2e1a;color:#ffe9b0;cursor:pointer}
-#lobby button:hover{background:#7a3e22} #lobby button.alt{background:#1e3040;border-color:#3e6a8a}
-#lobby input{font:inherit;font-size:11px;padding:8px;border-radius:8px;border:2px solid #4a2e22;background:#120a0e;color:#f6e7c8;flex:1;min-width:240px}
-#lobby .peers{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap} #lobby .peer{font-size:11px;background:#2a1a20;border-radius:8px;padding:6px 10px}
-#lobby .note{font-size:9px;line-height:1.7;opacity:.75;margin-top:10px} #lobby label{font-size:12px;cursor:pointer}
+#lobby button:hover{background:#7a3e22} #lobby button.alt{background:#1e3040;border-color:#3e6a8a} #lobby button.alt:hover{background:#28425a}
+#lobby button.big{font-size:15px;padding:14px 26px} #lobby button.ok{background:#1f4a22;border-color:#4a9a4e} #lobby button.ok:hover{background:#2a6030}
+#lobby button:disabled{opacity:.45;cursor:default;background:#2a2024;border-color:#4a3a34}
+#lobby input{font:inherit;font-size:11px;padding:8px;border-radius:8px;border:2px solid #4a2e22;background:#120a0e;color:#f6e7c8;flex:1;min-width:200px}
+#lobby .plist{margin-top:14px;display:flex;flex-direction:column;gap:6px}
+#lobby .pl{display:grid;grid-template-columns:44px 1fr auto auto;gap:12px;align-items:center;background:#2a1a20;border:2px solid #3a2830;border-radius:10px;padding:6px 10px;font-size:11px}
+#lobby .pl.rdy{border-color:#4a9a4e;background:#1d2a1e} #lobby .pl.me{box-shadow:0 0 0 2px #ffd76a55 inset}
+#lobby .pl img{width:44px;height:44px;border-radius:6px;image-rendering:pixelated;object-fit:cover}
+#lobby .pl .nm b{display:block;font-size:12px;color:#ffe9b0} #lobby .pl .nm i{font-style:normal;font-size:9px;opacity:.75}
+#lobby .tag{font-size:8px;padding:4px 6px;border-radius:5px;background:#5a2e1a;color:#ffd76a;margin-left:6px}
+#lobby .net{font-size:9px;white-space:nowrap} #lobby .net.g{color:#8fff8f} #lobby .net.y{color:#ffd76a} #lobby .net.r{color:#ff7a6a}
+#lobby .st{font-size:10px;white-space:nowrap;min-width:110px;text-align:right} #lobby .st.on{color:#8fff8f} #lobby .st.off{color:#c8b8a0}
+#lobby .pl.empty{opacity:.35;border-style:dashed;grid-template-columns:1fr;text-align:center;font-size:9px;padding:12px}
+#lobby .status{font-size:11px;margin-top:12px;color:#9fd0ff;line-height:1.7} #lobby .status.warn{color:#ffb070}
+#lobby input[type=checkbox]{flex:0 0 auto;min-width:0;width:18px;height:18px;padding:0;accent-color:#ffd76a}
+#lobby .note{font-size:9px;line-height:1.7;opacity:.75;margin-top:10px} #lobby label{font-size:11px;cursor:pointer;display:flex;gap:8px;align-items:center}
 #netmsg{position:absolute;left:50%;top:14px;transform:translateX(-50%);font:11px "Press Start 2P",monospace;color:#ffe9b0;background:#000a;padding:4px 12px;border-radius:8px;z-index:6;display:none}`;
   document.head.appendChild(css);
   const el = document.createElement('div'); el.id = 'lobby'; document.body.appendChild(el);
   const msg = document.createElement('div'); msg.id = 'netmsg'; document.body.appendChild(msg);
   const say = (s, ms = 2500) => { msg.textContent = s; msg.style.display = 'block'; clearTimeout(say.t); if (ms) say.t = setTimeout(() => (msg.style.display = 'none'), ms); };
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const cleanNick = (s) => String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 12);
+  NET.nick = cleanNick(localStorage.getItem('fp_name')) || 'Игрок' + Math.floor(10 + Math.random() * 89);
+  NET.ready = false;
+  const hello = () => act.hello && act.hello.send({ hero: NET.hero, nick: NET.nick, ready: NET.ready ? 1 : 0 });
+  const me = () => roster.find((r) => r.self);
 
+  let screen = '';
   function render() {
-    if (!NET.open) { el.innerHTML = ''; return; }
+    if (!NET.open) { el.innerHTML = ''; screen = ''; return; }
+    const sc = NET.mode === 'off' ? 'menu' : 'room:' + NET.mode;
+    if (sc !== screen) { screen = sc; shell(); }
+    dyn();
+  }
+  const heroGrid = () => HEROES.map((h) => `<div class="h ${NET.hero === h ? 'on' : ''}" data-h="${h}"><div class="who">${
+    roster.filter((r) => r.hero === h).map((r) => `<span>${esc(r.nick || '?')}</span>`).join('')}</div><img src="assets/portrait_${h}.png"><b>${NAMES[h]}</b><small>${DESC[h]}</small></div>`).join('');
+  function shell() {
     const inRoom = NET.mode !== 'off', isHost = NET.mode === 'host';
     const link = location.origin + location.pathname + '?room=' + (NET.code || '');
-    el.innerHTML = `<div class="box"><h1>FRIENDPOCALYPSE</h1><div class="sub">${inRoom ? (isHost ? 'Ты хост. Код комнаты: <b style="color:#ffd76a;font-size:18px">' + NET.code + '</b> — продиктуй друзьям или кинь ссылку' : 'Комната <b>' + NET.code + '</b>' + (NET.mode === 'client' ? ' — ждём старта от хоста' : '')) : 'Выбери героя'}</div>
-      <div class="heroes">${HEROES.map((h) => `<div class="h ${NET.hero === h ? 'on' : ''}" data-h="${h}"><img src="assets/portrait_${h}.png"><b>${NAMES[h]}</b><small>${DESC[h]}</small></div>`).join('')}</div>
-      ${inRoom ? `<div class="peers">${roster.map((r) => `<div class="peer">${r.self ? '★ ' : ''}${NAMES[r.hero]}${r.host ? ' (хост)' : ''}</div>`).join('')}</div>` : ''}
-      <div class="row">${!inRoom ? `<button id="solo">Играть (с ботами)</button><button id="soloalone" class="alt">Соло без ботов</button><button id="mk" class="alt">Создать комнату для друзей</button>` : ''}<button id="opts" class="alt">Настройки</button>
-        ${!inRoom ? `</div><div class="row"><input id="code" maxlength="5" placeholder="КОД КОМНАТЫ ОТ ДРУГА" style="text-transform:uppercase;flex:0 1 260px"><button id="join" class="alt">Войти</button>` : ''}
-        ${isHost ? `<input id="lnk" readonly value="${link}"><button id="cp" class="alt">Копировать ссылку</button>` : ''}</div>
-      ${isHost ? `<div class="row"><label><input type="checkbox" id="bots" ${NET.bots ? 'checked' : ''} style="min-width:0;flex:0"> Боты на свободных героях</label><button id="go">Старт (${roster.length} игр.)</button></div>` : ''}
-      <div class="note">WASD — бег · Q — способность · R — ульта · E — встать/поднять · 1/2/3 — улучшение · M — музыка${inRoom ? '' : ' · Ссылку на комнату отправь друзьям, им ничего не нужно ставить'}</div></div>`;
-    el.querySelectorAll('.h').forEach((d) => (d.onclick = () => { NET.hero = d.dataset.h; localStorage.setItem('fp_hero', NET.hero); if (act.hello) act.hello.send({ hero: NET.hero }); if (isHost) { roster.find((r) => r.self).hero = NET.hero; sendRoster(); } render(); }));
+    el.innerHTML = `<div class="box ${inRoom ? 'room' : ''}"><h1>FRIENDPOCALYPSE</h1>
+      <div class="sub">${!inRoom ? 'Выбери героя и ник' : isHost ? `Комната <span class="code">${NET.code}</span> — ты хост. Кинь друзьям ссылку или код.` : `Комната <span class="code">${esc(NET.code)}</span>`}</div>
+      <div class="row" style="margin-top:0"><label>Ник: <input id="nick" maxlength="12" value="${esc(NET.nick)}" style="min-width:160px;flex:0 1 200px"></label>
+        ${isHost ? `<input id="lnk" readonly value="${esc(link)}"><button id="cp" class="alt">Копировать ссылку</button>` : ''}</div>
+      <div class="heroes" id="heroes" style="margin-top:14px"></div>
+      ${inRoom ? `<div class="plist" id="plist"></div><div class="status" id="status"></div>
+        <div class="row"><button id="rdy" class="big"></button>${isHost ? `<label><input type="checkbox" id="bots" ${NET.bots ? 'checked' : ''} style="min-width:0;flex:0"> Боты на свободных героях</label><button id="go" class="big ok"></button>` : ''}
+          <button id="opts" class="alt">Настройки</button><button id="leave" class="alt">Выйти</button></div>`
+      : `<div class="row"><button id="solo" class="big">Играть (с ботами)</button><button id="soloalone" class="alt">Соло без ботов</button><button id="mk" class="alt">Создать комнату для друзей</button><button id="opts" class="alt">Настройки</button></div>
+        <div class="row"><input id="code" maxlength="5" placeholder="КОД КОМНАТЫ ОТ ДРУГА" style="text-transform:uppercase;flex:0 1 260px"><button id="join" class="alt">Войти в комнату</button></div>`}
+      <div class="note">WASD — бег · Q — способность · R — ульта · E — встать/поднять · 1/2/3 — улучшение · M — музыка · F3 — пинг и FPS</div></div>`;
     const $ = (id) => el.querySelector('#' + id);
+    $('nick').oninput = (e) => { NET.nick = cleanNick(e.target.value) || NET.nick; localStorage.setItem('fp_name', NET.nick); if (isHost && me()) { me().nick = NET.nick; sendRoster(); dyn(); } else hello(); };
+    $('nick').onkeydown = (e) => e.stopPropagation();
     if ($('solo')) $('solo').onclick = () => startLocal(false);
     if ($('soloalone')) $('soloalone').onclick = () => startLocal(true);
     if ($('mk')) $('mk').onclick = () => host();
-    if ($('opts')) $('opts').onclick = () => SETTINGS.show();
-    if ($('join')) { const go = () => { const c = $('code').value.trim().toUpperCase(); if (c.length >= 4) client(c); }; $('join').onclick = go; $('code').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') go(); }; }
+    $('opts').onclick = () => SETTINGS.show();
+    if ($('join')) { const go = () => { const c = $('code').value.trim().toUpperCase(); if (c.length >= 4) client(c); else say('Код комнаты — 5 символов'); };
+      $('join').onclick = go; $('code').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') go(); }; }
     if ($('cp')) $('cp').onclick = () => { navigator.clipboard.writeText(link).then(() => say('Ссылка скопирована — кидай друзьям')); };
-    if ($('bots')) $('bots').onchange = (e) => (NET.bots = e.target.checked);
-    if ($('go')) $('go').onclick = () => hostStart();
+    if ($('bots')) $('bots').onchange = (e) => { NET.bots = e.target.checked; sendRoster(); };
+    if ($('go')) $('go').onclick = () => { if (allReady()) hostStart(); };
+    if ($('rdy')) $('rdy').onclick = () => { NET.ready = !NET.ready; if (isHost && me()) { me().ready = NET.ready ? 1 : 0; sendRoster(); } else hello(); dyn(); };
+    if ($('leave')) $('leave').onclick = () => { try { room && room.leave(); } catch (e) {} location.href = location.pathname; };
   }
+  const netCls = (r) => r.host ? 'g' : r.ping == null ? 'y' : r.ping < 120 ? 'g' : r.ping < 250 ? 'y' : 'r';
+  const netTxt = (r) => r.host ? 'хост' : r.ping == null ? 'подключается…' : r.ping + ' мс';
+  const allReady = () => roster.length > 0 && roster.every((r) => r.host || r.ready);
+  function dyn() {
+    const $ = (id) => el.querySelector('#' + id); if (!$('heroes')) return;
+    $('heroes').innerHTML = heroGrid();
+    el.querySelectorAll('.h').forEach((d) => (d.onclick = () => { NET.hero = d.dataset.h; localStorage.setItem('fp_hero', NET.hero);
+      if (NET.mode === 'host' && me()) { me().hero = NET.hero; sendRoster(); } else hello(); dyn(); }));
+    if (!$('plist')) return;
+    const isHost = NET.mode === 'host', connected = NET.mode === 'host' || !!NET.hostPeer;
+    $('plist').innerHTML = roster.map((r) => `<div class="pl ${r.ready || r.host ? 'rdy' : ''} ${r.self ? 'me' : ''}"><img src="assets/portrait_${r.hero}.png">
+        <div class="nm"><b>${esc(r.nick || 'Игрок')}${r.host ? '<span class="tag">ХОСТ</span>' : ''}${r.self ? '<span class="tag" style="background:#1e3040;color:#9fe0ff">ТЫ</span>' : ''}</b><i>${NAMES[r.hero]}</i></div>
+        <div class="net ${netCls(r)}">● ${netTxt(r)}</div><div class="st ${r.ready || r.host ? 'on' : 'off'}">${r.host ? 'запускает' : r.ready ? '✔ ГОТОВ' : 'не готов'}</div></div>`).join('')
+      + Array.from({ length: Math.max(0, Math.min(4, 8) - roster.length) }, () => `<div class="pl empty">свободно${NET.bots && isHost ? ' — займёт бот' : ''}</div>`).join('');
+    const waiting = roster.filter((r) => !r.host && !r.ready).map((r) => esc(r.nick || 'Игрок'));
+    let st = '', warn = false;
+    if (!connected) { const s = Math.floor((performance.now() - (NET.joinT || performance.now())) / 1000);
+      st = `Ищем хоста… ${s} с`; if (s >= 20) { warn = true; st += '<br>Не получается связаться. Проверь код, хост должен быть в этой комнате. Помогает выключить VPN или зайти с другой сети (мобильный интернет).'; } }
+    else if (roster.length <= 1) st = isHost ? 'Ждём друзей… Отправь им ссылку. Можно стартовать и одному с ботами.' : 'Ждём список игроков от хоста…';
+    else if (waiting.length) st = `Ждём готовности: ${waiting.join(', ')}`;
+    else st = isHost ? 'Все готовы — жми СТАРТ!' : 'Все готовы — ждём, когда хост нажмёт старт';
+    $('status').innerHTML = st; $('status').className = 'status' + (warn ? ' warn' : '');
+    if ($('rdy')) { $('rdy').style.display = isHost ? 'none' : ''; $('rdy').textContent = NET.ready ? '✔ Готов (отменить)' : 'Я готов!'; $('rdy').className = 'big ' + (NET.ready ? 'ok' : ''); $('rdy').disabled = !connected; }
+    if ($('go')) { const ok = allReady(); $('go').disabled = !ok; $('go').textContent = ok ? `СТАРТ (${roster.length} игр.)` : `Ждём готовности (${roster.filter((r) => r.host || r.ready).length}/${roster.length})`; }
+  }
+  setInterval(() => { if (NET.open && NET.mode !== 'off') dyn(); }, 1000);                 // timers and pings tick in the room
   const startLocal = (alone) => { NET.open = false; render(); window.GAME.start({ hero: NET.hero, solo: alone }); };
 
   // ---------------- room ----------------
+  // STUN to find a direct path; a public TURN relay as the fallback for friends behind strict NATs / mobile networks
+  const RTC = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
+    { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' }] };
   async function joinRoomCode(code) {
-    say('Подключаюсь к комнате…', 0);
-    const T = await import(TRYSTERO); selfId = T.selfId; NET.code = code;
-    room = T.joinRoom({ appId: APP }, 'room-' + code);
-    for (const n of ['hello', 'roster', 'start', 'snap', 'input', 'bye', 'ping', 'pong']) act[n] = room.makeAction(n);
-    act.ping.onMessage = (d, { peerId }) => act.pong.send(d, { target: peerId });                     // host answers pings
-    act.pong.onMessage = (d) => { NET.dbg.rtt = Math.round(performance.now() - d.t); };
-    room.onPeerJoin = (id) => { if (NET.mode === 'host') { say('Игрок подключился'); } else if (NET.mode === 'client') act.hello.send({ hero: NET.hero }, { target: id }); };
+    say('Подключаюсь к комнате…', 0); NET.code = code; NET.joinT = performance.now(); render();
+    let T; try { T = await import(TRYSTERO); } catch (e) { say('Не удалось загрузить сетевой модуль — проверь интернет', 0); throw e; }
+    selfId = T.selfId;
+    room = T.joinRoom({ appId: APP, rtcConfig: RTC }, 'room-' + code);
+    for (const n of ['hello', 'roster', 'start', 'snap', 'input', 'bye', 'ping', 'pong', 'back']) act[n] = room.makeAction(n);
+    act.ping.onMessage = (d, { peerId }) => act.pong.send(d, { target: peerId });                     // everyone answers pings
+    act.pong.onMessage = (d, { peerId }) => { const rtt = Math.round(performance.now() - d.t); if (NET.mode === 'client') NET.dbg.rtt = rtt;
+      const r = roster.find((x) => x.peer === peerId); if (r) r.ping = rtt; };
+    room.onPeerJoin = (id) => { if (NET.mode === 'client') hello(); };
     room.onPeerLeave = (id) => { if (NET.mode === 'host') { const r = roster.find((x) => x.peer === id); roster = roster.filter((x) => x.peer !== id); sendRoster(); render();
-        const pid = peerToPid[id]; if (pid !== undefined && window.GAME.state()) { const p = window.GAME.state().players.find((o) => o.id === pid); if (p) p.bot = 1; } if (r) say(NAMES[r.hero] + ' вышел — его ведёт бот'); }
-      else if (NET.mode === 'client' && id === NET.hostPeer) { hostGone = true; say('Хост вышел из игры', 0); } };
+        const pid = peerToPid[id]; if (pid !== undefined && window.GAME.state()) { const p = window.GAME.state().players.find((o) => o.id === pid); if (p) p.bot = 1; } if (r) say(esc(r.nick || NAMES[r.hero]) + ' вышел' + (NET.started ? ' — его ведёт бот' : '')); }
+      else if (NET.mode === 'client' && id === NET.hostPeer) { hostGone = true; NET.hostPeer = null; say('Хост вышел из игры', 0); if (!NET.started) render(); } };
     say('', 1);
   }
-  const sendRoster = () => act.roster && act.roster.send(roster.map((r) => ({ peer: r.peer, hero: r.hero, host: r.host })));
+  // host → everyone: the roster (with the host's measured ping to each friend)
+  const sendRoster = () => act.roster && act.roster.send({ bots: NET.bots ? 1 : 0, list: roster.map((r) => ({ peer: r.peer, hero: r.hero, nick: r.nick, ready: r.ready ? 1 : 0, host: r.host ? 1 : 0, ping: r.ping })) });
   async function host() {
-    NET.code = Math.random().toString(36).slice(2, 7).toUpperCase(); NET.mode = 'host';
+    NET.code = Math.random().toString(36).slice(2, 7).toUpperCase(); NET.mode = 'host'; NET.ready = true;
     history.replaceState(null, '', '?room=' + NET.code + '&host=1');
     await joinRoomCode(NET.code);
-    roster = [{ peer: selfId, hero: NET.hero, host: 1, self: 1 }];
-    act.hello.onMessage = (d, { peerId }) => { let r = roster.find((x) => x.peer === peerId); if (!r) { if (roster.length >= 8) return; roster.push((r = { peer: peerId, hero: d.hero })); } r.hero = d.hero; sendRoster(); render();
-      if (window.GAME.state() && NET.started) lateJoin(peerId, r); };
+    roster = [{ peer: selfId, hero: NET.hero, nick: NET.nick, host: 1, ready: 1, self: 1 }];
+    act.hello.onMessage = (d, { peerId }) => { let r = roster.find((x) => x.peer === peerId); const fresh = !r;
+      if (!r) { if (roster.length >= 8) return; roster.push((r = { peer: peerId })); }
+      r.hero = HEROES.includes(d.hero) ? d.hero : 'hasan'; r.nick = cleanNick(d.nick) || 'Игрок'; r.ready = d.ready ? 1 : 0;
+      if (fresh) { say(r.nick + ' зашёл в комнату'); act.ping.send({ t: performance.now() }, { target: peerId }); }
+      sendRoster(); render();
+      if (window.GAME.state() && NET.started && fresh) lateJoin(peerId, r); };
     act.input.onMessage = (d, { peerId }) => { const pid = peerToPid[peerId]; if (pid === undefined) return; const prev = remote[pid] || {}; if (d.ss) ackSnap[pid] = Math.max(ackSnap[pid] || 0, d.ss); remote[pid] = Object.assign(d, { slot: d.slot || prev.slot || 0 }); };
+    setInterval(() => { if (NET.mode !== 'host' || NET.started) return; for (const r of roster) if (!r.self) act.ping.send({ t: performance.now() }, { target: r.peer }); sendRoster(); }, 1000);
     render();
   }
   function hostStart() {
     const heroes = roster.map((r) => r.hero), humans = roster.map((_, i) => i);
     if (NET.bots) for (const h of HEROES) if (!heroes.includes(h) && heroes.length < 8) heroes.push(h);
     const S = SIM.create({ heroes, humans }); S.solo = roster.length === 1 && heroes.length === 1 ? 1 : 0; S.me = 0; S.wt0 = 0;
-    roster.forEach((r, i) => (peerToPid[r.peer] = i));
+    roster.forEach((r, i) => { peerToPid[r.peer] = i; S.players[i].nick = r.nick; });
     NET.started = true; NET.open = false; render();
     window.GAME.set(S);
     roster.forEach((r, i) => { if (!r.self) act.start.send({ pid: i }, { target: r.peer }); });
@@ -154,14 +231,16 @@
   function lateJoin(peerId, r) {           // a friend who opens the link mid-run takes a bot's hero, or joins as a new hero
     const S = window.GAME.state(); let p = S.players.find((o) => o.bot && o.hero === r.hero && !Object.values(peerToPid).includes(o.id)) || S.players.find((o) => o.bot && !Object.values(peerToPid).includes(o.id));
     if (!p && S.players.length < 8) { const base = S.players[0]; const np = JSON.parse(JSON.stringify(SIM.create({ heroes: [r.hero] }).players[0])); np.id = S.players.length; np.x = base.x + 60; np.y = base.y; S.players.push(np); p = np; }
-    if (!p) return; p.bot = 0; peerToPid[peerId] = p.id; act.start.send({ pid: p.id }, { target: peerId }); say(NAMES[p.hero] + ' в игре!');
+    if (!p) return; p.bot = 0; p.nick = r.nick; peerToPid[peerId] = p.id; act.start.send({ pid: p.id }, { target: peerId }); say(esc(r.nick) + ' в игре!');
   }
   async function client(code) {
-    NET.mode = 'client'; await joinRoomCode(code);
-    act.roster.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; roster = d.map((r) => Object.assign(r, { self: r.peer === selfId })); render(); };
+    NET.mode = 'client'; NET.ready = false; await joinRoomCode(code);
+    act.roster.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; hostGone = false; NET.bots = !!d.bots;
+      roster = d.list.map((r) => Object.assign(r, { self: r.peer === selfId })); render(); };
     act.start.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; myPid = d.pid; NET.started = true; NET.open = false; render(); snaps = []; document.getElementById('hint').style.opacity = 0; };
+    act.back.onMessage = () => { NET.started = false; NET.ready = false; snaps = []; pred = null; SCENE.state = null; NET.open = true; render(); hello(); };   // host went back to the room
     act.snap.onMessage = async (d) => { NET.dbg.got++; NET.dbg.bytes = d.byteLength || d.length || 0; let S; try { S = restore(await unpack(d instanceof Uint8Array ? d : new Uint8Array(d))); } catch (e) { NET.dbg.err = String(e); return; } lastSq = Math.max(lastSq, S.sq || 0); snaps.push({ at: performance.now(), S }); if (snaps.length > 3) snaps.shift(); reconcile(S); };
-    act.hello.send({ hero: NET.hero });
+    hello();
     render();
   }
 
@@ -228,7 +307,10 @@ pred err ${Math.round(Math.hypot(corr[0], corr[1]))} px` :
 snap ${(NET.dbg.bytes / 1024).toFixed(1)} KB` : '') + (S ? `
 enemies ${S.enemies.length}` : ''); };
   tickOv();
-  NET.openLobby = () => { if (NET.mode === 'client' && !hostGone) return; NET.open = true; render(); };
+  // back to the room after a run: the host takes everyone with it, friends must press ready again
+  NET.openLobby = () => { if (NET.mode === 'client' && !hostGone) return;
+    if (NET.mode === 'host') { NET.started = false; for (const r of roster) if (!r.host) r.ready = 0; remote = {}; if (act.back) act.back.send({}); sendRoster(); }
+    NET.open = true; render(); };
 
   const code = q.get('room');
   if (code && q.get('host')) { NET.mode = 'off'; history.replaceState(null, '', location.pathname); }   // a reload ends the old room
