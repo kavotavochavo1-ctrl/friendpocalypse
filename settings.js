@@ -38,7 +38,7 @@
       ${choice('netinfo', 'FPS и сеть (F3)', [[1, 'Показывать'], [0, 'Скрыть']])}
       <div class="row2"><button id="s_full">Полный экран</button><button id="s_reset">Сбросить</button>
         ${inRun ? '<button id="s_menu">Выйти в меню</button>' : ''}<button id="s_close" class="on">Готово (Esc)</button></div>
-      <div class="keys">WASD — бег · Space — рывок · Q — способность · R — ульта (копится от убийств) · E — встать (соло) · 1/2/3 — улучшение · M — музыка вкл/выкл</div></div>`;
+      <div class="keys">WASD — бег · Q — способность · R — ульта (копится от убийств) · E — встать (соло) · 1/2/3 — улучшение · M — музыка вкл/выкл</div></div>`;
     el.querySelectorAll('input[type=range]').forEach((r) => (r.oninput = () => { V[r.dataset.k] = +r.value; el.querySelector('#v_' + r.dataset.k).textContent = r.value; save(); }));
     el.querySelectorAll('button[data-k]').forEach((b) => (b.onclick = () => { V[b.dataset.k] = +b.dataset.v; save(); render(); }));
     el.querySelector('#s_full').onclick = () => { const d = document.documentElement; document.fullscreenElement ? document.exitFullscreen() : d.requestFullscreen && d.requestFullscreen(); };

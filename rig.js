@@ -4,7 +4,7 @@
 // toward the camera (shortens), the body drops at double support. Arms swing against the legs; attacks aim at the target.
 (function () {
   const L = LIB, M = L.M, TAU = Math.PI * 2;
-  const RIG = (window.RIG = {});
+  const RIG = (window.RIG = {}), MUZ = (RIG.muzzle = {});
   const ang = (v) => Math.atan2(v[1], v[0]);
   const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
   const SS = (e0, e1, x) => L.SS(e0, e1, x);
@@ -139,7 +139,8 @@
     const drawGun = () => { if (!o.gun || !arms.R || !arms.R.hand) return; const G = window.ASSETS[o.gun]; if (!G) return;
       const hp = o.P(arms.R.hand), a = (o.aim == null ? (o.fl > 0 ? 0.3 : Math.PI - 0.3) : o.aim), len = o.gunLen, h = len * G.h / G.w, back = Math.cos(a) < 0;
       L.sprite(o.gun, 0, 0, { m: M.of(M.t(hp[0], hp[1]), M.r(back ? a - Math.PI : a), M.s(back ? -1 : 1, 1)), w: len, h, pivot: [len * 0.22, h * 0.6], u: o.u });
-      if (L.TRACE) { L.joint(o.id, 'grip', hp); L.joint(o.id, 'tip', [hp[0] + Math.cos(a) * len * 0.78, hp[1] + Math.sin(a) * len * 0.78]); } };
+      const tip = [hp[0] + Math.cos(a) * len * 0.78, hp[1] + Math.sin(a) * len * 0.78]; MUZ[o.id] = { tip, grip: hp, a, len };   // where shots leave the barrel this frame
+      if (L.TRACE) { L.joint(o.id, 'grip', hp); L.joint(o.id, 'tip', tip); } };
     // body (rotates about the crotch for lean / fart / bite)
     const drawBody = () => { const pv = [s.gx, R.crotch]; part(o, 'body', pv, [pv[0], pv[1] + bob], rotB, { sy: breath }); J('head', [R.head[0], R.head[1] + bob]); J('hip', [s.gx, R.crotch + bob]); };
     J('ground', root);

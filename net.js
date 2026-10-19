@@ -5,7 +5,7 @@
 (function () {
   const APP = 'friendpocalypse-v1', SNAP_HZ = 30, IN_HZ = 30, TRYSTERO = 'https://cdn.jsdelivr.net/npm/trystero@0.26.0/+esm';
   const HEROES = ['hasan', 'danil', 'vitya', 'leha'], NAMES = { hasan: 'Хасан', danil: 'Данил', vitya: 'Витя', leha: 'Лёха' };
-  const DESC = { hasan: 'Усы-хлысты, стягивает толпу. Хрупкий.', danil: 'Фотокарточки, метки, баффы. Дальний бой.',
+  const DESC = { hasan: 'Усы-хлысты, зацеп, усатое торнадо. Ближний бой, хрупкий.', danil: 'Карточки, фан-чант (очаровывает), сцена-барьер. Поддержка.',
     vitya: 'Ядовитые облака. Бьёт и своих. Не поднимает друзей.', leha: 'Танк. Пистолет → ПП → дробовик → РПГ. Щит.' };
   const q = new URLSearchParams(location.search);
   const NET = (window.NET = { mode: 'off', hero: localStorage.getItem('fp_hero') || q.get('hero') || 'hasan', bots: true, open: true });
@@ -20,7 +20,7 @@
   const ET = Object.keys(SIM.ETYPES), r1 = (v) => Math.round(v), r2 = (v) => Math.round(v * 100) / 100;
   const HN = ['hasan', 'danil', 'vitya', 'leha'];
   const PF = ['id', 'hero', 'bot', 'x', 'y', 'vx', 'vy', 'fx', 'fy', 'ax', 'ay', 'dir', 'dist', 'hp', 'hpMax', 'down', 'downT', 'revP', 'out', 'inv', 'hurtT',
-    'dashT', 'dashCD', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo'];
+    'qa', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo'];
   const evSince = {};
   function snapshot(S, pid) {
     const p = S.players.find((o) => o.id === pid) || S.players[0], R = 1500, nearP = (x, y, r = R) => Math.abs(x - p.x) < r * 1.4 && Math.abs(y - p.y) < r;
@@ -28,7 +28,7 @@
     const players = S.players.map((o) => { const row = PF.map((k) => { const v = o[k]; return typeof v === 'number' ? (Number.isInteger(v) ? v : r2(v)) : v; });
       row[PF.indexOf('hero')] = HN.indexOf(o.hero); row[PF.indexOf('ack')] = ackOf[o.id] || 0;
       return [row, [r2(o.m.area), r2(o.m.cd), r2(o.m.shield), r2(o.m.spd)], o.tokens, o.id === pid ? o.pick : 0, o.id === pid ? o.cam.map(r1) : 0, o.id === pid ? o.items : 0]; });
-    const E = []; for (const e of S.enemies) if (nearP(e.x, e.y)) E.push(e.id, ET.indexOf(e.type) + (e.elite ? 10 : 0), r1(e.x), r1(e.y), r1(e.vx), r1(e.vy), r1(e.hp), r1(e.hpMax), r1(e.dist), r2(e.spawnT), r2(e.hitT), r2(e.biteT || -9), e.face);
+    const E = []; for (const e of S.enemies) if (nearP(e.x, e.y)) E.push(e.id, ET.indexOf(e.type) + (e.elite ? 10 : 0), r1(e.x), r1(e.y), r1(e.vx), r1(e.vy), r1(e.hp), r1(e.hpMax), r1(e.dist), r2(e.spawnT), r2(e.hitT), r2(e.biteT || -9), e.face, r2(e.charmT || -9));
     const G = []; for (const g of S.gems) if (nearP(g.x, g.y, 1200)) G.push(g.id, r1(g.x), r1(g.y), g.v);
     const B = S.proj.filter((b) => nearP(b.x, b.y)).map((b) => [b.id, b.kind, r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), b.c || 0, b.tox || 0, b.kind === 'can' ? r2(b.ttl) : 0]);
     const EB = S.eproj.filter((b) => nearP(b.x, b.y)).map((b) => [r1(b.x), r1(b.y), r2(b.ttl)]);
@@ -36,12 +36,13 @@
     const ev = S.ev.filter((e) => e.t > since && (e.x === undefined || nearP(e.x, e.y, 2000) || e.k === 'say'));
     const enemyDots = S.enemies.length > 0 ? S.enemies.filter((e, i) => i % 3 === 0).map((e) => [r1(e.x / 8), r1(e.y / 8)]) : [];
     return { t: S.t, wave: S.wave, waveT: r2(S.waveT), brk: r2(S.brk), xp: S.xp, lvl: S.lvl, xpNext: S.xpNext, kills: S.kills, over: S.over, won: S.won,
-      awards: S.awards, comboT: S.comboT, solo: S.solo, players, E, G, B, EB, clouds: S.clouds, marks: S.marks, ev, dots: enemyDots,
+      awards: S.awards, comboT: S.comboT, solo: S.solo, players, E, G, B, EB, clouds: S.clouds, zones: S.zones, marks: S.marks, ev, dots: enemyDots,
+      pause: S.pause, pend: S.pend, clear: S.clear, clearT: r2(S.clearT), left: S.enemies.length,
       chests: S.chests.map((c) => ({ id: c.id, x: r1(c.x), y: r1(c.y) })), food: S.food.filter((f) => nearP(f.x, f.y)).map((f) => ({ id: f.id, x: r1(f.x), y: r1(f.y) })) };
   }
   function restore(n) {
-    const enemies = []; for (let i = 0; i < n.E.length; i += 13) { const a = n.E;
-      enemies.push({ id: a[i], type: ET[a[i + 1] % 10], elite: a[i + 1] >= 10 ? 1 : 0, x: a[i + 2], y: a[i + 3], vx: a[i + 4], vy: a[i + 5], hp: a[i + 6], hpMax: a[i + 7], dist: a[i + 8], spawnT: a[i + 9], hitT: a[i + 10], biteT: a[i + 11], face: a[i + 12], r: SIM.ETYPES[ET[a[i + 1] % 10]].r }); }
+    const enemies = []; for (let i = 0; i < n.E.length; i += 14) { const a = n.E;
+      enemies.push({ id: a[i], type: ET[a[i + 1] % 10], elite: a[i + 1] >= 10 ? 1 : 0, x: a[i + 2], y: a[i + 3], vx: a[i + 4], vy: a[i + 5], hp: a[i + 6], hpMax: a[i + 7], dist: a[i + 8], spawnT: a[i + 9], hitT: a[i + 10], biteT: a[i + 11], face: a[i + 12], charmT: a[i + 13], r: SIM.ETYPES[ET[a[i + 1] % 10]].r }); }
     const gems = []; for (let i = 0; i < n.G.length; i += 4) gems.push({ id: n.G[i], x: n.G[i + 1], y: n.G[i + 2], v: n.G[i + 3] });
     const proj = n.B.map((b) => ({ id: b[0], kind: b[1], x: b[2], y: b[3], vx: b[4], vy: b[5], c: b[6], tox: b[7], ttl: b[8] }));
     const eproj = n.EB.map((b) => ({ x: b[0], y: b[1], ttl: b[2] }));
@@ -102,7 +103,7 @@
         ${!inRoom ? `</div><div class="row"><input id="code" maxlength="5" placeholder="КОД КОМНАТЫ ОТ ДРУГА" style="text-transform:uppercase;flex:0 1 260px"><button id="join" class="alt">Войти</button>` : ''}
         ${isHost ? `<input id="lnk" readonly value="${link}"><button id="cp" class="alt">Копировать ссылку</button>` : ''}</div>
       ${isHost ? `<div class="row"><label><input type="checkbox" id="bots" ${NET.bots ? 'checked' : ''} style="min-width:0;flex:0"> Боты на свободных героях</label><button id="go">Старт (${roster.length} игр.)</button></div>` : ''}
-      <div class="note">WASD — бег · Space — рывок · Q — способность · R — ульта · E — встать/поднять · 1/2/3 — улучшение · M — музыка${inRoom ? '' : ' · Ссылку на комнату отправь друзьям, им ничего не нужно ставить'}</div></div>`;
+      <div class="note">WASD — бег · Q — способность · R — ульта · E — встать/поднять · 1/2/3 — улучшение · M — музыка${inRoom ? '' : ' · Ссылку на комнату отправь друзьям, им ничего не нужно ставить'}</div></div>`;
     el.querySelectorAll('.h').forEach((d) => (d.onclick = () => { NET.hero = d.dataset.h; localStorage.setItem('fp_hero', NET.hero); if (act.hello) act.hello.send({ hero: NET.hero }); if (isHost) { roster.find((r) => r.self).hero = NET.hero; sendRoster(); } render(); }));
     const $ = (id) => el.querySelector('#' + id);
     if ($('solo')) $('solo').onclick = () => startLocal(false);
@@ -177,11 +178,11 @@
   let lastIn = 0, latch = {};
   // ---- client: numbered input + local prediction of the own hero (moves at once; the host's answer reconciles it) ----
   let lastSent = '', lastSq = 0;
-  NET.clientInput = (inp) => { for (const k of ['dash', 'jump', 'q', 'r', 'e']) if (inp[k]) latch[k] = 1; if (inp.slot) latch.slot = inp.slot;
+  NET.clientInput = (inp) => { for (const k of ['q', 'r', 'e']) if (inp[k]) latch[k] = 1; if (inp.slot) latch.slot = inp.slot;
     predict(inp);
     if (!act.input) return;
     const d = { left: inp.left ? 1 : 0, right: inp.right ? 1 : 0, up: inp.up ? 1 : 0, down: inp.down ? 1 : 0 };
-    for (const k of ['dash', 'jump', 'q', 'r', 'e']) d[k] = inp[k] || latch[k] ? 1 : 0; d.slot = latch.slot || 0;
+    for (const k of ['q', 'r', 'e']) d[k] = inp[k] || latch[k] ? 1 : 0; d.slot = latch.slot || 0;
     const key = JSON.stringify(d), now = performance.now();
     if (key === lastSent && now - lastIn < 1000 / IN_HZ) return;                     // unchanged: heartbeat only
     lastIn = now; lastSent = key; latch = {}; d.seq = ++seq; d.ss = lastSq; act.input.send(d);
@@ -189,17 +190,15 @@
   const meSnap = () => { const b = snaps[snaps.length - 1]; return b && b.S.players.find((o) => o.id === myPid); };
   function predict(inp) {
     const me = meSnap(), now = performance.now(); if (!me) return;
-    if (!pred || me.down || me.out) { pred = { x: me.x, y: me.y, vx: 0, vy: 0, dashT: -9, dashCD: 0, prevDash: 0, dist: me.dist || 0, dir: me.dir || 0 }; hist = []; corr = [0, 0]; lastPred = now; return; }
+    const b = snaps[snaps.length - 1]; if (pred && b.S.pause) { pred.vx = pred.vy = 0; lastPred = now; return; }          // level-up pause: the world (and you) stand still
+    if (!pred || me.down || me.out) { pred = { x: me.x, y: me.y, vx: 0, vy: 0, dist: me.dist || 0, dir: me.dir || 0 }; hist = []; corr = [0, 0]; lastPred = now; return; }
     let dt = Math.min(0.1, (now - lastPred) / 1000); lastPred = now;
     const H = SIM.HEROES[me.hero], spd = H.spd * ((me.m && me.m.spd) || 1) * (me.hero === 'leha' ? 1 - 0.04 * (me.tier || 0) : 1);
     const ix = (inp.right ? 1 : 0) - (inp.left ? 1 : 0), iy = (inp.down ? 1 : 0) - (inp.up ? 1 : 0), il = Math.hypot(ix, iy) || 1;
-    const dashE = (inp.dash || inp.jump) && !pred.prevDash; pred.prevDash = inp.dash || inp.jump ? 1 : 0;
     if (ix || iy) { pred.fx = ix / il; pred.fy = iy / il; pred.dir = Math.abs(iy) > Math.abs(ix) * 1.2 ? (iy > 0 ? 0 : 2) : (ix > 0 ? 1 : 3); }
     while (dt > 0) { const h = Math.min(SIM.DT, dt); dt -= h;
       const acc = 2600 * h; pred.vx += Math.max(-acc, Math.min(acc, ix / il * spd - pred.vx)); pred.vy += Math.max(-acc, Math.min(acc, iy / il * spd - pred.vy));
-      pred.dashCD = Math.max(0, pred.dashCD - h);
-      if (dashE && pred.dashCD <= 0 && pred.dashT < now - 50) { pred.dashT = now; pred.dashCD = 1.1; }
-      const dashing = now - pred.dashT < 170, mx = dashing ? (pred.fx || 0) * 950 : pred.vx, my = dashing ? (pred.fy || 0) * 950 : pred.vy;
+      const mx = pred.vx, my = pred.vy;
       const ox = pred.x, oy = pred.y; pred.x += mx * h; pred.y += my * h; SIM.collide(pred, 24); pred.dist += Math.hypot(pred.x - ox, pred.y - oy); }
     // ease the reconciliation error in over ~150 ms (a hard snap only when far off)
     const cx = corr[0] * 0.12, cy = corr[1] * 0.12; pred.x += cx; pred.y += cy; corr[0] -= cx; corr[1] -= cy;

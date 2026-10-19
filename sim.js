@@ -7,7 +7,7 @@
   const VIEW = { W: 1920, H: 1080 }, WORLD = { x0: 0, y0: 0, x1: 5200, y1: 3800 };
   const C = [2600, 1900];                                                    // plaza centre
   const PLAZA = [600, 500];                                                  // plaza radii (3/4 view squash)
-  const HINT = 'WASD — бег · Space — рывок · Q — способность · R — ульта · E — поднять друга · 1/2/3 — улучшение';
+  const HINT = 'WASD — бег · Q — способность · R — ульта · E — поднять друга · 1/2/3 — улучшение';
   const h1 = (n) => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
   const h2 = (a, b) => h1(a * 12.9898 + b * 78.233);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -32,7 +32,12 @@
     spitter: { hp: 28, spd: 90, r: 22, dmg: 7, xp: 2, sc: 1.05, from: 4, ranged: 1, w: 0.14 },
     bomber: { hp: 18, spd: 150, r: 22, dmg: 18, xp: 2, sc: 1.0, from: 5, bomb: 1, w: 0.12 },
   };
-  const WAVE_LEN = 60, BREAK = 9, WAVES = 10;
+  const WAVE_LEN = 60, BREAK = 9, WAVES = 10, LASH_HIT = 0.21;              // Hasan's whip: snap 0.21 s after the swing starts (scene LASH)
+  // ability sizes (kept compact so 4–8 players don't paint the whole screen)
+  const ULT_STAGE = 5, ULT_GAS = 230, TORNADO = { r: 140, ttl: 4, spd: 150 }, CHARM = { r: 360, half: 0.62, ttl: 2.5 }, JET = { r: 380, half: 0.45 };
+  const stageCard = (p, ua, k) => { const a = ua * 1.6 + k * Math.PI / 4, R = 150 * p.m.area; return [p.x + Math.cos(a) * R, p.y - 30 + Math.sin(a) * R * 0.72]; };
+  const inCone = (p, e, ang, r, half) => { const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy); if (d > r + e.r) return false; if (d < 30) return true;
+    const da = Math.atan2(dy, dx) - ang; return Math.abs(Math.atan2(Math.sin(da), Math.cos(da))) < half; };
   const COOP = [1, 1, 1.65, 2.2, 2.7, 3.15, 3.55, 3.95, 4.3], COOP_HP = [1, 1, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35];
 
   // ---------------- progression (Vampire Survivors / HoloCure style) ----------------
@@ -148,7 +153,7 @@
 
   function create(cfg = {}) {
     const heroes = cfg.heroes || ORDER, S = { t: 0, steps: 0, wt0: 0, mode: cfg.mode || 'play', seed: cfg.seed || 1,
-      players: [], enemies: [], proj: [], eproj: [], clouds: [], gems: [], marks: [], booms: [], nid: 1,
+      players: [], enemies: [], proj: [], eproj: [], clouds: [], zones: [], gems: [], marks: [], booms: [], nid: 1, rt: 0, pause: 0, pend: [], clear: 0, clearT: 0,
       wave: 1, waveT: 0, brk: 0, xp: 0, lvl: 1, xpNext: 6, eliteT: 20, chests: [], food: [], spawnAcc: 0, over: 0, won: 0, freeze: 0, kills: 0,
       comboT: -9, comboK: {}, sayT: -9, banter: 0, ev: [], awards: null, me: 0, solo: 0 };
     heroes.forEach((h, i) => S.players.push(newPlayer(i, h, cfg.humans ? !cfg.humans.includes(i) : 1, i)));
@@ -236,35 +241,40 @@
     if (p.hero === 'hasan') {
       if (p.atkT <= 0 && tgt) { p.atkT = 0.62 / as; p.atkN++; p.atkSide = -p.atkSide; p.lastAtk = t;
         const ang = Math.atan2(p.ay, p.ax), R = 190 * area * p.m.sarea, pull = p.atkN % p.m.pullN === 0, n = 1 + p.m.extra;
+        ev(S, { k: 'whip', pid: p.id, x: p.x, y: p.y, ang, side: p.atkSide, pull: pull ? 1 : 0, n, R });
+        p.lash = { t: t + LASH_HIT, ang, R, pull, n }; }                 // the lash winds up over his head; damage lands on the snap
+      if (p.lash && t >= p.lash.t) { const { ang, R, pull, n } = p.lash; p.lash = null;
         for (let k = 0; k < n; k++) { const a0 = ang + (k - (n - 1) / 2) * 0.55;
           near(p.x, p.y - 40, R, (e) => { const da = Math.atan2(e.y - (p.y - 40), e.x - p.x) - a0, dd = Math.abs(Math.atan2(Math.sin(da), Math.cos(da)));
             if (dd > 0.75) return; const ex = p.x + Math.cos(a0) * 70, ey = p.y - 40 + Math.sin(a0) * 70;
             if (pull && ETYPES[e.type].sc < 1.5 && !e.elite) { e.kx += (ex - e.x) * 5; e.ky += (ey - e.y) * 5; e.pullT = t; e.pullBy = p.id; } else if (pull) e.slowT = t + 1.2;
             hurtEnemy(S, e, 14 * p.m.dmg * p.m.sdmg, p, 'whip', Math.cos(a0) * 120, Math.sin(a0) * 120); }); }
-        ev(S, { k: 'whip', pid: p.id, x: p.x, y: p.y, ang, side: p.atkSide, pull: pull ? 1 : 0, n, R });
         if (p.hitSet.length >= 5 && t - p.fastT > 6) { p.fastT = t; p.hitSet = []; } }
+      // Q «Подкрутил усы»: two mustache blades spin close around him — a melee blender that shoves out and swats spit away (eproj loop)
       if (t - p.qT < 4) { if (Math.floor((t - p.qT) / 0.25) !== Math.floor((t - p.qT - DT) / 0.25))
-        near(p.x, p.y - 30, 170 * area, (e) => { const d = dist(e.x, e.y, p.x, p.y) || 1; hurtEnemy(S, e, 8 * p.m.dmg, p, 'twirl', (e.x - p.x) / d * 300, (e.y - p.y) / d * 300); }); }
-      if (t - p.ultT < 3.2) { const ox = p.x + p.fx * 220, oy = p.y + p.fy * 180;
-        near(ox, oy, 460 * area, (e) => { const d = dist(e.x, e.y, ox, oy) || 1, big = ETYPES[e.type].sc >= 1.5;
-          if (!big) { e.kx += (-(e.y - oy) / d * 9 + (ox - e.x) / d * 5) * 60 * DT * 60; e.ky += ((e.x - ox) / d * 9 + (oy - e.y) / d * 5) * 60 * DT * 60; } else e.slowT = t + 0.5;
-          if (S.steps % 12 === 0) hurtEnemy(S, e, 7 * p.m.dmg, p, 'tornado'); });
-        if (t - p.ultT + DT >= 3.2) near(ox, oy, 480 * area, (e) => { const d = dist(e.x, e.y, ox, oy) || 1; hurtEnemy(S, e, 40 * p.m.dmg, p, 'tornado', (e.x - ox) / d * 900, (e.y - oy) / d * 900); }); }
+        near(p.x, p.y - 30, 150 * area, (e) => { const d = dist(e.x, e.y, p.x, p.y) || 1; hurtEnemy(S, e, 8 * p.m.dmg, p, 'twirl', (e.x - p.x) / d * 300, (e.y - p.y) / d * 300); }); }
+      // R «Усатое торнадо» is a travelling zone (S.zones, zoneStep)
     }
     if (p.hero === 'danil') {
       if (p.atkT <= 0 && tgt) { p.atkT = 0.55 / as * (p.set === 0 ? 0.85 : 1); p.lastAtk = t; const n = 1 + p.m.extra, ang = Math.atan2(p.ay, p.ax);
         for (let k = 0; k < n; k++) { const a = ang + (k - (n - 1) / 2) * 0.16;
-          S.proj.push({ id: S.nid++, own: p.id, kind: 'card', x: p.x + p.ax * 24, y: p.y - 50, vx: Math.cos(a) * 920, vy: Math.sin(a) * 920, dmg: 10 * p.m.dmg * p.m.sdmg, ttl: 0.9, rico: p.m.rico + (p.set === 2 ? 1 : 0), pierce: p.m.pierce || 0, hit: [], tox: 0, c: (p.atkN + k) % 3 }); }
+          S.proj.push({ id: S.nid++, own: p.id, kind: 'card', x: p.x + p.ax * 24, y: p.y - 50, vx: Math.cos(a) * 920, vy: Math.sin(a) * 920, dmg: 10 * p.m.dmg * p.m.sdmg, ttl: 0.9, rico: p.m.rico + (p.set === 2 ? 1 : 0), pierce: p.m.pierce || 0, hit: [], tox: 0, c: (p.atkN + k) % 4 }); }
         p.atkN++; ev(S, { k: 'throw', pid: p.id, x: p.x, y: p.y }); }
-      if (t - p.ultT < 1.6 && Math.floor((t - p.ultT) / 0.5) !== Math.floor((t - p.ultT - DT) / 0.5))
-        for (let k = 0; k < 22; k++) { const a = k / 22 * Math.PI * 2 + t; S.proj.push({ id: S.nid++, own: p.id, kind: 'card', x: p.x, y: p.y - 50, vx: Math.cos(a) * 820, vy: Math.sin(a) * 820, dmg: 16 * p.m.dmg, ttl: 0.9, rico: 1, hit: [], tox: 0, c: k % 3 }); }
+      // R «Камбэк года»: a stage of 8 giant idol cards orbits him for 5 s — a fence that hits and shoves out whoever touches it, then the cards fly out
+      const ua = t - p.ultT;
+      if (ua < ULT_STAGE && Math.floor(ua / 0.12) !== Math.floor((ua - DT) / 0.12))
+        for (let k = 0; k < 8; k++) { const [cx, cy] = stageCard(p, ua, k);
+          near(cx, cy, 44, (e) => { const d = dist(e.x, e.y, p.x, p.y) || 1; hurtEnemy(S, e, 9 * p.m.dmg, p, 'card', (e.x - p.x) / d * 480, (e.y - p.y) / d * 480); }); }
+      if (ua >= ULT_STAGE && ua - DT < ULT_STAGE)
+        for (let k = 0; k < 8; k++) { const [cx, cy] = stageCard(p, ua, k), a = Math.atan2(cy - (p.y - 30), cx - p.x);
+          S.proj.push({ id: S.nid++, own: p.id, kind: 'card', x: cx, y: cy - 20, vx: Math.cos(a) * 820, vy: Math.sin(a) * 820, dmg: 18 * p.m.dmg, ttl: 0.8, rico: 1, hit: [], tox: 0, c: k % 4 }); }
     }
     if (p.hero === 'vitya') {
       const solo = S.players.filter((q) => q !== p && alive(q) && dist(q.x, q.y, p.x, p.y) < 320).length;
       p.zone = 1 + 0.3 * Math.max(0, 1 - solo / 2);
-      if (p.atkT <= 0) { p.atkT = 3.4 * p.m.srate / as; p.lastAtk = t; addCloud(S, p, p.x - p.fx * 30, p.y - 10 - p.fy * 20, 100 * area * p.m.sarea, 4.2);
-        if (p.m.double) addCloud(S, p, p.x + p.fy * 120, p.y - 10 - p.fx * 90, 90 * area * p.m.sarea, 4.2); }
-      if (t - p.ultT > 0.95 && t - p.ultT - DT <= 0.95) addCloud(S, p, p.ux, p.uy, 400 * area, 6, 1);
+      if (p.atkT <= 0) { p.atkT = 3.4 * p.m.srate / as; p.lastAtk = t; addCloud(S, p, p.x - p.fx * 30, p.y - 10 - p.fy * 20, 85 * area * p.m.sarea, 4.2);
+        if (p.m.double) addCloud(S, p, p.x + p.fy * 110, p.y - 10 - p.fx * 80, 75 * area * p.m.sarea, 4.2); }
+      if (t - p.ultT > 0.95 && t - p.ultT - DT <= 0.95) addCloud(S, p, p.ux, p.uy, ULT_GAS * area, 6, 1);
     }
     if (p.hero === 'leha') {
       const g = S.t - p.ultT < 7 ? 4 : p.tier, rate = [0.5, 0.13, 1.0, 1.5, 0.35][g];
@@ -306,15 +316,40 @@
   }
 
   function useQ(S, p, t) {
-    p.qT = t; p.qCD = QCD[p.hero] * p.m.cd; ev(S, { k: 'q', pid: p.id, hero: p.hero, x: p.x, y: p.y }); say(S, p, 'q');
-    if (p.hero === 'danil') { const ids = []; for (let k = 0; k < 5; k++) { const e = nearest(S, p.x, p.y, 800, ids); if (!e) break; ids.push(e.id); S.marks.push({ id: e.id, until: t + 5, by: p.id }); } }
-    if (p.hero === 'vitya') { for (let k = 1; k <= 5; k++) addCloud(S, p, p.x + p.fx * 75 * k, p.y - 10 + p.fy * 60 * k, 70 + 8 * k, 6);
-      near(p.x + p.fx * 200, p.y + p.fy * 160, 260, (e) => { e.kx += p.fx * 600; e.ky += p.fy * 600; e.poisT = t + 4; }); }
+    // aim: Danil at the nearest crowd (charm cone), everyone else where he faces
+    p.qa = p.hero === 'danil' && p.ax !== undefined ? Math.atan2(p.ay, p.ax) : Math.atan2(p.fy, p.fx);
+    p.qT = t; p.qCD = QCD[p.hero] * p.m.cd; ev(S, { k: 'q', pid: p.id, hero: p.hero, x: p.x, y: p.y, ang: p.qa }); say(S, p, 'q');
+    const area = p.m.area, ca = Math.cos(p.qa), sa = Math.sin(p.qa);
+    // Danil «Фан-чант»: a megaphone cone of hearts — enemies in it are charmed (stop, wander, take +50%), friends nearby get the fan buff
+    if (p.hero === 'danil') { near(p.x, p.y, CHARM.r * area, (e) => { if (!inCone(p, e, p.qa, CHARM.r * area, CHARM.half)) return;
+        const big = ETYPES[e.type].sc >= 1.5 || e.elite; e.charmT = t + CHARM.ttl * (big ? 0.5 : 1); S.marks.push({ id: e.id, until: e.charmT, by: p.id }); });
+      for (const q of S.players) if (alive(q) && dist(q.x, q.y, p.x, p.y) < 320) q.buffT = Math.max(q.buffT, t + 4); }
+    // Vitya «Залп по ветру»: a gas jet — shoves the cone back, poisons it and leaves a short trail of small clouds along the line
+    if (p.hero === 'vitya') { near(p.x, p.y, JET.r * area, (e) => { if (!inCone(p, e, p.qa, JET.r * area, JET.half)) return; const d = dist(e.x, e.y, p.x, p.y);
+        const f = 1 - 0.5 * d / (JET.r * area); e.kx += ca * 720 * f; e.ky += sa * 720 * f; e.poisT = t + 4; e.slowT = Math.max(e.slowT, t + 1.2); hurtEnemy(S, e, 6 * p.m.dmg * p.m.sdmg, p, 'gas'); });
+      [[110, 55], [200, 62], [290, 70]].forEach(([d, r]) => addCloud(S, p, p.x + ca * d * area, p.y - 10 + sa * d * 0.75 * area, r * area, 5)); }
+    // Лёха «Прикрыл!»: a riot shield in front — a bash on raise, then it blocks spit from the front while he walks behind it
+    if (p.hero === 'leha') near(p.x + ca * 60, p.y - 20 + sa * 45, 110, (e) => { hurtEnemy(S, e, 10 * p.m.dmg, p, 'bash', ca * 560, sa * 560); e.slowT = Math.max(e.slowT, t + 1); });
   }
   function useUlt(S, p, t) {
     p.ult = 0; p.ultT = t; p.ultLock = t + 35 * p.m.cd; ev(S, { k: 'ult', pid: p.id, hero: p.hero, x: p.x, y: p.y }); say(S, p, 'ult', true);
-    if (p.hero === 'vitya') { p.ux = p.x; p.uy = p.y - 10; ev(S, { k: 'warn', x: p.ux, y: p.uy, r: 400 * p.m.area, until: t + 0.95 }); }
-    if (p.hero === 'danil') for (const q of S.players) if (alive(q) && dist(q.x, q.y, p.x, p.y) < 450) q.buffT = t + 6;
+    if (p.hero === 'vitya') { p.ux = p.x; p.uy = p.y - 10; ev(S, { k: 'warn', x: p.ux, y: p.uy, r: ULT_GAS * p.m.area, until: t + 0.95 }); }
+    if (p.hero === 'danil') for (const q of S.players) if (alive(q) && dist(q.x, q.y, p.x, p.y) < 320) q.buffT = t + 6;
+    if (p.hero === 'hasan') S.zones.push({ id: S.nid++, kind: 'tornado', owner: p.id, x: p.x + p.fx * 110, y: p.y + p.fy * 80, vx: p.fx * TORNADO.spd, vy: p.fy * TORNADO.spd * 0.75,
+      t0: t, ttl: TORNADO.ttl, r: TORNADO.r * p.m.area });
+  }
+  // travelling zones: Hasan's tornado drifts where he faced, sucks small enemies into a spin, chips them, flings them at the end
+  function zoneStep(S, t) {
+    for (const z of S.zones) { const p = S.players.find((q) => q.id === z.owner); if (!p) { z.ttl = 0; continue; }
+      z.x += z.vx * DT; z.y += z.vy * DT; const zx = z.x, zy = z.y; collide(z, 20); if (z.x !== zx) z.vx *= -1; if (z.y !== zy) z.vy *= -1;
+      const a = t - z.t0, R = z.r, end = a + DT >= z.ttl;
+      near(z.x, z.y, R * 1.8, (e) => { const dx = e.x - z.x, dy = e.y - z.y, d = Math.hypot(dx, dy) || 1, big = ETYPES[e.type].sc >= 1.5 || e.elite;
+        if (end) { if (d < R * 1.3) hurtEnemy(S, e, 34 * p.m.dmg, p, 'tornado', dx / d * 900, dy / d * 900); return; }
+        if (!big) { const inw = d > R * 0.55 ? 1 : -0.4, k = d < R ? 1 : 0.55; e.kx += (-dy / d * 9 - dx / d * 5 * inw) * 30 * k; e.ky += (dx / d * 9 - dy / d * 5 * inw) * 30 * k; e.pullT = t; e.pullBy = p.id; }
+        else e.slowT = t + 0.5;
+        if (d < R && S.steps % 12 === 0) hurtEnemy(S, e, 6 * p.m.dmg, p, 'tornado'); });
+      if (end) ev(S, { k: 'boom', x: z.x, y: z.y, r: R * 1.2, kind: 'tornado' }); }
+    S.zones = S.zones.filter((z) => t < z.t0 + z.ttl);
   }
 
   // ---------------- bots (attract demo, empty co-op slots) ----------------
@@ -336,29 +371,42 @@
     let cnt = 0; near(p.x, p.y, 240, () => cnt++);
     if (cnt >= 4 && p.qCD <= 0) inp.q = 1;
     if (p.ult >= 1 && cnt >= 6) inp.r = 1;
-    if (cnt >= 7 && p.dashCD <= 0 && S.steps % 90 === p.id * 7) inp.dash = 1;
-    if (p.pick && S.t - p.pickT > 1.2) { const rank = (c) => ({ evo: 0, sig: 1, w: c.tag === 'НОВОЕ' ? 3 : 2, p: c.tag === 'НОВОЕ' ? 5 : 4, heal: 6 })[c.kind];
-      let b = 0; p.pick.forEach((c, i) => { if (rank(c) < rank(p.pick[b])) b = i; }); inp.slot = b + 1; }                // bots pick like a sensible player
     return inp;
+  }
+  const botPick = (p) => { const rank = (c) => ({ evo: 0, sig: 1, w: c.tag === 'НОВОЕ' ? 3 : 2, p: c.tag === 'НОВОЕ' ? 5 : 4, heal: 6 })[c.kind];   // bots pick like a sensible player
+    let b = 0; p.pick.forEach((c, i) => { if (rank(c) < rank(p.pick[b])) b = i; }); return b + 1; };
+  // level-up / chest pick: the whole world waits until every player with a pending pick has chosen (S.t is frozen; S.rt keeps going)
+  const PICK_AFK = 30;
+  function pauseStep(S, inps) {
+    for (const p of S.players) { if (!p.pick || p.out) continue;
+      const inp = p.bot ? {} : (inps[p.id] || {});
+      let slot = p.bot ? (S.rt - p.pickT > 1.2 ? botPick(p) : 0) : inp.slot;
+      if (!(slot >= 1 && slot <= p.pick.length) && S.rt - p.pickT > PICK_AFK) slot = 1;                       // AFK: take the first card
+      if (slot >= 1 && slot <= p.pick.length) applyPick(S, p, p.pick[slot - 1].id, S.t); }
   }
 
   // ---------------- step ----------------
   function step(S, inpAll) {
-    const t = S.t + DT; S.t = t; S.steps++;
-    if (S.over) { if (S.ev.length > 96) S.ev.splice(0, S.ev.length - 96); return S; }
-    buildGrid(S);
+    if (S.over) { S.t += DT; S.steps++; if (S.ev.length > 96) S.ev.splice(0, S.ev.length - 96); return S; }
     const inps = (inpAll && inpAll.players) || { 0: inpAll || {} };
+    S.rt = (S.rt || 0) + DT; S.steps++;
+    S.pend = S.players.filter((p) => p.pick && !p.out).map((p) => p.id); S.pause = S.pend.length ? 1 : 0;
+    if (S.pause) { pauseStep(S, inps); if (S.ev.length > 96) S.ev.splice(0, S.ev.length - 96); return S; }
+    const t = S.t + DT; S.t = t;
+    buildGrid(S);
     // ---- waves ----
     if (S.brk > 0) { S.brk -= DT; if (S.brk <= 0) { S.wave++; S.waveT = 0; ev(S, { k: 'wave', n: S.wave }); const p = S.players[Math.floor(h1(S.wave) * S.players.length)]; say(S, p, 'wave'); } }
-    else { S.waveT += DT;
-      if (S.waveT >= WAVE_LEN) { if (S.wave >= WAVES) { S.over = t; S.won = 1; finishRun(S); return S; }
+    // the wave timer runs out → no more spawns; the break starts only once the last enemy of the wave is dead
+    else if (S.clear) { S.clearT += DT;
+      if (!S.enemies.length) { S.clear = 0; if (S.wave >= WAVES) { S.over = t; S.won = 1; finishRun(S); return S; }
         S.brk = BREAK; ev(S, { k: 'break', n: S.wave }); for (const p of S.players) { p.tokens = []; if (p.down && !p.out) { p.down = 0; p.hp = p.hpMax * 0.5; } p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.3); }
-        S.enemies.forEach((e) => (e.flee = 1)); S.banter = t + 2; } }
+        S.banter = t + 2; } }
+    else { S.waveT += DT; if (S.waveT >= WAVE_LEN) { S.waveT = WAVE_LEN; S.clear = 1; S.clearT = 0; ev(S, { k: 'clear', n: S.wave }); } }
     if (S.banter && t > S.banter) { S.banter = 0; const up = S.players.filter(alive), a = up[Math.floor(h1(S.wave + 3) * up.length)]; if (a) { S.sayT = -9; a.vcd = 0; say(S, a, 'banter'); } }
     if (S.allyDownSay && t > S.allyDownSay[0]) { const a = S.players.find((q) => q.id === S.allyDownSay[1]); S.allyDownSay = 0; if (a && alive(a)) { a.vcd = 0; say(S, a, 'ally_down'); } }
     // ---- spawning: hold a target count around the team, outside every camera ----
     const n = S.players.length, coop = COOP[Math.min(8, n)], humans = Math.max(1, n);
-    const want = S.brk > 0 ? 0 : Math.min(190, Math.round((7 + S.wave * 5 + S.waveT * (0.08 + S.wave * 0.025)) * coop * (S.solo ? 0.7 : 1)));
+    const want = S.brk > 0 || S.clear ? 0 : Math.min(190, Math.round((7 + S.wave * 5 + S.waveT * (0.08 + S.wave * 0.025)) * coop * (S.solo ? 0.7 : 1)));
     S.spawnAcc += DT * (2 + S.wave * 0.8) * coop;
     const live = S.players.filter(alive);
     while (S.spawnAcc >= 1 && S.enemies.length < want && live.length) { S.spawnAcc -= 1;
@@ -374,7 +422,7 @@
     }
     if (S.spawnAcc > 3) S.spawnAcc = 3;
     // an elite every ~25 s from wave 2: a golden brute that drops a chest (a free upgrade for whoever opens it)
-    if (S.brk <= 0 && S.wave >= 2 && live.length && (S.eliteT -= DT) <= 0) { S.eliteT = Math.max(14, 28 - S.wave);
+    if (S.brk <= 0 && !S.clear && S.wave >= 2 && live.length && (S.eliteT -= DT) <= 0) { S.eliteT = Math.max(14, 28 - S.wave);
       const p = live[Math.floor(h1(S.steps) * live.length)], a = h1(S.steps + 5) * Math.PI * 2;
       const x = clamp(p.x + Math.cos(a) * 1200, 80, WORLD.x1 - 80), y = clamp(p.y + Math.sin(a) * 900, 180, WORLD.y1 - 60), w1 = S.wave - 1;
       if (!blocked(x, y, 40)) { const hp = 130 * 6 * (1 + 0.18 * w1 + 0.025 * w1 * w1) * COOP_HP[Math.min(8, n)];
@@ -384,7 +432,7 @@
     for (const p of S.players) {
       const inp = p.bot ? botInput(S, p) : (inps[p.id] || {});
       const edge = (k) => { const v = !!inp[k], e = v && !p.prev[k]; p.prev[k] = v; return e; };
-      const dashE = edge('dash') || edge('jump'), qE = edge('q'), rE = edge('r'), eE = edge('e');
+      const qE = edge('q'), rE = edge('r'), eE = edge('e');
       if (p.out) continue;
       if (p.down) { const g = inGas(S, p.x, p.y); p.downT -= DT * (g ? 1.5 : 1); if (g) p.gasDown = t;
         if (S.solo && p.selfRes > 0 && (eE || p.bot)) { p.selfRes--; p.down = 0; p.hp = p.hpMax * 0.5; p.inv = t + 2; ev(S, { k: 'revive', pid: p.id, by: p.id, x: p.x, y: p.y }); }
@@ -395,9 +443,6 @@
         const vt = S.players.find((q) => q.hero === 'vitya' && alive(q) && dist(q.x, q.y, p.x, p.y) < 85); if (vt && S.t - (p.cantT || -9) > 4) { p.cantT = S.t; say(S, vt, 'cant_revive'); }
         if (p.downT <= 0) { p.out = 1; ev(S, { k: 'out', pid: p.id, x: p.x, y: p.y }); }
         continue; }
-      // upgrade pick
-      if (p.pick && inp.slot >= 1 && inp.slot <= p.pick.length) applyPick(S, p, p.pick[inp.slot - 1].id, t);
-      else if (p.pick && t - p.pickT > 15) applyPick(S, p, p.pick[0].id, t);                     // AFK: take the first card
       // move
       const ix = (inp.right ? 1 : 0) - (inp.left ? 1 : 0), iy = (inp.down ? 1 : 0) - (inp.up ? 1 : 0), il = Math.hypot(ix, iy) || 1;
       const slowLeha = p.hero === 'leha' ? 1 - 0.04 * p.tier : 1, fast = t - p.fastT < 2 ? 1.25 : 1;
@@ -405,9 +450,8 @@
       const tx = ix / il * spd, ty = iy / il * spd, acc = 2600 * DT;
       p.vx += clamp(tx - p.vx, -acc, acc); p.vy += clamp(ty - p.vy, -acc, acc);
       if (ix || iy) { p.fx = ix / il; p.fy = iy / il; p.dir = Math.abs(iy) > Math.abs(ix) * 1.2 ? (iy > 0 ? 0 : 2) : (ix > 0 ? 1 : 3); p.stillT = 0; } else p.stillT += DT;
-      p.dashCD = Math.max(0, p.dashCD - DT); p.qCD = Math.max(0, p.qCD - DT);
-      if (dashE && p.dashCD <= 0) { p.dashT = t; p.dashCD = 1.6; p.inv = Math.max(p.inv, t + 0.25); ev(S, { k: 'dash', pid: p.id, x: p.x, y: p.y, dx: p.fx, dy: p.fy }); }
-      const dashing = t - p.dashT < 0.17, mx = dashing ? p.fx * 950 : p.vx, my = dashing ? p.fy * 950 : p.vy;
+      p.qCD = Math.max(0, p.qCD - DT);
+      const mx = p.vx, my = p.vy;
       p.x += mx * DT; p.y += my * DT; collide(p, 24);
       const moved = Math.hypot(mx, my) * DT; if (moved > 0.05) { const b = Math.floor(p.dist / 62); p.dist += moved; if (Math.floor(p.dist / 62) !== b) ev(S, { k: 'step', pid: p.id, x: p.x, y: p.y }); }
       if (qE && p.qCD <= 0) useQ(S, p, t);
@@ -433,9 +477,10 @@
     for (const e of S.enemies) {
       const T = ETYPES[e.type]; let tg = null, td = 1e9;
       for (const p of targets) { const d = dist(p.x, p.y, e.x, e.y); if (d < td) { td = d; tg = p; } }
-      let spd = T.spd * (t < e.slowT ? 0.45 : 1) * (t < e.poisT ? 0.8 : 1) * (inGas(S, e.x, e.y) ? 0.8 : 1);
-      let dx = 0, dy = 0;
-      if (e.flee) { const p = tg || { x: C[0], y: C[1] }; const d = dist(p.x, p.y, e.x, e.y) || 1; dx = (e.x - p.x) / d; dy = (e.y - p.y) / d; spd *= 1.4; e.hp -= DT * 30; }
+      let spd = T.spd * (t < e.slowT ? 0.45 : 1) * (t < e.poisT ? 0.8 : 1) * (inGas(S, e.x, e.y) ? 0.8 : 1) * (S.clear && S.clearT > 15 ? 1.6 : 1);
+      let dx = 0, dy = 0; const charmed = t < (e.charmT || -9);
+      if (charmed) { dx = Math.sin(t * 1.7 + e.id) * 0.35; dy = Math.cos(t * 1.3 + e.id * 2) * 0.35; }
+      else if (e.flee) { const p = tg || { x: C[0], y: C[1] }; const d = dist(p.x, p.y, e.x, e.y) || 1; dx = (e.x - p.x) / d; dy = (e.y - p.y) / d; spd *= 1.4; e.hp -= DT * 30; }
       else if (tg) { dx = (tg.x - e.x) / (td || 1); dy = (tg.y - e.y) / (td || 1);
         if (T.ranged && td < 520) { dx *= -0.5; dy *= -0.5; if (td < 380) { dx *= 2; dy *= 2; } } }
       // separation from neighbours
@@ -447,7 +492,7 @@
       const mv = Math.hypot(e.vx, e.vy) * DT; e.dist += mv; if (Math.abs(e.vx) > 4) e.face = e.vx > 0 ? 1 : -1;
       collide(e, e.r * 0.6);
       if (e.hp <= 0) continue;
-      if (tg && !e.flee) {
+      if (tg && !e.flee && !charmed) {
         if (td < e.r + 30 && t > e.atkT) { e.atkT = t + 0.7; e.biteT = t;
           if (T.bomb) { e.hp = 0; killEnemy(S, e, null, 'self'); } else hurtPlayer(S, tg, T.dmg * (1 + 0.07 * (S.wave - 1)) * (e.elite ? 1.5 : 1), e); }
         if (T.ranged && td < 640 && t > e.shotT) { e.shotT = t + 3.6 + h2(e.id, S.steps) * 2; const d = td || 1;
@@ -480,11 +525,14 @@
     }
     S.proj = S.proj.filter((b) => b.ttl > 0);
     for (const b of S.eproj) { b.x += b.vx * DT; b.y += b.vy * DT; b.ttl -= DT;
+      // Лёха's shield stops spit from the front; Hasan's mustache spin swats it from any side
+      const lh = S.players.find((q) => q.hero === 'leha' && alive(q) && t - q.qT < 4 + q.m.shield && dist(q.x, q.y - 40, b.x, b.y) < 150 && (b.x - q.x) * q.fx + (b.y - q.y + 40) * q.fy > 10);
+      const hz = S.players.find((q) => q.hero === 'hasan' && alive(q) && t - q.qT < 4 && dist(q.x, q.y - 30, b.x, b.y) < 150 * q.m.area);
+      if (lh || hz) { b.ttl = 0; ev(S, { k: 'block', x: b.x, y: b.y, by: lh ? 'leha' : 'hasan' }); continue; }
       for (const p of S.players) { if (!alive(p)) continue;
-        const lh = S.players.find((q) => q.hero === 'leha' && alive(q) && t - q.qT < 4 + q.m.shield && dist(q.x, q.y - 40, b.x, b.y) < 150);
-        if (lh) { b.ttl = 0; ev(S, { k: 'block', x: b.x, y: b.y }); break; }
         if (dist(p.x, p.y - 40, b.x, b.y) < 30) { hurtPlayer(S, p, b.dmg, null); b.ttl = 0; break; } } }
     S.eproj = S.eproj.filter((b) => b.ttl > 0);
+    zoneStep(S, t);
     for (const c of S.clouds) if (c.follow !== undefined) { const o = S.players.find((q) => q.id === c.follow); if (o && !o.out) { c.x += (o.x - c.x) * 2.5 * DT; c.y += (o.y - 10 - c.y) * 2.5 * DT; } }
     S.clouds = S.clouds.filter((c) => t < c.t0 + c.ttl);
     S.marks = S.marks.filter((m) => t < m.until);
@@ -495,13 +543,13 @@
         if (bd < 26) { g.got = 1; S.xp += g.v; best.st.xp += g.v; ev(S, { k: 'gem', x: g.x, y: g.y, pid: best.id, v: g.v }); } } }
     S.gems = S.gems.filter((g) => !g.got && t - g.t0 < 60);
     for (const c of S.chests) for (const p of S.players) if (alive(p) && !c.got && dist(p.x, p.y, c.x, c.y) < 70) { c.got = 1;
-      if (p.pick) p.queue = (p.queue || 0) + 1; else { p.pick = rollPick(S, p); p.pickT = t; } ev(S, { k: 'chest', pid: p.id, x: c.x, y: c.y }); say(S, p, 'lvl'); }
+      if (p.pick) p.queue = (p.queue || 0) + 1; else { p.pick = rollPick(S, p); p.pickT = S.rt; } ev(S, { k: 'chest', pid: p.id, x: c.x, y: c.y }); say(S, p, 'lvl'); }
     S.chests = S.chests.filter((c) => !c.got);
     for (const f of S.food) for (const p of S.players) if (alive(p) && !f.got && p.hp < p.hpMax && dist(p.x, p.y, f.x, f.y) < 55) { f.got = 1; p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.25); ev(S, { k: 'food', pid: p.id, x: f.x, y: f.y }); }
     S.food = S.food.filter((f) => !f.got && t - f.t0 < 40);
     if (S.gems.length > 260) S.gems.splice(0, S.gems.length - 260);
     while (S.xp >= S.xpNext) { S.xp -= S.xpNext; S.lvl++; S.xpNext = xpNeed(S, S.lvl); ev(S, { k: 'lvl', n: S.lvl });
-      for (const p of S.players) { if (p.out) continue; if (p.pick) p.queue = (p.queue || 0) + 1; else { p.pick = rollPick(S, p); p.pickT = t; } }
+      for (const p of S.players) { if (p.out) continue; if (p.pick) p.queue = (p.queue || 0) + 1; else { p.pick = rollPick(S, p); p.pickT = S.rt; } }
       const p = S.players[Math.floor(h1(S.lvl) * S.players.length)]; say(S, p, 'lvl'); }
     // ---- defeat ----
     if (S.players.every((p) => p.down || p.out)) { S.over = t; S.won = 0; finishRun(S); }
@@ -512,8 +560,9 @@
   function applyPick(S, p, id, t) {
     if (id === 'evo') p.evo = 1; else if (id === 'heal') p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.4);
     else { p.items[id] = lv(p, id) + 1; if (id === 'hp') p.hp += 20; }
-    recalc(p); ev(S, { k: 'upgrade', pid: p.id, id, x: p.x, y: p.y, evo: id === 'evo' ? 1 : 0 });
-    if (p.queue > 0) { p.queue--; p.pick = rollPick(S, p); p.pickT = t; } else p.pick = null;
+    const tier0 = p.tier; recalc(p); ev(S, { k: 'upgrade', pid: p.id, id, x: p.x, y: p.y, evo: id === 'evo' ? 1 : 0 });
+    if (p.hero === 'leha' && p.tier !== tier0) ev(S, { k: 'gunup', pid: p.id, g: p.tier, x: p.x, y: p.y });             // the arsenal grows: shown over his head
+    if (p.queue > 0) { p.queue--; p.pick = rollPick(S, p); p.pickT = S.rt; } else p.pick = null;
   }
   function rollPick(S, p) {
     const cand = [], W = Object.keys(WEAPONS), P = Object.keys(PASSIVES).filter((id) => !PASSIVES[id].hero || PASSIVES[id].hero === p.hero);

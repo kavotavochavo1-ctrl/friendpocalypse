@@ -73,7 +73,7 @@ const load = (src) => new Promise((res, rej) => { const s = document.createEleme
   addEventListener('pointerup', () => { ptr.down = 0; });
   let last = performance.now(), fpsAcc = 0, fpsN = 0;
   const mkInp = () => ({ left: keys.ArrowLeft || keys.KeyA, right: keys.ArrowRight || keys.KeyD, up: keys.ArrowUp || keys.KeyW, down: keys.ArrowDown || keys.KeyS,
-      jump: keys.Space, act: keys.KeyX || keys.KeyJ || keys.Enter, q: keys.KeyQ, r: keys.KeyR, e: keys.KeyE, dash: keys.ShiftLeft, px: ptr.x, py: ptr.y, press: ptr.down, click: ptr.click, slot: pend.slot, wheel: pend.wheel });
+      act: keys.KeyX || keys.KeyJ || keys.Enter, q: keys.KeyQ, r: keys.KeyR, e: keys.KeyE, px: ptr.x, py: ptr.y, press: ptr.down, click: ptr.click, slot: pend.slot, wheel: pend.wheel });
   // advance = time + sim (+ network). Driven by rAF while visible, and by a worker clock while the tab is hidden, so a host
   // who alt-tabs keeps the game running for everyone (rAF stops and main-thread timers throttle in background tabs).
   const advance = () => {
