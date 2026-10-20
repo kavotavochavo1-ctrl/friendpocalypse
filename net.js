@@ -3,6 +3,7 @@
 // Client: sends its input (30 Hz, presses latched so quick taps are never lost) and renders snapshots interpolated by id.
 // Rooms are links: ?room=CODE. Whoever creates the room hosts; up to 8 players; free hero slots can be bots.
 (function () {
+  const LAG = +new URLSearchParams(location.search).get('lag') || 0;        // dev: ?lag=120 adds 120 ms each way on a client (to test prediction)
   const APP = 'friendpocalypse-v1', SNAP_HZ = 20, IN_HZ = 30, TRYSTERO = 'https://cdn.jsdelivr.net/npm/trystero@0.26.0/+esm';
   const HEROES = ['hasan', 'danil', 'vitya', 'leha'], NAMES = { hasan: 'Хасан', danil: 'Данил', vitya: 'Витя', leha: 'Лёха' };
   const DESC = { hasan: 'Усы-хлысты связывают врагов, усатое торнадо. Ближний бой, хрупкий.', danil: 'Карточки, фан-чант (очаровывает), сцена-барьер. Поддержка.',
@@ -10,7 +11,7 @@
   const q = new URLSearchParams(location.search);
   const NET = (window.NET = { mode: 'off', hero: localStorage.getItem('fp_hero') || q.get('hero') || 'hasan', bots: true, open: true });
   let room = null, act = {}, selfId = null, roster = [], peerToPid = {}, remote = {}, lastSnap = 0, myPid = 0;
-  let evBuf = [], snaps = [], hostGone = false, ackOf = {}, pred = null, hist = [], seq = 0, corr = [0, 0], lastPred = 0, camL = null; NET.dbg = { sent: 0, got: 0, bytes: 0, err: '' };
+  let evBuf = [], snaps = [], hostGone = false, ackOf = {}, pred = null, hist = [], seq = 0, corr = [0, 0], lastPred = 0, camL = null, camV = [0, 0], camT = 0; NET.dbg = { sent: 0, got: 0, bytes: 0, err: '' };
 
   // ---------------- compression (deflate-raw via CompressionStream) ----------------
   const pack = async (obj) => new Uint8Array(await new Response(new Blob([JSON.stringify(obj)]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());
@@ -82,7 +83,9 @@
     if (mi >= 0 && pred && !S.players[mi].down && !S.players[mi].out) {
       const W = SIM.VIEW.W, H = SIM.VIEW.H, Wd = SIM.WORLD, cl = (v, a0, a1) => Math.max(a0, Math.min(a1, v));
       const tx = cl(pred.x - W / 2 + pred.vx * 0.25, Wd.x0, Wd.x1 - W), ty = cl(pred.y - 60 - H / 2 + pred.vy * 0.2, Wd.y0, Wd.y1 - H);
-      if (!camL) camL = [tx, ty]; camL[0] += (tx - camL[0]) * 0.12; camL[1] += (ty - camL[1]) * 0.12;
+      // the same spring as the host's camera (sim.js camStep): the hero walks off first and the view follows, never the view first
+      if (!camL) { camL = [tx, ty]; camV = [0, 0]; camT = now; } let cdt = Math.min(0.1, (now - camT) / 1000); camT = now;
+      while (cdt > 0) { const h = Math.min(SIM.DT, cdt); cdt -= h; for (const k of [0, 1]) { camV[k] += (28 * ((k ? ty : tx) - camL[k]) - 10.5 * camV[k]) * h; camL[k] += camV[k] * h; } }
       S.players[mi] = Object.assign({}, S.players[mi], { x: pred.x, y: pred.y, vx: pred.vx, vy: pred.vy, cam: camL.slice(), dist: pred.dist, dir: pred.dir, fx: pred.fx || 0, fy: pred.fy || 1 }); }
     return S;
   }
@@ -356,7 +359,7 @@
       roster = d.list.map((r) => Object.assign(r, { self: r.peer === selfId })); render(); };
     act.start.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; myPid = d.pid; NET.started = true; NET.open = false; render(); snaps = []; document.getElementById('hint').style.opacity = 0; };
     act.back.onMessage = () => { NET.started = false; NET.ready = false; snaps = []; pred = null; SCENE.state = null; NET.open = true; render(); hello(); };   // host went back to the room
-    act.snap.onMessage = async (d) => { NET.dbg.got++; NET.dbg.bytes = d.byteLength || d.length || 0; let S; try { S = restore(await unpack(d instanceof Uint8Array ? d : new Uint8Array(d))); } catch (e) { NET.dbg.err = String(e); return; } lastSq = Math.max(lastSq, S.sq || 0); snaps.push({ at: performance.now(), S }); if (snaps.length > 3) snaps.shift(); reconcile(S); };
+    act.snap.onMessage = async (d) => { if (LAG && !d.__lag) { setTimeout(() => act.snap.onMessage(Object.assign(d, { __lag: 1 })), LAG); return; } NET.dbg.got++; NET.dbg.bytes = d.byteLength || d.length || 0; let S; try { S = restore(await unpack(d instanceof Uint8Array ? d : new Uint8Array(d))); } catch (e) { NET.dbg.err = String(e); return; } lastSq = Math.max(lastSq, S.sq || 0); snaps.push({ at: performance.now(), S }); if (snaps.length > 3) snaps.shift(); reconcile(S); };
     hello();
     render();
   }
@@ -381,7 +384,7 @@
     for (const k of ['q', 'r', 'e']) d[k] = inp[k] || latch[k] ? 1 : 0; d.slot = latch.slot || 0;
     const key = JSON.stringify(d), now = performance.now();
     if (key === lastSent && now - lastIn < 1000 / IN_HZ) return;                     // unchanged: heartbeat only
-    lastIn = now; lastSent = key; latch = {}; d.seq = ++seq; d.ss = lastSq; act.input.send(d);
+    lastIn = now; lastSent = key; latch = {}; d.seq = ++seq; d.ss = lastSq; if (LAG) setTimeout(() => act.input.send(d), LAG); else act.input.send(d);
     if (pred) { hist.push({ seq, x: pred.x, y: pred.y }); if (hist.length > 120) hist.shift(); } };
   const meSnap = () => { const b = snaps[snaps.length - 1]; return b && b.S.players.find((o) => o.id === myPid); };
   function predict(inp) {
