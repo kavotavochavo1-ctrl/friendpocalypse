@@ -1,4 +1,4 @@
-// live/rig.js — cut-out rigs (rigcut.py / partrig.py output in window.RIGS) for heroes and ghouls, all three views.
+﻿// live/rig.js — cut-out rigs (rigcut.py / partrig.py output in window.RIGS) for heroes and ghouls, all three views.
 // Pure function of the inputs (no state): gait phase comes from the actor's travelled distance, attacks from event ages.
 // Side view: planted feet on explicit foot paths + two-bone IK (animation.md §12, §15.1). Front/back: the swing leg lifts
 // toward the camera (shortens), the body drops at double support. Arms swing against the legs; attacks aim at the target.

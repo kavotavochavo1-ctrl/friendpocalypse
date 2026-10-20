@@ -53,6 +53,12 @@
       if (music.gain) { const g = musicBus.gain; g.cancelScheduledValues(ctx.currentTime); g.setValueAtTime(g.value, ctx.currentTime); g.linearRampToValueAtTime(vol.music * 0.35, ctx.currentTime + 0.1); g.linearRampToValueAtTime(vol.music, ctx.currentTime + b.duration + 0.3); } });
   };
 
+  // boss lines: a cut-scene line cuts off whatever was speaking; a bark waits its turn
+  let cutK = '', cur = null;
+  const line = (id, cut) => { if (!ctx || (!cut && ctx.currentTime < voUntil - 0.2)) return; if (cut && cur) { try { cur.stop(); } catch (e) {} }
+    load('audio/vo/' + id + '.ogg').then((b) => { if (!b) return; const s = ctx.createBufferSource(); s.buffer = b; s.connect(voBus); s.start(); cur = s; voUntil = ctx.currentTime + b.duration;
+      if (music.gain) { const g = musicBus.gain; g.cancelScheduledValues(ctx.currentTime); g.setValueAtTime(g.value, ctx.currentTime); g.linearRampToValueAtTime(vol.music * 0.3, ctx.currentTime + 0.1); g.linearRampToValueAtTime(vol.music, ctx.currentTime + b.duration + 0.3); } }); };
+
   // ---------------- procedural SFX ----------------
   const env = (g, t, a, d, peak) => { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); };
   const out = (pan, v) => { const g = ctx.createGain(), p = ctx.createStereoPanner(); p.pan.value = pan; g.gain.value = v; g.connect(p); p.connect(sfxBus); return g; };
@@ -117,10 +123,12 @@
     const me = S.players[S.me || 0], cam = me.cam, now = ctx.currentTime;
     playMusic(S.over ? (S.won ? 'victory' : 'calm') : S.brk > 0 ? 'calm' : S.wave >= 8 ? 'intense' : 'battle');
     const present = new Set(S.players.filter((p) => !p.out).map((p) => p.hero));
+    { const c = S.cut, k = c ? c.key + c.i : ''; if (k !== cutK) { cutK = k; if (c) line(c.ids[c.i], 1); } }
     let n = 0, maxT = lastT;
     for (const e of S.ev) { if (e.t <= lastT) continue; if (e.t > maxT) maxT = e.t; if (S.t - e.t > 0.6) continue;   // stale (joined late / tab was hidden)
       const ex = (e.x || 0) - cam[0] - 960, ey = (e.y || 0) - cam[1] - 540, dd = Math.hypot(ex, ey), pan = Math.max(-1, Math.min(1, ex / 1100));
       const near = Math.max(0, 1 - dd / 1600), r = h(e.t * 13 + (e.x || 0));
+      if (e.k === 'bark') { line(e.id); continue; }
       if (e.k === 'say') { if (Math.random() < (window.SETTINGS ? SETTINGS.voiceRate() : 1)) say(e.who, e.cat, e.v, pan, present); continue; }
       if (e.k === 'win' || e.k === 'lose') { say('ann', e.k, 0, 0); continue; }
       if (e.k === 'wave') { FX.wave(now, out(0, 0.7)); if (r < 0.5) say('ann', 'wave', 0, 0); continue; }

@@ -1,9 +1,10 @@
 // live/settings.js — player settings (per browser, localStorage): volumes, voice-line rate, screen shake, flashes,
 // ally name tags, FPS/network overlay, fullscreen. Opened from the lobby or with Esc in a run (solo pauses meanwhile).
 (function () {
-  const DEF = { master: 90, music: 35, sfx: 40, vo: 100, voices: 0.7, shake: 100, flash: 1, names: 1, netinfo: 0, quality: 0 };
+  const DEF = { master: 90, music: 35, sfx: 40, vo: 100, voices: 0.7, shake: 50, flash: 1, names: 1, netinfo: 0, quality: 0 };
   let V = Object.assign({}, DEF);
   try { Object.assign(V, JSON.parse(localStorage.getItem('fp_settings') || '{}')); } catch (e) {}
+  if (!V.v2) { if (V.shake === 100) V.shake = DEF.shake; V.v2 = 1; }        // the old default shake was too strong
   const subs = [];
   const save = () => { try { localStorage.setItem('fp_settings', JSON.stringify(V)); } catch (e) {} subs.forEach((f) => f(V)); };
   const S = (window.SETTINGS = {

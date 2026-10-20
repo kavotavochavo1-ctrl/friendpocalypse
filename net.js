@@ -5,7 +5,7 @@
 (function () {
   const APP = 'friendpocalypse-v1', SNAP_HZ = 30, IN_HZ = 30, TRYSTERO = 'https://cdn.jsdelivr.net/npm/trystero@0.26.0/+esm';
   const HEROES = ['hasan', 'danil', 'vitya', 'leha'], NAMES = { hasan: 'Хасан', danil: 'Данил', vitya: 'Витя', leha: 'Лёха' };
-  const DESC = { hasan: 'Усы-хлысты, зацеп, усатое торнадо. Ближний бой, хрупкий.', danil: 'Карточки, фан-чант (очаровывает), сцена-барьер. Поддержка.',
+  const DESC = { hasan: 'Усы-хлысты связывают врагов, усатое торнадо. Ближний бой, хрупкий.', danil: 'Карточки, фан-чант (очаровывает), сцена-барьер. Поддержка.',
     vitya: 'Ядовитые облака. Бьёт и своих. Не поднимает друзей.', leha: 'Танк. Пистолет → ПП → дробовик → РПГ. Щит.' };
   const q = new URLSearchParams(location.search);
   const NET = (window.NET = { mode: 'off', hero: localStorage.getItem('fp_hero') || q.get('hero') || 'hasan', bots: true, open: true });
@@ -20,8 +20,8 @@
   const ET = Object.keys(SIM.ETYPES), r1 = (v) => Math.round(v), r2 = (v) => Math.round(v * 100) / 100;
   const HN = ['hasan', 'danil', 'vitya', 'leha'];
   const PF = ['id', 'hero', 'bot', 'x', 'y', 'vx', 'vy', 'fx', 'fy', 'ax', 'ay', 'dir', 'dist', 'hp', 'hpMax', 'down', 'downT', 'revP', 'out', 'inv', 'hurtT',
-    'qa', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo', 'nick', 'petN', 'sigEvo', 'rerolls', 'inBus'];
-  const ES = 19;                                                            // enemy row stride
+    'qa', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo', 'nick', 'petN', 'sigEvo', 'rerolls', 'inBus', 'nat', 'rootT', 'slowT', 'crisisT'];
+  const ES = 20;                                                            // enemy row stride
   const evSince = {};
   function snapshot(S, pid) {
     const p = S.players.find((o) => o.id === pid) || S.players[0], R = 1500, nearP = (x, y, r = R) => Math.abs(x - p.x) < r * 1.4 && Math.abs(y - p.y) < r;
@@ -30,26 +30,27 @@
       row[PF.indexOf('hero')] = HN.indexOf(o.hero); row[PF.indexOf('ack')] = ackOf[o.id] || 0;
       return [row, [r2(o.m.area), r2(o.m.cd), r2(o.m.shield), r2(o.m.spd)], o.tokens, o.id === pid ? o.pick : 0, o.id === pid ? o.cam.map(r1) : 0, o.id === pid ? o.items : 0, o.id === pid ? o.fused : 0, o.id === pid ? o.gifts : 0]; });
     const E = []; for (const e of S.enemies) if (nearP(e.x, e.y)) E.push(e.id, ET.indexOf(e.type) + (e.elite ? 100 : 0), r1(e.x), r1(e.y), r1(e.vx), r1(e.vy), r1(e.hp), r1(e.hpMax), r1(e.dist), r2(e.spawnT), r2(e.hitT), r2(e.biteT || -9), e.face, r2(e.charmT || -9), r2(e.burnT || -9), r2(e.freezeT || -9),
-      e.chg || 0, r2(e.cdx || 0), r2(e.howlT || -99));
+      e.chg || 0, r2(e.cdx || 0), r2(e.howlT || -99), r2(e.rootT || -9));
     const G = []; for (const g of S.gems) if (nearP(g.x, g.y, 1200)) G.push(g.id, r1(g.x), r1(g.y), g.v);
     const B = S.proj.filter((b) => nearP(b.x, b.y)).map((b) => [b.id, b.kind, r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), b.c || 0, b.tox || 0, r2(b.ttl), r2(b.ttl0 || 0), (b.mods && b.mods.burn ? 1 : 0) | (b.mods && b.mods.shock ? 2 : 0), b.own]);
-    const EB = S.eproj.filter((b) => nearP(b.x, b.y)).map((b) => [r1(b.x), r1(b.y), r2(b.ttl), b.lob ? r2(b.ttl0) : 0]);
+    const EB = S.eproj.filter((b) => nearP(b.x, b.y)).map((b) => [r1(b.x), r1(b.y), r2(b.ttl), b.lob ? r2(b.ttl0) : 0, b.kind || 0, r1(b.vx), r1(b.vy)]);
     const since = evSince[pid] ?? -1;                                       // only events this friend has not been sent yet
-    const ev = S.ev.filter((e) => e.t > since && (e.x === undefined || nearP(e.x, e.y, 2000) || e.k === 'say'));
+    const ev = S.ev.filter((e) => e.t > since && (e.x === undefined || nearP(e.x, e.y, 2000) || e.k === 'say' || e.k === 'bark'));
     const enemyDots = S.enemies.length > 0 ? S.enemies.filter((e, i) => i % 3 === 0).map((e) => [r1(e.x / 8), r1(e.y / 8)]) : [];
     return { t: S.t, wave: S.wave, waveT: r2(S.waveT), brk: r2(S.brk), xp: S.xp, lvl: S.lvl, xpNext: S.xpNext, kills: S.kills, over: S.over, won: S.won,
       awards: S.awards, comboT: S.comboT, solo: S.solo, kettleBy: S.kettleBy, players, E, G, B, EB, clouds: S.clouds, zones: S.zones, marks: S.marks, ev, dots: enemyDots,
       pause: S.pause, pend: S.pend, clear: S.clear, clearT: r2(S.clearT), left: S.enemies.length,
+      boss: S.boss && Object.assign({}, S.boss, { hits: 0, said: 0 }), cut: S.cut, traps: S.traps, bossWave: S.bossWave,
       map: S.map, bus: S.bus, endless: S.endless, home: S.home, score: S.score, drinks: S.drinks, kioskNext: S.kioskNext, spor: S.spor, daily: S.daily,
       chests: S.chests.map((c) => ({ id: c.id, x: r1(c.x), y: r1(c.y) })), food: S.food.filter((f) => nearP(f.x, f.y)).map((f) => ({ id: f.id, x: r1(f.x), y: r1(f.y) })) };
   }
   function restore(n) {
     const enemies = []; for (let i = 0; i < n.E.length; i += ES) { const a = n.E, ty = ET[a[i + 1] % 100];
       enemies.push({ id: a[i], type: ty, elite: a[i + 1] >= 100 ? 1 : 0, x: a[i + 2], y: a[i + 3], vx: a[i + 4], vy: a[i + 5], hp: a[i + 6], hpMax: a[i + 7], dist: a[i + 8], spawnT: a[i + 9], hitT: a[i + 10], biteT: a[i + 11], face: a[i + 12], charmT: a[i + 13], burnT: a[i + 14], freezeT: a[i + 15],
-        chg: a[i + 16], cdx: a[i + 17], howlT: a[i + 18], r: SIM.ETYPES[ty].r }); }
+        chg: a[i + 16], cdx: a[i + 17], howlT: a[i + 18], rootT: a[i + 19], r: SIM.ETYPES[ty].r }); }
     const gems = []; for (let i = 0; i < n.G.length; i += 4) gems.push({ id: n.G[i], x: n.G[i + 1], y: n.G[i + 2], v: n.G[i + 3] });
     const proj = n.B.map((b) => ({ id: b[0], kind: b[1], x: b[2], y: b[3], vx: b[4], vy: b[5], c: b[6], tox: b[7], ttl: b[8], ttl0: b[9], mods: b[10] ? { burn: b[10] & 1, shock: b[10] & 2 } : null, own: b[11] }));
-    const eproj = n.EB.map((b) => ({ x: b[0], y: b[1], ttl: b[2], lob: b[3] ? 1 : 0, ttl0: b[3] }));
+    const eproj = n.EB.map((b) => ({ x: b[0], y: b[1], ttl: b[2], lob: b[3] ? 1 : 0, ttl0: b[3], kind: b[4] || null, vx: b[5], vy: b[6] }));
     const players = n.players.map(([row, m, tokens, pick, cam, items, fused, gifts]) => { const o = {}; PF.forEach((k, i) => (o[k] = row[i])); o.hero = HN[o.hero];
       o.m = { area: m[0], cd: m[1], shield: m[2], spd: m[3] }; o.tokens = tokens || []; o.pick = pick || null; o.items = items || { sig: 1 }; o.fused = fused || []; o.gifts = gifts || {}; o.cam = cam || [o.x - 960, o.y - 600]; return o; });
     for (const e of n.ev) evBuf.push(e); while (evBuf.length && evBuf[0].t < n.t - 3) evBuf.shift(); if (evBuf.length > 200) evBuf.splice(0, evBuf.length - 200);

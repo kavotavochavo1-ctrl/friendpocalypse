@@ -53,7 +53,8 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
   // ---- FX kit: painted effect sprites (art/gen fx_*) + Arcada Effector flipbooks (fxa_*, exported atlases: cols, rows, frames) ----
   const FXA = { fxa_boom: [3, 3, 9], fxa_sparks: [4, 2, 8], fxa_shock: [4, 2, 8], fxa_fan: [4, 2, 8], fxa_gas: [4, 2, 8],
     fxa_evo: [4, 3, 12], fxa_vortex: [4, 4, 16], fxa_holo: [4, 4, 16], fxa_cyclone: [4, 4, 16], fxa_rank: [4, 4, 16],
-    fxa_pop: [4, 2, 8], fxa_firework: [4, 3, 12], fxa_ice: [4, 2, 8], fxa_kettle: [4, 4, 16], fxa_flame: [4, 4, 16] };   // alchemy set          // evolution set (art/effector/*.json)
+    fxa_pop: [4, 2, 8], fxa_firework: [4, 3, 12], fxa_ice: [4, 2, 8], fxa_kettle: [4, 4, 16], fxa_flame: [4, 4, 16],
+    fxa_beam: [1, 8, 8], fxa_warn: [4, 2, 8], fxa_slam: [3, 3, 9], fxa_wave: [4, 2, 8], fxa_tile: [4, 2, 8], fxa_rspark: [4, 2, 8], fxa_cheese: [4, 2, 8], fxa_dust: [4, 2, 8] };   // boss set (art/effector/make_boss_fx.py)   // alchemy set          // evolution set (art/effector/*.json)
   // chain lightning between two points: a jagged bright line with a soft glow (pure shader, redrawn every frame so it crackles)
   const bolt = (x0, y0, x1, y1, seed, amt) => { const n = 7, dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy) || 1, nx = -dy / d, ny = dx / d; let px = x0, py = y0;
     G.blend('add'); for (let j = 1; j <= n; j++) { const f = j / n, o = j < n ? (L.rnd(seed, j) - 0.5) * 26 : 0, qx = x0 + dx * f + nx * o, qy = y0 + dy * f + ny * o;
@@ -116,12 +117,16 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
   const EV_TINT = { ghoul: [1, 1, 1, 0], sprinter: [1.25, 0.6, 0.55, 0.8], brute: [0.8, 0.75, 0.95, 0.6], spitter: [0.85, 0.6, 1.3, 0.8], bomber: [1.4, 0.8, 0.4, 0.8],
     starshiy: [0.8, 0.75, 0.9, 0.35], alpha: [0.45, 0.4, 0.5, 0.75] };
   // enemy art: the park's shadow ghouls (one rig, tinted per type); Meleuz's town folk (rigs front/back, sprites side-on), mums and dogs (sprites)
-  const SKIN = { ghoul: 'ghoul', sprinter: 'ghoul', brute: 'ghoul', spitter: 'ghoul', bomber: 'ghoul', gopnik: 'gopnik', starshiy: 'gopnik', alkash: 'alkash', mom: 'mom', dog: 'dog', alpha: 'dog' };
-  const BASEH = { ghoul: 84, gopnik: 120, alkash: 112, mom: 124, dog: 78 };
-  const SPRITE_VIEW = (skin, view, e, GT) => skin !== 'dog' ? skin + '_' + view
-    : view === 'side' ? (e.type === 'alpha' && GT - (e.howlT || -99) > -7 && GT - (e.howlT || -99) < -5.6 ? 'dog_alpha' : 'dog_side' + (Math.floor(e.dist / 26) % 3)) : 'dog_' + view;
+  const SKIN = { ghoul: 'rat', sprinter: 'rat', brute: 'fatrat', spitter: 'toxrat', bomber: 'bombrat', komissar: 'leha', gopnik: 'gopnik', starshiy: 'gopnik', alkash: 'alkash', mom: 'mom', dog: 'dog', alpha: 'dog' };
+  const BASEH = { ghoul: 84, gopnik: 120, alkash: 112, mom: 124, dog: 78, rat: 58, fatrat: 70, toxrat: 56, bombrat: 62, leha: 128 };
+  // four-legged runners are frame sprites (3-frame side run + front/back); the toxic and kamikaze rats are one side sprite
+  const SPRITE_VIEW = (skin, view, e, GT) => skin === 'toxrat' || skin === 'bombrat' ? skin : skin !== 'dog' && skin !== 'rat' && skin !== 'fatrat' ? skin + '_' + view
+    : view === 'side' ? (e.type === 'alpha' && GT - (e.howlT || -99) > -7 && GT - (e.howlT || -99) < -5.6 ? 'dog_alpha' : skin + '_side' + runFrame(skin, e)) : skin + '_' + view;
+  // rats run at a steady ~8 frames/s whatever their speed (slow ones stepped by distance looked choppy); dogs keep their stride
+  const runFrame = (skin, e) => skin === 'dog' ? Math.floor(e.dist / 26) % 3 : Math.floor(e.dist / (SIM.ETYPES[e.type].spd || 100) * (skin === 'fatrat' ? 6.5 : 8.5)) % 3;
   const BUILD = { admin: 1, mosque: 1, church: 1, glory: 1, lenin: 1, tmonument: 1, kiosk: 1 };
 
+  let camC = null, camGT = 0;
   S.render = (t) => {
     const ST = S.state || SIM.at(t), GT = ST.t, rnd = L.rnd;
     if (SIM.LV.id !== (ST.map || 'park')) SIM.useMap(ST.map || 'park');
@@ -129,11 +134,13 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     const me = ST.players[ST.me || 0];
     // ---- shake: trauma from recent hits / booms near me ----
     let tr = 0; for (const e of ST.ev) { const a = GT - e.t; if (a < 0 || a > 0.4) continue;
-      if (e.k === 'boom') tr = Math.max(tr, (e.kind === 'rocket' ? 0.5 : 0.7) * (1 - a / 0.4) * SS(1100, 300, Math.hypot(e.x - me.x, e.y - me.y)));
-      if (e.k === 'hurt' && e.pid === me.id && !e.ally) tr = Math.max(tr, 0.45 * (1 - a / 0.3));
+      if (e.k === 'boom' && (e.r >= 140 || e.kind === 'slam' || e.kind === 'bomb')) tr = Math.max(tr, 0.6 * (1 - a / 0.4) * SS(1100, 300, Math.hypot(e.x - me.x, e.y - me.y)));
+      if (e.k === 'hurt' && e.pid === me.id && !e.ally) tr = Math.max(tr, 0.3 * (1 - a / 0.3));
       if (e.k === 'ult' && e.pid === me.id) tr = Math.max(tr, 0.4 * (1 - a / 0.4)); }
     const sh = ST.pause ? 0 : tr * tr * 22 * (window.SETTINGS ? SETTINGS.shake() : 1);
-    const cx = Math.round(me.cam[0] + sh * Math.sin(GT * 83)), cy = Math.round(me.cam[1] + sh * Math.sin(GT * 101 + 1));
+    { const tg = ST.cut ? [ST.cut.fx - W / 2, ST.cut.fy - 160 - H / 2] : me.cam; if (!camC || Math.abs(GT - camGT) > 1) camC = me.cam.slice(); camGT = GT;
+      camC[0] += (tg[0] - camC[0]) * 0.07; camC[1] += (tg[1] - camC[1]) * 0.07; if (!ST.cut && Math.hypot(tg[0] - camC[0], tg[1] - camC[1]) < 4) camC = null; }
+    const cam0 = camC || me.cam, cx = Math.round(cam0[0] + sh * Math.sin(GT * 83)), cy = Math.round(cam0[1] + sh * Math.sin(GT * 101 + 1));
     const sx = (x) => x - cx, sy = (y) => y - cy, vis = (x, y, m = 300) => x > cx - m && x < cx + W + m && y > cy - m && y < cy + H + m;
 
     // ===== ground =====
@@ -197,11 +204,13 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       G.draw(L.P.night, { u_lights: arr, u_n: lights.length, u_dark: 0.64, u_amb: [0.05, 0.03, 0.09] }, G.xf(0, 0, W, H)); }
     for (const [x, y] of SIM.LAMPS) if (vis(x, y, 300)) L.glow(sx(x), sy(y) - 10, 300, WARM, 0.3, 1.8);
     L.beginComp();
+    drawHazards(ST, GT, sx, sy, vis);
 
     // ===== y-sorted world =====
     const Y = [];
     const shade = (x, y) => { const l = lightAt(x, y); return { grade: [0.85 + 0.15 * Math.min(1, l), 0.5 + 0.55 * Math.min(1, l), 0, 1], tint: [1.0, 0.82, 0.62, 0.35 * Math.min(1, l)] }; };
     for (const [k, x, y, s, f] of SIM.PROPS) { const [w, h] = sz(k), ww = w * s, hh = h * s; if (!vis(x, y, Math.max(420, ww * 0.6, hh))) continue;
+      if (k === 'lenin' && ST.boss && ST.boss.kind === 'lenin') continue;
       Y.push([y, () => { const sxx = sx(x), syy = sy(y), u = shade(sxx, syy - Math.min(hh * 0.5, 200));
         if (BUILD[k]) { u.grade[0] = Math.max(0.8, u.grade[0]); u.grade[1] = Math.max(0.62, u.grade[1]); }             // landmarks stay readable at night
         if (k !== 'flowers') L.shadow(sxx + 10, syy - 4, ww * 0.42, Math.min(BUILD[k] ? 60 : 30, hh * 0.12), 0.5);
@@ -226,9 +235,13 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
           const act = ST.players.filter((p) => !p.out), n = act.filter((p) => p.inBus).length, s2 = (b.to === 'home' ? 'ДОМОЙ ' : 'В МЕЛЕУЗ ') + n + '/' + act.length;
           if (hudFree(x, y - bh - 30)) lab('busn', s2, x, y - bh - 30 + 4 * Math.sin(GT * 3), { size: 28, al: 0.5, col: '#ffe066', font: FONT }); } }]); }
     // enemies
-    for (const e of ST.enemies) { if (!vis(e.x, e.y, 120)) continue; const T = SIM.ETYPES[e.type], skin = SKIN[e.type] || 'ghoul';
+    if (ST.boss && ST.boss.dead && (ST.boss.kind === 'lenin' || !ST.boss.gone) && vis(ST.boss.dx, ST.boss.dy, 400)) { const B = ST.boss;     // what's left of the boss
+      Y.push([B.dy, () => { const n = B.kind === 'lenin' ? 'lenin_toppled' : 'vlad_dead', hh = B.kind === 'lenin' ? 170 : 110, ww = L.hsz(n, hh); L.shadow(sx(B.dx), sy(B.dy), ww * 0.4, 16, 0.5);
+        L.sprite(n, sx(B.dx) - ww / 2, sy(B.dy) - hh, { w: ww, h: hh, u: shade(sx(B.dx), sy(B.dy) - 60) }); }]); }
+    for (const e of ST.enemies) { if (!vis(e.x, e.y, e.boss || SIM.ETYPES[e.type].boss ? 500 : 120)) continue; const T = SIM.ETYPES[e.type], skin = SKIN[e.type] || 'ghoul';
+      if (T.boss) { if (ST.boss) Y.push([e.y, () => drawBoss(e, ST.boss, sx(e.x), sy(e.y), GT, shade)]); continue; }
       Y.push([e.y, () => { const sp = Math.hypot(e.vx, e.vy), ph = e.dist / 34 * Math.PI, born = SS(0, 0.35, GT - e.spawnT); if (born < 0.03) return;      // a zero-scale rig blows up
-        const dv = Math.abs(e.vy) > Math.abs(e.vx) * 1.3 ? (e.vy > 0 ? 'front' : 'back') : 'side', view = SPRITE_VIEW(skin, dv, e, GT);
+        const dv = RATS[skin] ? 'side' : Math.abs(e.vy) > Math.abs(e.vx) * 1.3 ? (e.vy > 0 ? 'front' : 'back') : 'side', view = SPRITE_VIEW(skin, dv, e, GT);     // rats always run side-on
         const h = BASEH[skin] * T.sc * born * (e.elite ? 1.25 : 1) * (ST.spor === 'chonk' ? 1.4 : 1), w = L.hsz(view, h), x = sx(e.x) + (e.chg === 1 ? 3 * Math.sin(GT * 60) : 0), y = sy(e.y), bob = Math.abs(Math.sin(ph)) * 4 * Math.min(1, sp / 60);
         const hit = SS(0.12, 0, GT - e.hitT), u = shade(x, y - h / 2), tn = EV_TINT[e.type]; u.grade[1] = Math.max(0.78, u.grade[1]); u.rim = [0.55, e.face > 0 ? 0.004 : -0.004, -0.005, 1]; u.rimCol = [1, 0.45, 0.6];
         if (hit > 0) { u.grade = [1, 1, hit * 0.85, 1]; u.haze = [1, 0.95, 0.95]; }
@@ -241,12 +254,21 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         const sq = 1 + 0.06 * Math.sin(2 * ph) * Math.min(1, sp / 60), lean = (e.vx / 300) * 0.12 + (GT - e.biteT < 0.2 ? 0.25 * e.face * Math.sin((GT - e.biteT) / 0.2 * Math.PI) : 0);
         if (RIG.has(view)) { const k = h / RIGS[view].h, ba = GT - (e.biteT || -9);
           RIG.draw({ name: view, view: dv, x, y, k, fl: dv === 'side' ? e.face : 1, ph: RIG.phase(view, e.dist, k, dv) + e.id, amt: Math.min(1, sp / 60), t, id: 'e' + e.id, u,
-            aim: Math.atan2(e.vy, e.vx || 0.001), act: ba < 0.35 ? { kind: 'bite', a: ba / 0.35 } : null, lean: (e.vx / 300) * 0.1 });
-        } else { const fx = dv === 'side' ? (skin === 'ghoul' ? -e.face : e.face) : 1, wob = skin === 'alkash' ? 0.07 * Math.sin(GT * 2.3 + e.id) : 0;     // the town folk's art faces right; drunks sway
+            aim: e.type === 'komissar' && ST.boss && ST.boss.km ? ST.boss.km.aim : Math.atan2(e.vy, e.vx || 0.001),
+            act: e.type === 'komissar' ? { kind: 'aim', a: 1 } : ba < 0.35 ? { kind: 'bite', a: ba / 0.35 } : null, lean: (e.vx / 300) * 0.1,
+            gun: e.type === 'komissar' ? GUNS[1] : null, gunLen: 50 });
+          if (e.type === 'komissar') { const sd = dv === 'side'; L.glow(x, y - h * 0.5, 70, [1, 0.2, 0.15], 0.25, 2);
+            spr(sd ? 'cap_side' : 'cap_front', x + (sd ? 6 * e.face : 0), y - h * 0.97, 54, 38, 0, { flip: sd && e.face < 0 });
+            if (ST.boss && ST.boss.km && ST.boss.km.atk && ST.boss.km.atk.k === 'speech') { L.ring(x, y - h * 0.5, 80, 90, [1, 0.4, 0.3], 0.6, 0.05); L.glow(x, y - h * 0.5, 90, [1, 0.3, 0.2], 0.25, 2); } }
+        } else { const fx = dv === 'side' || SIDE_ONLY[skin] ? (skin === 'ghoul' ? -e.face : e.face) : 1, wob = skin === 'alkash' ? 0.07 * Math.sin(GT * 2.3 + e.id) : 0;     // the town folk's art faces right; drunks sway
           L.sprite(view, 0, 0, { m: M.of(M.t(x, y - bob), M.r(lean + wob), M.s(fx / Math.sqrt(sq), sq)), w, h, pivot: [w / 2, h], u }); }
         if (skin === 'ghoul') { const ex = dv === 'side' ? [0.17 * e.face] : dv === 'front' ? [-0.12, 0.12] : []; for (const o of ex) L.glow(x + o * w, y - h * 0.68 - bob, 7 * T.sc, [1, 0.3, 0.6], 0.9, 2); }
-        else if (dv !== 'back') L.glow(x + (dv === 'side' ? 0.12 * e.face * w : 0), y - h * (skin === 'dog' ? 0.62 : 0.84) - bob, 10 * T.sc, [1, 0.3, 0.7], 0.5, 2);
+        else if (dv !== 'back' && !RATS[skin] && skin !== 'leha') L.glow(x + (dv === 'side' ? 0.12 * e.face * w : 0), y - h * (skin === 'dog' ? 0.62 : 0.84) - bob, 10 * T.sc, [1, 0.3, 0.7], 0.5, 2);
+        if (skin === 'toxrat') L.glow(x + 0.4 * w * e.face, y - h * 0.45, 22, [0.5, 1, 0.2], 0.4, 2);
+        if (skin === 'bombrat') { L.glow(x - 0.05 * w * e.face, y - h * 1.0, 16, [1, 0.8, 0.3], 0.6 + 0.4 * Math.sin(GT * 30 + e.id), 2); }
         if (e.type === 'bomber') L.glow(x, y - h * 0.5, 50, [1, 0.5, 0.1], 0.4 + 0.3 * Math.sin(GT * 14), 2.4);
+        if (GT < (e.rootT || -9)) { const wb = 0.06 * Math.sin(GT * 9 + e.id);
+          for (const [hy, rt] of [[0.42, 0.18], [0.62, -0.14]]) spr('fx_mustache', x, y - h * hy - bob, w * 0.95, w * 0.3, rt + wb, { tint: [1.2, 0.9, 0.6, 0.3] }); }
         if (frozen) spr('fx_ice', x, y - 24 * T.sc, 44 * T.sc, 52 * T.sc, 0, { a: 0.85 });
         if (burning) book('fxa_flame', loopQ(GT * 1.2, e.id * 0.17), x, y - h * 0.55, 40 * T.sc, 60 * T.sc, { add: 1, a: 0.8 });
         if (charm || ST.marks.some((m) => m.id === e.id)) { const hb = 4 * Math.sin(GT * 6 + e.id); L.glow(x, y - h - 20 + hb, 22, [1, 0.4, 0.8], 0.5, 2); spr('fx_heart', x, y - h - 20 + hb, 24, 22, 0.15 * Math.sin(GT * 3 + e.id)); }
@@ -254,8 +276,8 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         if (e.hp < e.hpMax && (e.elite || T.sc >= 1.5 || GT - e.hitT < 1.5)) { const bw = 44 * Math.max(1, T.sc * 0.8); L.solid(x - bw / 2 - 2, y - h - 10, bw + 4, 8, [0.08, 0.03, 0.04]); L.solid(x - bw / 2, y - h - 8, bw * Math.max(0, e.hp / e.hpMax), 4, [0.95, 0.22, 0.32]); }
       }]); }
     // players
-    for (const p of ST.players) { if (p.out || p.inBus || !vis(p.x, p.y, 160)) continue;
-      Y.push([p.y, () => drawHero(p, sx(p.x), sy(p.y), GT, t, p.id === me.id, shade, ST)]);
+    for (const p of ST.players) { if (p.out || p.inBus || p.nat || !vis(p.x, p.y, 160)) continue;
+      Y.push([p.y, () => { drawHero(p, sx(p.x), sy(p.y), GT, t, p.id === me.id, shade, ST); if (GT < (p.rootT || 0) && ST.boss) spr('trap_shut', sx(p.x) + 8, sy(p.y) - 10, 54, 40); }]);
       // «Прикрыл!»: a riot shield held in front — behind him when he walks up, an edge-on slab when he walks sideways
       if (p.hero === 'leha' && !p.down && GT - p.qT < 4 + ((p.m && p.m.shield) || 0)) { const qa = GT - p.qT, dur = 4 + ((p.m && p.m.shield) || 0), up = SS(0, 0.15, qa) * SS(dur, dur - 0.3, qa);
         const fx = p.fx || 0, fy = p.fy || 1, side = Math.abs(fx) > Math.abs(fy) * 1.2;
@@ -316,7 +338,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         if (b.mods && b.mods.burn) book('fxa_flame', loopQ(GT * 2, b.id * 0.1), x, y - 10, 30, 40, { add: 1, a: 0.7 }); }
       else if (b.kind === 'tractor') { const [tw, th] = [150, 116], yy = y, life = SS(0, 0.15, 2 - b.ttl) * SS(0, 0.25, b.ttl), sh = b.mods && b.mods.shock;
         L.shadow(x, yy, 64, 14, 0.5 * life); for (let j = 1; j <= 4; j++) L.puff(x - b.vx * 0.06 * j, yy - 6 - 3 * j, 12 + 7 * j, [0.55, 0.45, 0.35], 0.35 * life / j, b.id + j + Math.floor(GT * 8));
-        spr('fx_tractor', x, yy - th / 2 + 2 * Math.sin(GT * 40), tw, th, 0, { flip: b.vx < 0, a: life }); if (sh) { L.glow(x, yy - 50, 70, [0.4, 0.7, 1], 0.4, 2); if (Math.floor(GT * 20) % 2) bolt(x - 40, yy - 90, x + 40, yy - 20, GT * 50 + b.id, 0.8 * life); } }
+        const ta = Math.atan2(b.vy, b.vx); spr('fx_tractor', x, yy - th / 2 + 2 * Math.sin(GT * 40), tw, th, b.vx < 0 ? ta - Math.PI : ta, { flip: b.vx < 0, a: life }); if (sh) { L.glow(x, yy - 50, 70, [0.4, 0.7, 1], 0.4, 2); if (Math.floor(GT * 20) % 2) bolt(x - 40, yy - 90, x + 40, yy - 20, GT * 50 + b.id, 0.8 * life); } }
       else if (b.kind === 'condensed') { const q = 1 - Math.max(0, b.ttl) / 0.6, hgt = 120 * 4 * q * (1 - q); L.shadow(x, y + 46, 10, 4, 0.4); spr('fx_condensed', x, y - hgt, 22, 28, GT * 8 + b.id); }
       else if (b.kind === 'can') { const q = 1 - Math.max(0, b.ttl) / 0.6, hgt = 120 * 4 * q * (1 - q);
         L.shadow(x, y + 46, 10, 4, 0.4); L.rrect(x - 7, y - 11 - hgt, 14, 22, 3, [0.3, 0.95, 0.9], [0.1, 0.55, 0.5]); L.solid(x - 7, y - 4 - hgt, 14, 5, [0.95, 0.3, 0.5], GT * 9, 7, 2.5); }
@@ -331,6 +353,12 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       else if (b.kind === 'pellet') { L.glow(x, y, 12, [1, 0.7, 0.3], 0.5, 2.5); streak(x - Math.cos(an) * 22, y - Math.sin(an) * 22, an, 26, 6, [1, 0.75, 0.3], 1.2); }
       else { L.glow(x, y, 16, [1, 0.8, 0.4], 0.5, 2.5); streak(x - Math.cos(an) * 40, y - Math.sin(an) * 40, an, 46, 7, [1, 0.85, 0.45], 1.4); L.solid(x - 9, y - 1, 18, 2, [1, 0.97, 0.8], an, 9, 1); } }
     for (const b of ST.eproj) { const x = sx(b.x), y = sy(b.y);
+      if (b.lob && b.kind === 'cheese') { const q = 1 - Math.max(0, b.ttl) / (b.ttl0 || 1), hgt = 260 * 4 * q * (1 - q); L.shadow(x, y + 40, 22, 8, 0.45); spr('fx_cheese', x, y - hgt, 52, 46, GT * 6); continue; }
+      if (b.lob && b.kind === 'nade') { const q = 1 - Math.max(0, b.ttl) / (b.ttl0 || 1), hgt = 200 * 4 * q * (1 - q); L.shadow(x, y + 40, 10, 4, 0.45);
+        L.rrect(x - 8, y - 8 - hgt, 16, 16, 7, [0.3, 0.4, 0.2], [0.15, 0.22, 0.1], 1); L.glow(x, y - 8 - hgt, 10, [1, 0.6, 0.2], 0.6, 2); continue; }
+      if (b.kind === 'star') { const d = SIM.LV.LENIN ? Math.hypot(b.x - SIM.LV.LENIN[0], b.y + 40 - SIM.LV.LENIN[1]) : 999, lift = 230 * Math.max(0, 1 - d / 320);
+        L.shadow(x, y + 40, 14, 5, 0.4); book('fxa_rspark', loopQ(GT * 2, b.x * 0.003), x, y - lift, 70, 70, { add: 1, a: 0.9 }); spr('fx_star', x, y - lift, 40, 38, GT * 5 + x * 0.01); continue; }
+      if (b.kind === 'kbul') { const an = Math.atan2(b.vy || 0, b.vx || 1); L.glow(x, y, 14, [1, 0.5, 0.2], 0.6, 2.5); streak(x - Math.cos(an) * 30, y - Math.sin(an) * 30, an, 34, 6, [1, 0.45, 0.2], 1.3); continue; }
       if (b.lob) { const q = 1 - Math.max(0, b.ttl) / (b.ttl0 || 0.9), hgt = 150 * 4 * q * (1 - q); L.shadow(x, y + 40, 9, 4, 0.45);             // an empty bottle, spinning in an arc
         L.rrect(x - 5, y - 14 - hgt, 10, 24, 3, [0.25, 0.6, 0.25], [0.12, 0.35, 0.15], 0.95); L.solid(x - 2, y - 22 - hgt, 4, 9, [0.2, 0.5, 0.2], GT * 14, 2, 13); continue; }
       L.glow(x, y, 26, [0.75, 0.3, 1], 0.7, 2.2); L.puff(x, y, 10, [0.6, 0.2, 0.8], 0.9, b.ttl * 10); }
@@ -362,9 +390,12 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         else if (a < 0.15) L.star(ex, ey - 6, 16 * (1 - a / 0.15), [1, 0.9, 0.6], 1 - a / 0.15); }
       if (e.k === 'crit' && a < 0.5) { const cy = ey - 110 - 40 * a - 30 * (critN % 6), cx = ex + 70 * ((critN % 3) - 1); critN++;    // stacked; dropped near the top HUD
         if (hudFree(cx, cy)) lab('crit' + (e.t * 1000 | 0) % 7, 'КРИТ!', cx, cy, { size: 22, col: '#ffd040', al: 0.5, a: 1 - a / 0.5, font: FONT }); }
-      if (e.k === 'boom' && a < 0.9) { const q = a / 0.9, r = e.r; L.glow(ex, ey - 20, r * 1.1, e.gas ? [0.7, 1, 0.3] : [1, 0.5, 0.12], 0.5 * (1 - q) ** 2, 2.4);
+      if (e.k === 'boom' && a < 0.9) { const q = a / 0.9, r = e.r; L.glow(ex, ey - 20, r * 1.1, e.gas ? [0.7, 1, 0.3] : [1, 0.5, 0.12], (r >= 140 ? 0.5 : 0.3) * (1 - q) ** 2, 2.4);
+        if (e.kind === 'slam' || e.kind === 'red' || e.kind === 'nade') { book('fxa_slam', a / 0.75, ex, ey - r * 0.25, r * 2.6, r * 2.6, { add: 1 }); continue; }
+        if (e.kind === 'cheese') { book('fxa_cheese', a / 0.6, ex, ey - 10, r * 2.4, r * 2.4); continue; }
+        if (e.kind === 'dust') { book('fxa_dust', a / 0.8, ex, ey - 20, r * 2.8, r * 2.8); continue; }
         if (e.kind === 'tornado') book('fxa_shock', a / 0.5, ex, ey - 20, r * 2.6, r * 2.6, { add: 1, tint: [1.3, 0.8, 0.4, 0.9] });
-        else if (e.kind === 'petard' || e.kind === 'kamikaze') book('fxa_pop', a / 0.7, ex, ey - 24, r * 3, r * 3, { add: 1 });
+        else if (e.kind === 'petard' || e.kind === 'kamikaze') book('fxa_pop', a / 0.6, ex, ey - 24, r * 2.3, r * 2.3, { add: 1, a: 0.8 });
         else if (e.kind === 'firework') { book('fxa_firework', a / 0.9, ex, ey - 70, r * 3.2, r * 3.2, { add: 1 }); book('fxa_pop', a / 0.6, ex, ey - 16, r * 2, r * 2, { add: 1 }); }
         else if (e.kind === 'fried') { book('fxa_pop', a / 0.6, ex, ey - 20, r * 2.4, r * 2.4, { add: 1 }); book('fxa_ice', a / 0.6, ex, ey - 24, r * 2.2, r * 2.2); }
         else if (e.kind === 'ignite') book('fxa_boom', a / 0.6, ex, ey - r * 0.35, r * 2.5, r * 2.5, { tint: [0.8, 1.3, 0.45, 0.6] });
@@ -500,6 +531,147 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       L.solid(x - 30, y - h - 12, 60, 7, [0.08, 0.03, 0.04]); L.solid(x - 29, y - h - 11, 58 * p.hp / p.hpMax, 5, [0.9, 0.2, 0.25]); }
   }
 
+
+  // ---------------- bosses: sprites, hazards, cut-scenes (BOSSES.md) ----------------
+  const RATS = { rat: 1, fatrat: 1, toxrat: 1, bombrat: 1 }, SIDE_ONLY = { toxrat: 1, bombrat: 1 };
+  const BNAME = { vlad: 'ВЛАД', lenin: 'ИЛЬИЧ', hasan: 'ХАСАН', danil: 'ДАНИЛ', vitya: 'ВИТЯ', leha: 'ЛЁХА' };
+  const BCOL = { vlad: '#d6a0ff', lenin: '#ff7a6a', hasan: '#ffd76a', danil: '#ffb0e0', vitya: '#b8ff7a', leha: '#c9d68a' };
+  const SCARED = { rk_p2_0: 1, rk_p2_1: 1, rk_p3_0: 1, rk_end_0: 1, rk_s_0: 1, rk_s_1: 1, rk_s_2: 1 };
+  const portraitOf = (id, who) => SCARED[id] ? 'portrait_vlad_scared' : id === 'ln_b_3' || id === 'ln_b_1' || id.startsWith('km_') ? 'portrait_komissar' : 'portrait_' + who;
+  // the boss itself, at its ground point
+  function drawBoss(e, B, x, y, GT, shade) {
+    const hit = SS(0.12, 0, GT - e.hitT), u = shade(x, y - 120); u.grade[1] = Math.max(0.8, u.grade[1]);
+    if (hit > 0) { u.grade = [1, 1, hit * 0.8, 1]; u.haze = [1, 0.95, 0.95]; }
+    if (e.type === 'vlad') { if (B.hide) return;
+      const dv = Math.abs(e.vy) > Math.abs(e.vx) * 1.3 ? (e.vy > 0 ? 'front' : 'back') : 'side', sc = GT < B.scared;
+      const n = B.ph === 1 ? 'vlad_throne' : B.ph === 3 ? 'vlad_ball' : sc ? 'vlad_scared' : GT - (B.taunt || -9) < 1.3 ? 'vlad_taunt' : B.atk && B.atk.k === 'traps' ? 'vlad_summon'
+        : dv === 'side' ? 'vlad_side' + (Math.floor(e.dist / 45) % 2) : 'vlad_' + dv;
+      const hh = B.ph === 1 ? 300 : B.ph === 3 ? 270 : 150, ww = L.hsz(n, hh), shake = sc ? 3 * Math.sin(GT * 70) : 0, wob = B.ph === 3 ? 0.07 * Math.sin(e.dist / 60) : B.ph === 1 ? 0.02 * Math.sin(GT * 2) : 0;
+      L.shadow(x, y, ww * 0.38, 16, 0.55); if (B.ph === 1) L.glow(x, y - 150, 220, [0.7, 0.4, 1], 0.15, 2);
+      L.sprite(n, 0, 0, { m: M.of(M.t(x + shake, y), M.r(wob), M.s(n.startsWith('vlad_side') || n === 'vlad_taunt' ? e.face : 1, 1)), w: ww, h: hh, pivot: [ww / 2, hh], u });
+      if (B.ph === 3) for (let j = 0; j < 3; j++) L.puff(x - e.vx * 0.08 * j, y - 6 - 4 * j, 14 + 10 * j, [0.4, 0.32, 0.28], 0.35 / (j + 1), GT * 9 + j);
+      return; }
+    // Ильич: a pose per attack; the eyes burn; the decree's weak spot pulses
+    const n = leninPose(B, GT), hh = LENIN_H, ww = L.hsz(n, hh), vul = GT < (B.vuln || 0);
+    u.grade[0] = Math.max(0.85, u.grade[0]); if (vul) u.tint = [1.6, 0.4, 0.3, 0.35 + 0.2 * Math.sin(GT * 12)];
+    L.shadow(x, y, ww * 0.42, 26, 0.6); L.sprite(n, x - ww / 2, y - hh, { w: ww, h: hh, u });
+    const [ex, ey] = leninEyes(B, GT, x, y), hot = B.lasers.length ? 1 : 0.55;
+    for (const o of [-0.022, 0.022]) book('fxa_rspark', loopQ(GT * 1.6, o), ex + o * ww, ey, 34 * hot + 10, 34 * hot + 10, { add: 1, a: hot });
+    if (B.ph >= 2) L.glow(x, y - hh * 0.55, 90, [1, 0.25, 0.1], 0.18 + 0.08 * Math.sin(GT * 4), 2);
+    if (vul) { L.glow(x, y - hh * 0.5, 200, [1, 0.3, 0.2], 0.35, 2); if (hudFree(x, y - hh - 30)) lab('vuln', 'УЯЗВИМ!', x, y - hh - 30, { size: 30, al: 0.5, col: '#ffe066', font: FONT }); }
+  }
+  // ---- danger language: every boss attack area gets a red outline (with a dark underline so it reads on warm paving) ----
+  const DR = [1, 0.16, 0.12], DK = [0.08, 0.0, 0.02];
+  const seg = (x, y, ang, len, a = 1, th = 3) => { L.solid(x, y - (th + 4) / 2, len, th + 4, DK, ang, 0, (th + 4) / 2, 0.55 * a); L.solid(x, y - th / 2, len, th, DR, ang, 0, th / 2, a); };
+  const oval = (x, y, r, a = 1, k = 0.75) => { const n = Math.max(24, Math.min(72, Math.round(r / 6))); let px = x + r, py = y;
+    for (let j = 1; j <= n; j++) { const an = j / n * Math.PI * 2, qx = x + Math.cos(an) * r, qy = y + Math.sin(an) * r * k; seg(px, py, Math.atan2(qy - py, qx - px), Math.hypot(qx - px, qy - py) + 1, a); px = qx; py = qy; } };
+  // a band of half-width hw along screen angle as, from (x, y), len long: its two edges and both caps
+  const band = (x, y, as, len, hw, a = 1) => { const nx = -Math.sin(as) * hw, ny = Math.cos(as) * hw, ex = x + Math.cos(as) * len, ey = y + Math.sin(as) * len;
+    seg(x + nx, y + ny, as, len, a); seg(x - nx, y - ny, as, len, a); seg(x - nx, y - ny, as + Math.PI / 2, 2 * hw, a); seg(ex - nx, ey - ny, as + Math.PI / 2, 2 * hw, a); };
+  // an Effector flipbook turned around a pivot (beams, ring chunks)
+  const bookR = (n, q, x, y, w, h, rot, piv, o = {}) => { const [c, r, f] = FXA[n], i = Math.min(f - 1, Math.floor(q * f)), cx = i % c, cy = Math.floor(i / c);
+    G.blend('add'); L.sprite(n, 0, 0, { m: M.of(M.t(x, y), M.r(rot)), w, h, pivot: piv || [w / 2, h / 2], src: [cx / c, cy / r, (cx + 1) / c, (cy + 1) / r], u: { alpha: o.a ?? 1, tint: [1, 1, 1, 0] } }); G.blend(); };
+  // Ilyich's pose now, and where his eyes are on that drawing (u, v of the sprite, measured on the art)
+  const LEYE = { lenin_awake: [0.55, 0.065], lenin_windup: [0.545, 0.2], lenin_slam: [0.53, 0.37], lenin_orator: [0.48, 0.06], lenin_broken: [0.47, 0.06] }, LENIN_H = 360;
+  const leninPose = (B, GT) => { const A = B.atk, a = A ? GT - A.t0 : 9;
+    return B.ph === 3 && !(A && A.k === 'fist') ? 'lenin_broken' : A && A.k === 'fist' ? (a < 0.9 ? 'lenin_windup' : a < 1.6 ? 'lenin_slam' : 'lenin_awake')
+      : A && (A.k === 'five' || A.k === 'coll' || A.k === 'oct' || A.k === 'decree' || A.k === 'march') ? 'lenin_orator' : 'lenin_awake'; };
+  const leninEyes = (B, GT, x, y) => { const n = leninPose(B, GT), ww = L.hsz(n, LENIN_H), [u, v] = LEYE[n]; return [x - ww / 2 + u * ww, y - LENIN_H + v * LENIN_H, ww]; };
+  // telegraphs and hazards on the ground (drawn above the night, below the people)
+  function drawHazards(ST, GT, sx, sy, vis) {
+    const B = ST.boss;
+    if (ST.map === 'park') for (const [dx, dy] of SIM.HOLE_R) { const hx = SIM.C[0] + dx, hy = SIM.C[1] + dy; if (!vis(hx, hy, 100)) continue;
+      const open = ST.ev.some((v) => v.k === 'hole' && GT - v.t < 1.6 && Math.hypot(v.x - hx, v.y - hy) < 40) || (B && B.hide && ST.ev.some((v) => v.k === 'hole' && !v.out && GT - v.t < 1.4));
+      spr(open ? 'manhole_open' : 'manhole', sx(hx), sy(hy) - 6, 96, open ? 80 : 74); }
+    // mousetraps: the snap zone is outlined once they are armed
+    for (const tr of ST.traps || []) { if (!vis(tr.x, tr.y, 60)) continue; const arm = SS(tr.t0, tr.arm || tr.t0 + 0.5, GT);
+      if (!tr.snap && arm >= 1) oval(sx(tr.x), sy(tr.y) - 4, 38, 0.55 + 0.25 * Math.sin(GT * 6 + tr.id));
+      spr(tr.snap ? 'trap_shut' : 'trap_open', sx(tr.x), sy(tr.y) - 14, 58, 44, 0, { a: tr.snap ? SS(tr.snap + 1.5, tr.snap + 1.1, GT) : 0.5 + 0.5 * arm }); }
+    for (const e of ST.ev) { if (GT < e.t || GT > (e.until || e.t + 1)) continue; const q = SS(e.t, e.until, GT);
+      // a strike coming down here: the red Effector warning ring, a crisp outline, and a fill that closes in as it lands
+      if (e.k === 'bwarn') { const x = sx(e.x), y = sy(e.y), w = e.r * 2 * 384 / 350;
+        L.shadow(x, y, e.r * 0.95, e.r * 0.72, 0.3 * q); book('fxa_warn', loopQ(GT * 1.4, e.x * 0.001), x, y, w, w, { add: 1, a: 0.85 });
+        oval(x, y, e.r, 0.9); L.ring(x, y, e.r * q, e.r * 0.75 * q, DR, 0.35 + 0.45 * q, 0.07); }
+      if (e.k === 'bline') { const x = sx(e.x), y = sy(e.y), dx = e.x2 - e.x, dy = e.y2 - e.y, len = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
+        L.solid(x, y - e.w / 2, len, e.w, DR, a, 0, e.w / 2, 0.1 + 0.18 * q); band(x, y, a, len, e.w / 2, 0.9); L.solid(x, y - 2, len * q, 4, [1, 0.6, 0.4], a, 0, 2, 0.8); }
+      // a rat stampede: the swept strip is outlined; the rows' start lines and a preview sweep show where the gaps are
+      if (e.k === 'lanes') { const px = -e.ay, py = e.ax, ph = ((GT - e.t) * 1.6) % 1, as = Math.atan2(e.ay, e.ax), L2 = 2100;
+        for (const s of [-720, 720]) { const wx = e.x + px * s, wy = e.y + py * s; seg(sx(wx) - e.ax * 340, sy(wy) - e.ay * 340, as, L2 + 340, 0.85); }
+        for (let row = 0; row < 3; row++) for (let s = -700; s <= 700; s += 39) { if (Math.abs(s - e.gaps[row][0]) < 110 || Math.abs(s - e.gaps[row][1]) < 110) continue;
+          for (const d of [0, ph * L2]) { const wx = e.x + px * s - e.ax * row * 170 + e.ax * d, wy = e.y + py * s - e.ay * row * 170 + e.ay * d; if (!vis(wx, wy, 40)) continue;
+            L.solid(sx(wx) - 14, sy(wy) - 3, 28, 6, DR, as + Math.PI / 2, 14, 3, d ? 0.45 * (1 - ph) : 0.85); } } } }
+    if (!B) return;
+    const e = ST.enemies.find((o) => o.id === B.id), ox = B.kind === 'lenin' ? SIM.LV.LENIN[0] : e ? e.x : 0, oy = B.kind === 'lenin' ? SIM.LV.LENIN[1] : e ? e.y : 0;
+    // the rat-king ball: its crush radius
+    if (B.kind === 'vlad' && B.ph === 3 && e && !B.dead) oval(sx(e.x), sy(e.y), e.r + 30, 0.7);
+    // «Красный октябрь»: cells are outlined while they warn, then burn (Effector fire per cell)
+    if (B.tiles) { const Tl = B.tiles, a = GT - Tl.t0;
+      for (let cx = 0; cx < Tl.nx; cx++) for (let cy = 0; cy < Tl.ny; cy++) { if (!SIM.hotCell(Tl, cx, cy)) continue; const wx = Tl.x0 + cx * Tl.cs, wy = Tl.y0 + cy * Tl.cs; if (!vis(wx + 75, wy + 75, 120)) continue;
+        const X = sx(wx) + 6, Y = sy(wy) + 6, S2 = Tl.cs - 12, burn = a >= 1;
+        L.rrect(X, Y, S2, S2, 8, DR, [0.7, 0.05, 0.05], burn ? 0.3 * SS(2.6, 2.2, a) : 0.08 + 0.12 * a * (0.6 + 0.4 * Math.sin(GT * 20)));
+        if (burn) book('fxa_tile', loopQ(GT * 1.2, cx * 0.17 + cy * 0.29), X + S2 / 2, Y + S2 / 2 - 14, S2 * 1.3, S2 * 1.3, { add: 1, a: SS(2.6, 2.2, a) });
+        const oa = burn ? SS(2.6, 2.3, a) : 0.6 + 0.3 * Math.sin(GT * 14);
+        seg(X, Y, 0, S2, oa); seg(X, Y + S2, 0, S2, oa); seg(X, Y, Math.PI / 2, S2, oa); seg(X + S2, Y, Math.PI / 2, S2, oa); } }
+    // shock rings from the fist: chunks of Effector fire along the ring (the gaps stay empty), its two edges outlined
+    for (const R of B.rings || []) { const r = (GT - R.t0) * R.sp; if (r < 0) continue; const rx = R.x ?? ox, ry = R.y ?? oy;
+      const n = Math.max(14, Math.min(64, Math.round(2 * Math.PI * r / 85)));
+      for (let k = 0; k < n; k++) { const a = (k + 0.5) / n * Math.PI * 2; if (R.gaps.some((g) => Math.abs(Math.atan2(Math.sin(a - g), Math.cos(a - g))) < 0.32)) continue;
+        const wx = rx + Math.cos(a) * r, wy = ry + Math.sin(a) * r * 0.75; if (!vis(wx, wy, 60)) continue;
+        const X = sx(wx), Y = sy(wy), ta = Math.atan2(Math.cos(a) * 0.75, -Math.sin(a));                 // the ring's tangent on screen
+        bookR('fxa_wave', loopQ(GT * 1.3, k * 0.137), X, Y - 10, 2 * Math.PI * r / n * 1.25, 60, ta, null, { a: 0.95 });
+        for (const dr of [-30, 30]) { const r2 = r + dr, a2 = a + Math.PI / n, a1 = a - Math.PI / n;
+          const x1 = sx(rx + Math.cos(a1) * r2), y1 = sy(ry + Math.sin(a1) * r2 * 0.75), x2 = sx(rx + Math.cos(a2) * r2), y2 = sy(ry + Math.sin(a2) * r2 * 0.75);
+          seg(x1, y1, Math.atan2(y2 - y1, x2 - x1), Math.hypot(x2 - x1, y2 - y1) + 1, 0.8, 2); } } }
+    // eye lasers: the damage band outlined while it aims, then the Effector beam along the ground, fed from his eyes
+    const eyes = B.kind === 'lenin' && !B.dead ? leninEyes(B, GT, sx(ox), sy(oy)) : null;
+    // each beam leaves one eye, comes down onto the paving LAS_GROUND out, and runs along the ground (only that part hurts — it is outlined)
+    B.lasers.forEach((Ls, k) => { const G0 = SIM.LAS_GROUND, ca = Math.cos(Ls.a), sa = Math.sin(Ls.a) * 0.75, as = Math.atan2(sa, ca), x0 = sx(ox + ca * G0), y0 = sy(oy + sa * G0), hw = SIM.LAS_W + 16, len = 1700 - G0;
+      const ex = eyes ? eyes[0] + (k % 2 ? 0.022 : -0.022) * eyes[2] : x0, ey = eyes ? eyes[1] : y0, ed = Math.hypot(x0 - ex, y0 - ey), ea = Math.atan2(y0 - ey, x0 - ex);
+      if (GT < Ls.on || (Ls.hold && GT < Ls.hold)) { band(x0, y0, as, len, hw, 0.5 + 0.4 * Math.sin(GT * 20)); L.solid(x0, y0 - 1.5, len, 3, DR, as, 0, 1.5, 0.6); L.solid(ex, ey - 1, ed, 2, DR, ea, 0, 1, 0.6); return; }
+      bookR('fxa_beam', loopQ(GT * 1.4, k * 0.31), x0, y0, len, hw * 3.2, as, [0, hw * 1.6]); band(x0, y0, as, len, hw, 0.55);
+      bookR('fxa_beam', loopQ(GT * 1.4, k * 0.31 + 0.5), ex, ey, ed + 20, hw * 2.2, ea, [0, hw * 1.1]);
+      book('fxa_slam', loopQ(GT * 3, k * 0.4) * 0.35, x0, y0 - 10, 120, 120, { add: 1, a: 0.8 }); });       // where it burns into the paving
+    // the commissar's machine-gun cone while he sprays
+    const K = B.km; if (K && K.atk && K.atk.k === 'burst') { const ke = ST.enemies.find((o) => o.id === K.eid);
+      if (ke) { const X = sx(ke.x), Y = sy(ke.y) - 52; for (const o of [-0.13, 0.13]) seg(X, Y, K.aim + o, 720, 0.75); } }
+  }
+  // the dialogue box of a cut-scene: letterbox, portrait, name, typed text
+  let cutKey = '', cutT0 = 0;
+  function drawCut(ST, F) {
+    const c = ST.cut, id = c.ids[c.i], [who, text] = (window.BLINES || {})[id] || ['', ''], k = c.key + c.i;
+    if (k !== cutKey) { cutKey = k; cutT0 = performance.now(); }
+    const n = Math.floor((performance.now() - cutT0) / 1000 * 42);
+    L.solid(0, 0, W, 110, [0, 0, 0], 0, 0, 0, 0.92); L.solid(0, H - 110, W, 110, [0, 0, 0], 0, 0, 0, 0.92);
+    const bx = W / 2 - 660, by = H - 300, bw = 1320, bh = 210; panel('cut', bx, by, bw, bh, 0.94);
+    L.sprite(portraitOf(id, who), bx + 18, by + 18, { w: 174, h: 174 });
+    lab('cutn', BNAME[who] || who, bx + 214, by + 40, Object.assign({ size: 30, col: BCOL[who] || '#f6e7c8' }, F));
+    wrap(text.slice(0, n), 46).slice(0, 3).forEach((ln, j) => lab('cutt' + j, ln, bx + 214, by + 92 + j * 40, Object.assign({ size: 28, col: '#f6e7c8' }, F)));
+    lab('cuth', 'E — дальше', bx + bw - 24, by + bh - 24, Object.assign({ size: 16, al: 1, col: '#9fd0ff' }, F));
+  }
+  function drawBossHUD(ST, me, GT, sx, sy, F) {
+    const B = ST.boss; if (!B) return;
+    if (!B.dead && ST.bossWave && !ST.cut) { const vl = B.kind === 'vlad', nm = vl ? 'ВЛАД — КОРОЛЬ КРЫС' : 'ВЛАДИМИР ИЛЬИЧ: ВОССТАНИЕ', bw = 760, bx = W / 2 - bw / 2, by = 150;
+      panel('bossbar', bx - 10, by - 10, bw + 20, 70, 0.85); lab('bossn', nm, W / 2, by + 12, Object.assign({ size: 22, al: 0.5, col: vl ? '#d6a0ff' : '#ff8a7a' }, F));
+      bar(bx, by + 30, bw, 22, B.hpf ?? 1, GT < (B.vuln || 0) ? [1, 0.85, 0.3] : [0.85, 0.15, 0.25], [0.55, 0.05, 0.12]);
+      for (const f of vl ? [0.65, 0.3] : [0.7, 0.35]) L.solid(bx + bw * f - 1, by + 28, 3, 26, [1, 0.9, 0.7], 0, 0, 0, 0.8);
+      if (B.km) { const K = B.km; panel('kmbar', bx + 180, by + 72, 400, 50, 0.85); lab('kmn', 'ВЕРНОСТЬ ПАРТИИ', bx + 380, by + 86, Object.assign({ size: 16, al: 0.5, col: '#ff6a5a' }, F));
+        bar(bx + 190, by + 98, 380, 16, K.hpf ?? 1, [1, 0.25, 0.2], [0.6, 0.05, 0.05]); } }
+    // a boss line in a speech bubble over the boss (clamped to the screen)
+    const bk = [...ST.ev].reverse().find((v) => v.k === 'bark' && GT - v.t < 3.2 && GT >= v.t);
+    if (bk && !ST.cut) { const [who, text] = (window.BLINES || {})[bk.id] || ['', '']; const lines = wrap(text, 30), a = SS(0, 0.15, GT - bk.t) * SS(3.2, 2.8, GT - bk.t);
+      const tw = Math.max(...lines.map((ln, j) => labW('bk' + j, ln, Object.assign({ size: 20 }, F)))), bh = 34 + lines.length * 28;
+      const x = Math.max(tw / 2 + 30, Math.min(W - tw / 2 - 30, sx(bk.x))), y = Math.max(ST.bossWave ? 300 : 200, Math.min(H - 220, sy(bk.y) - (who === 'lenin' ? 420 : 200)));
+      L.rrect(x - tw / 2 - 21, y - bh / 2 - 3, tw + 42, bh + 6, 14, [0.55, 0.38, 0.22], [0.3, 0.18, 0.12], 0.9 * a); L.rrect(x - tw / 2 - 18, y - bh / 2, tw + 36, bh, 12, [0.14, 0.08, 0.12], [0.08, 0.04, 0.07], 0.92 * a);
+      L.uiBox('bk', x - tw / 2 - 18, y - bh / 2, tw + 36, bh);
+      lines.forEach((ln, j) => lab('bk' + j, ln, x, y - (lines.length - 1) * 14 + j * 28, Object.assign({ size: 20, al: 0.5, col: BCOL[who] || '#f6e7c8', a }, F))); }
+    if (me.nat && !ST.cut) { const K = B.km, s1 = 'ВАШ ПЕРСОНАЖ НАЦИОНАЛИЗИРОВАН', s2 = 'Управление передано партии. Тактика комиссара:';
+      const Y0 = H - 360, tw = Math.max(labW('nat1', s1, Object.assign({ size: 34 }, F)), 940); L.rrect(W / 2 - tw / 2 - 30, Y0 - 50, tw + 60, 168, 16, [0.45, 0.05, 0.05], [0.25, 0.02, 0.02], 0.85); L.uiBox('nat', W / 2 - tw / 2 - 30, Y0 - 50, tw + 60, 168);
+      lab('nat1', s1, W / 2, Y0 - 16, Object.assign({ size: 34, al: 0.5, col: '#ffe066' }, F)); lab('nat2', s2, W / 2, Y0 + 22, Object.assign({ size: 18, al: 0.5, col: '#f6e7c8' }, F));
+      ['1 Преследовать', '2 Подавлять огнём', '3 Защищать Ильича'].forEach((s, i) => lab('nat3' + i, s, W / 2 + (i - 1) * 300, Y0 + 60, Object.assign({ size: 20, al: 0.5, col: K && K.mode === i ? '#ffe066' : '#c8a8a0' }, F)));
+      if (K) lab('nat4', 'Партия отпустит через ' + Math.max(0, Math.ceil(K.until - GT)) + ' с', W / 2, Y0 + 96, Object.assign({ size: 15, al: 0.5, col: '#ff9a8a' }, F)); }
+    if (GT < (me.crisisT || 0)) lab('crisis', 'Идейный кризис: −20% урона', W / 2, 250, Object.assign({ size: 20, al: 0.5, col: '#ff9a8a' }, F));
+  }
+
   // ---------------- HUD ----------------
   const panel = (id, x, y, w, h, a = 0.82) => { L.rrect(x - 3, y - 3, w + 6, h + 6, 10, [0.55, 0.38, 0.22], [0.3, 0.18, 0.12], a); L.rrect(x, y, w, h, 8, [0.12, 0.08, 0.1], [0.07, 0.05, 0.07], a); L.uiBox(id, x, y, w, h, 4); };
   const bar = (x, y, w, h, f, c0, c1) => { L.rrect(x, y, w, h, h / 2, [0.05, 0.02, 0.03], [0.1, 0.05, 0.06]); if (f > 0.01) L.rrect(x + 2, y + 2, (w - 4) * Math.min(1, f), h - 4, (h - 4) / 2, c0, c1); };
@@ -546,10 +718,11 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     if (!ST.over) {
     panel('wave', W / 2 - 150, 16, 300, 112);
     const act = ST.players.filter((p) => !p.out), onBus = act.filter((p) => p.inBus).length, bus = ST.bus && !ST.endless;
-    const wl = bus ? 'ВСЕ В АВТОБУС!' : ST.brk > 0 ? `Перерыв ${Math.ceil(ST.brk)}` : ST.clear ? 'Добей волну!' : `Волна ${ST.wave}`;
+    const wl = bus ? 'ВСЕ В АВТОБУС!' : ST.bossWave && !ST.clear ? 'БОСС' : ST.brk > 0 ? `Перерыв ${Math.ceil(ST.brk)}` : ST.clear ? 'Добей волну!' : `Волна ${ST.wave}`;
     lab('wavel', wl, W / 2, 44, Object.assign({ size: ST.clear || bus ? 26 : 30, al: 0.5, col: bus ? '#ffe066' : ST.clear ? '#ff9a6a' : '#ffd76a' }, F));
     if (bus) lab('timer', `В автобусе ${onBus}/${act.length}`, W / 2, 84, Object.assign({ size: 24, al: 0.5 }, F));
     else if (ST.clear) lab('timer', `Осталось ${ST.left ?? ST.enemies.length}`, W / 2, 84, Object.assign({ size: 24, al: 0.5 }, F));
+    else if (ST.bossWave) lab('timer', `Волна ${ST.wave}`, W / 2, 84, Object.assign({ size: 24, al: 0.5 }, F));
     else lab('timer', mmss(ST.brk > 0 ? ST.brk : SIM.WAVE_LEN - ST.waveT), W / 2, 84, Object.assign({ size: 32, al: 0.5 }, F));
     lab('mapn', ST.endless ? `Бесконечная ночь · домой ${onBus}/${act.length}` : (SIM.MAPN[ST.map] || 'Парк') + (ST.map === 'meleuz' ? ' · волны 11–20' : ' · волны 1–10'), W / 2, 112, Object.assign({ size: 15, al: 0.5, col: ST.endless ? '#d6a0ff' : '#c8b8a0' }, F));
     // the spor and the energy drinks (risk taken → score multiplier)
@@ -656,6 +829,8 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         lab('ad' + i, `${pname(p)}: ${a.d}`, W / 2 - 390, y + 64, Object.assign({ size: 22 }, F)); });
       lab('rr', ST.net ? 'Ждём, пока хост вернёт всех в комнату…' : window.NET && NET.mode === 'host' ? 'Backspace — в комнату' : 'Backspace — ещё раз', W / 2, 250 + ST.awards.length * 100, Object.assign({ size: 26, al: 0.5, col: '#9fd0ff' }, F)); }
     { const ar = [...ST.ev].reverse().find((v) => v.k === 'arrive' && GT - v.t < 1.4); if (ar) L.solid(0, 0, W, H, [0, 0, 0], 0, 0, 0, SS(1.4, 0.2, GT - ar.t)); }
+    if (!ST.over) drawBossHUD(ST, me, GT, sx, sy, F);
+    if (ST.cut && !ST.over) drawCut(ST, F);
     // demo caption
   }
 
@@ -700,7 +875,20 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     ['alchemy_hud', abil('leha', null, 1.2, (s, p) => { p.items = { sig: 3, leha_rail: 2, salute: 1, tapok: 3, speaker: 3, pigeon: 2, fury: 1, armor: 3, hp: 2 }; p.sigEvo = 'leha_rail';
       p.fused = [['tapok', 'speaker']]; SIM.recalc(p); })],
     ['status', abil('hasan', null, 0.4, (s, p) => { s.enemies.forEach((e, i) => { if (i % 3 === 0) e.burnT = s.t + 3; else if (i % 3 === 1) e.freezeT = s.t + 3; }); p.items.pigeon = 3; SIM.recalc(p); })],
-    ['leha_q', abil('leha', 'q', 0.4)], ['leha_r', abil('leha', 'r', 1.0)], ...melQA(), ...sigQA()];
+    ['leha_q', abil('leha', 'q', 0.4)], ['leha_r', abil('leha', 'r', 1.0)], ...melQA(), ...sigQA(), ...bossQA()];
+  // bosses mid-fight (BOSSES.md): a phase each, their telegraphs, a bark, the cut-scene box, the nationalised Лёха
+  const bossQA = () => {
+    const god = (s) => { s.xpNext = 1e9; for (const p of s.players) { p.hp = p.hpMax = 9999; p.pick = null; p.queue = 0; } };
+    const run = (s, secs) => { for (let i = 0; i < 120 * secs; i++) { SIM.step(s, {}); god(s); } return s; };
+    const fight = (map, secs, f, heroes, humans) => { const s = SIM.create({ heroes: heroes || ['hasan', 'danil', 'vitya', 'leha'], humans: humans || [0], map }); s.wave = map === 'park' ? 10 : 20; s.brk = 0;
+      run(s, 2); SIM.startBoss(s); s.cut = null; s.boss.go = 1; s.boss.next = s.t + 0.5; const e = s.enemies.find((o) => o.id === s.boss.id); e.inv = 0; if (f) f(s, e);
+      run(s, secs); s.cut = null; const p = s.players[0]; p.cam = [e.x - W / 2, e.y - 60 - H / 2 + 100]; s.me = 0; return s; };
+    return [['boss_vlad', fight('park', 1.6, (s) => { s.boss.n = 1; s.ev.push({ k: 'bark', id: 'rk_t_vitya', x: s.boss ? SIM.C[0] : 0, y: SIM.C[1], t: s.t + 1.2 }); })],
+      ['boss_vlad_ball', fight('park', 1.0, (s, e) => { e.hp = e.hpMax * 0.25; s.boss.ph = 3; e.r = 64; })],
+      ['boss_lenin', fight('meleuz', 2.0, (s) => { s.boss.n = 0; })],
+      ['boss_cut', (() => { const s = fight('meleuz', 0.2); s.cut = { key: 'ln_b', ids: ['ln_b_0', 'ln_b_1'], i: 0, t0: s.rt, fx: SIM.LV.LENIN[0], fy: SIM.LV.LENIN[1] }; return s; })()],
+      ['boss_nat', (() => { const s = fight('meleuz', 0.1, (s, e) => { e.hp = e.hpMax * 0.68; }, ['leha', 'hasan', 'danil', 'vitya'], [0, 1]);
+        s.cut = { key: 'ln_b', ids: ['ln_b_4'], i: 0, t0: -99, fx: 0, fy: 0, then: 'betray' }; SIM.step(s, {}); run(s, 2); s.cut = null; s.me = 0; return s; })()]]; };
   // the hero's own weapon after each element evolution, mid-attack
   const sigQA = () => { const evo = (hero, id, secs) => abil(hero, null, secs, (s, p) => { p.items = { sig: 3, [id]: 1 }; p.sigEvo = id; p.tier = 2; SIM.recalc(p); });
     const whip = (id) => { const s0 = evo('hasan', id, 0.05), p = s0.players[0]; p.inv = 0; p.hurtT = -9;
@@ -738,7 +926,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         p.cam = [x0 - W / 2, y0 - H / 2 - 60]; }
       else { p.x = x0 + dx * dist; p.y = y0 + dy * dist; p.vx = dx * sp; p.vy = dy * sp; p.dir = dir; p.dist = dist; p.cam = [x0 - W / 2, y0 - H / 2 - 60]; p.lastAtk = -9; }
       S.me = 0; S.t = 5; return S; };
-    for (const hero of ['hasan', 'danil', 'vitya', 'leha', 'ghoul']) for (const [dir, v] of [[0, 'front'], [1, 'side'], [2, 'back']]) {
+    for (const hero of ['hasan', 'danil', 'vitya', 'leha']) for (const [dir, v] of [[0, 'front'], [1, 'side'], [2, 'back']]) {
       const name = hero + '_' + v, R = window.RIGS && RIGS[name]; if (!R) continue;
       const hgt = hero === 'ghoul' ? 84 : Z[name][1], k = hgt / R.h, stride = (R.ankleL ? R.ankleL[1] : R.footL[1]) - R.hipL[1];
       const len = RIG.stride(name, k, v), key = hero + '_walk_' + v;

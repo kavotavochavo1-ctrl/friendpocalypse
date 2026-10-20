@@ -1,4 +1,4 @@
-// live/sim.js — FRIENDPOCALYPSE: deterministic co-op survivor-like sim, fixed 120 Hz, 1–8 players (humans or bots).
+﻿// live/sim.js — FRIENDPOCALYPSE: deterministic co-op survivor-like sim, fixed 120 Hz, 1–8 players (humans or bots).
 // Contract (engine.md §6): create / step / at / spawn / respawn / outOfPlay / scriptInput; events in S.ev.
 // Host-authoritative: the host steps S with every player's input ({ players: { id: inp } }) and ships S to clients.
 // Every reaction (whips, clouds, cards, rockets, revives, combos, voice lines) lives here so all clients see the same.
@@ -40,6 +40,10 @@
     starshiy: { hp: 140, spd: 64, r: 38, dmg: 18, xp: 5, sc: 1.6, from: 13, w: 0.1, map: 'meleuz' },
     mom: { hp: 46, spd: 88, r: 30, dmg: 20, xp: 3, sc: 1.05, from: 14, charge: 1, w: 0.1, map: 'meleuz' },
     alpha: { hp: 110, spd: 168, r: 30, dmg: 15, xp: 5, sc: 1.45, from: 999, w: 0, map: 'meleuz', howl: 1 },    // «Вожак стаи»: elites only
+    // bosses (BOSSES.md): hp is the wave-1 base, scaled by hpScale like everyone else
+    vlad: { hp: 3600, spd: 0, r: 46, dmg: 14, xp: 60, sc: 1, from: 999, w: 0, map: 'park', boss: 1 },
+    lenin: { hp: 4000, spd: 0, r: 95, dmg: 16, xp: 120, sc: 1, from: 999, w: 0, map: 'meleuz', boss: 1 },
+    komissar: { hp: 450, spd: 0, r: 26, dmg: 0, xp: 0, sc: 1, from: 999, w: 0, map: 'meleuz', mini: 1 },
   };
   const ELITES = { park: ['brute'], meleuz: ['starshiy', 'alpha'] };      // «Батя района» (a starshiy elite) and «Вожак стаи»
   const WAVE_LEN = 60, BREAK = 9, WAVES = 10, LASH_HIT = 0.21;
@@ -80,7 +84,7 @@
   // weapons stay locked until the meta unlocks them (cfg.meta.unlock).
   const MAXL = 3, MAXW = 3, MAXP = 4;
   const SIG = {
-    hasan: { n: 'Усы-хлысты', lv: ['Два уса хлещут ближайших', 'Два хлыста за удар, +25% урона', '+25% радиус, зацеп каждым 2-м ударом'], evo: 'pick', evoN: 'Усатый вихрь', evoD: 'Пробуждение: усы крутятся вокруг и стягивают толпу' },
+    hasan: { n: 'Усы-хлысты', lv: ['Два уса хлещут ближайших', 'Два хлыста за удар, +25% урона', '+25% радиус, чаще связывает усами'], evo: 'pick', evoN: 'Усатый вихрь', evoD: 'Пробуждение: усы крутятся вокруг, режут и связывают толпу' },
     danil: { n: 'Фотокарточки', lv: ['Карты с рикошетом', '+1 карта, +1 рикошет', '+30% урона, +1 карта, карты пробивают'], evo: 'crit', evoN: 'Коллекция ультраредок', evoD: 'Пробуждение: кольцо карт вращается вокруг и бьёт само' },
     vitya: { n: 'Тихий, но смертельный', lv: ['Облако позади себя', 'Облако больше, пукает чаще', '+30% урона, два облака за раз'], evo: 'hp', evoN: 'Насрал в штаны', evoD: 'Пробуждение: больше не пукает — за ним тянется сплошной газовый след' },
     leha: { n: 'Оружейная лицензия', lv: ['Пистолет', 'ПП: очередь', 'Дробовик: веер дроби'], evo: 'armor', evoN: 'Карманный апокалипсис', evoD: 'Пробуждение: РПГ, залп из 3 ракет' },
@@ -259,7 +263,7 @@
       M.SUBS = [[1150, 980, 420, 260, 'glory'], [4020, 1010, 480, 230, 'admin'], [1200, 3290, 400, 170, 'mosque'], [3720, 2860, 400, 220, 'emb'],
         [1730, 1610, 170, 110, 'lenin'], [3480, 1600, 210, 120, 'tractor'], [C[0], 700, 300, 120, 'church']];
       M.POND = [4320, 3500, 820, 400];                                          // the Belaya bend
-      M.BUS = [4840, C[1] + 60]; M.KIOSK = [3870, 1665]; M.FLAME = [1150, 1150];
+      M.BUS = [4840, C[1] + 60]; M.KIOSK = [3870, 1665]; M.FLAME = [1150, 1150]; M.LENIN = [1730, 1610];
       addP('church', C[0], 600); M.WALLS.push([C[0] - 250, 360, C[0] + 250, 590]);
       addP('admin', 4020, 780); M.WALLS.push([3560, 300, 4480, 760]);
       addP('mosque', 1200, 3150); M.WALLS.push([920, 2860, 1480, 3130]);
@@ -337,7 +341,7 @@
       map: LV.id, spor: SPORS[cfg.spor] ? cfg.spor : null, daily: cfg.daily ? 1 : 0, bus: null, endless: 0, swarmT: 0, score: 0, drinks: 0, kioskNext: 3, sporWon: 0,
       players: [], enemies: [], proj: [], eproj: [], clouds: [], zones: [], gems: [], marks: [], booms: [], nid: 1, rt: 0, pause: 0, pend: [], clear: 0, clearT: 0,
       wave: 1, waveT: 0, brk: 0, xp: 0, lvl: 1, xpNext: 6, eliteT: 20, chests: [], food: [], spawnAcc: 0, over: 0, won: 0, freeze: 0, kills: 0,
-      comboT: -9, comboK: {}, sayT: -9, banter: 0, ev: [], awards: null, me: 0, solo: 0,
+      comboT: -9, comboK: {}, sayT: -9, banter: 0, ev: [], awards: null, me: 0, solo: 0, boss: null, cut: null, traps: [], bossWave: 0,
       found: ((cfg.meta && cfg.meta.found) || []).slice(), unlock: Object.assign({}, cfg.meta && cfg.meta.unlock) };
     heroes.forEach((h, i) => S.players.push(newPlayer(i, h, cfg.humans ? !cfg.humans.includes(i) : 1, i)));
     S.solo = S.players.filter((p) => !p.bot).length <= 1 && S.players.length === 1 ? 1 : 0;
@@ -353,7 +357,7 @@
 
   // ---------------- helpers ----------------
   const ev = (S, o) => { o.t = S.t; S.ev.push(o); };
-  const alive = (p) => !p.down && !p.out && !p.inBus;
+  const alive = (p) => !p.down && !p.out && !p.inBus && !p.nat;
   // risk → reward: the spor's enemy factor, the night kiosk's energy drinks, the endless night's compounding waves
   const sporK = (S) => (SPORS[S.spor] && SPORS[S.spor].k) || 1;
   const scoreX = (S) => ((SPORS[S.spor] && SPORS[S.spor].x) || 1) * (1 + 0.1 * S.drinks);
@@ -386,12 +390,16 @@
     ev(S, { k: 'combo', key, x, y, pid: p ? p.id : -1 }); if (p) { p.st.combo++; say(S, p, 'combo_' + key); }
     for (let i = 0; i < bonus; i++) S.gems.push({ id: S.nid++, x: x + 60 * (h2(S.steps, i) - 0.5), y: y + 50 * (h2(S.steps, i + 9) - 0.5), v: 2, t0: S.t });
   };
+  let KB_T = 0; const kb = (e) => e.elite || e.boss || e.type === 'komissar' || KB_T < (e.rootT || 0) ? 0 : ETYPES[e.type].sc >= 1.5 ? 0.3 : 0.6;
   const hurtEnemy = (S, e, dmg, p, kind, kx = 0, ky = 0) => {
-    if (e.hp <= 0) return;
+    if (e.hp <= 0 || S.t < (e.inv || 0)) return;
+    if (e.boss && S.t < S.boss.vuln) dmg *= 2; if (S.t < (e.shieldT || 0)) dmg *= 0.25; if (p && S.t < (p.crisisT || 0)) dmg *= 0.8;
+    if (e.boss) bossHit(S, e, dmg);
+    if (e.type === 'komissar' && e.hp - dmg <= 0) { e.hitT = S.t; if (p) p.st.dmg += dmg; freeLeha(S, e, 1); return; }
     if (S.marks.length && S.marks.some((m) => m.id === e.id && S.t < m.until)) dmg *= 1.5;
     if (S.t < (e.gooT || -9)) dmg *= 1.25;                                    // stuck in condensed milk
     let crit = 0; if (p && h2(S.steps + e.id, dmg) < p.m.crit) { dmg *= p.m.critX || 2; crit = 1; }
-    e.hp -= dmg; e.hitT = S.t; e.kx += kx; e.ky += ky; e.lastHit = p ? p.id : -1; e.lastKind = kind;
+    KB_T = S.t; const k = kb(e); e.hp -= dmg; e.hitT = S.t; e.kx += kx * k; e.ky += ky * k; e.lastHit = p ? p.id : -1; e.lastKind = kind;
     if (p) { p.st.dmg += dmg;
       if (p.m.leech && alive(p) && p.lsB > 0) { const h = Math.min(dmg * p.m.leech, p.lsB, p.hpMax - p.hp); if (h > 0) { p.hp += h; p.lsB -= h; } }   // Кумыс
       if (p.hero === 'hasan' && !p.hitSet.includes(e.id)) { p.hitSet.push(e.id); if (p.hitSet.length > 8) p.hitSet.shift(); } }
@@ -399,7 +407,7 @@
     if (e.hp <= 0) killEnemy(S, e, p, kind);
   };
   const killEnemy = (S, e, p, kind) => {
-    const T = ETYPES[e.type]; S.kills++; if (p) { p.st.kills++; if (S.t > p.ultLock) p.ult = Math.min(1, p.ult + 0.0032 * T.xp); }
+    const T = ETYPES[e.type]; S.kills++; if (T.boss) bossDead(S, e); if (p) { p.st.kills++; if (S.t > p.ultLock) p.ult = Math.min(1, p.ult + 0.0032 * T.xp); }
     S.score += Math.round(T.xp * 10 * (e.elite ? 10 : 1) * scoreX(S));
     ev(S, { k: 'kill', x: e.x, y: e.y, type: e.type, kind, pid: p ? p.id : -1, sc: T.sc });
     S.gems.push({ id: S.nid++, x: e.x, y: e.y - 4, v: T.xp * (S.map === 'meleuz' ? 1.6 : 1), t0: S.t });
@@ -436,7 +444,7 @@
     else if (p.hp < p.hpMax * 0.25 && !ally) say(S, p, 'low');
   };
   const addCloud = (S, p, x, y, r, ttl, big, quiet) => { S.clouds.push({ id: S.nid++, owner: p.id, x, y, r, ttl: ttl * p.m.ttl, t0: S.t, big: big ? 1 : 0, tick: 0, atick: 0,
-      ign: p.m.smods && p.m.smods.ignite && (!quiet || (p.trN = (p.trN || 0) + 1) % 3 === 0) ? S.t + 0.9 : 0 });   // a trail flares every 3rd puff                  // «Газовая петарда»: the cloud flares up a moment later
+      ign: p.m.smods && p.m.smods.ignite && (!quiet || (p.trN = (p.trN || 0) + 1) % 5 === 0) ? S.t + 0.9 : 0 });   // a trail flares every 3rd puff                  // «Газовая петарда»: the cloud flares up a moment later
     if (S.clouds.length > 48) S.clouds.shift(); if (!quiet) ev(S, { k: 'fart', x, y, pid: p.id, big: big ? 1 : 0 }); };
 
   // ---------------- hero attacks ----------------
@@ -454,7 +462,8 @@
         for (let k = 0; k < n; k++) { const a0 = ang + (k - (n - 1) / 2) * 0.55;
           near(p.x, p.y - 40, R, (e) => { const da = Math.atan2(e.y - (p.y - 40), e.x - p.x) - a0, dd = Math.abs(Math.atan2(Math.sin(da), Math.cos(da)));
             if (dd > 0.75) return; const ex = p.x + Math.cos(a0) * 70, ey = p.y - 40 + Math.sin(a0) * 70;
-            if (pull && ETYPES[e.type].sc < 1.5 && !e.elite) { e.kx += (ex - e.x) * 5; e.ky += (ey - e.y) * 5; e.pullT = t; e.pullBy = p.id; } else if (pull) e.slowT = t + 1.2;
+            // «связал усами»: every lash may tie them up (the charged one — every pullN-th — much likelier); big ones and elites shake it off sooner
+            if (h2(e.id, S.steps) < (pull ? 0.6 : 0.25)) { const big = ETYPES[e.type].sc >= 1.5 || e.elite; e.rootT = Math.max(e.rootT || 0, t + (big ? 0.7 : 1.6)); }
             hurtEnemy(S, e, 14 * p.m.dmg * p.m.sdmg, p, 'whip', Math.cos(a0) * 120, Math.sin(a0) * 120);
             if (p.m.smods && e.hp > 0) { const M = Object.assign({}, p.m.smods); if (p.lashZ) M.shock = 0; else if (M.shock) p.lashZ = 1; applyMods(S, e, p, M, 14 * p.m.dmg * p.m.sdmg); } }); }
         p.lashZ = 0;
@@ -516,9 +525,9 @@
         ev(S, { k: 'throw', pid: p.id, x: p.x, y: p.y }); }
       // Петарды: firecrackers lobbed at random enemies nearby (Салют / Северное сияние: fireworks falling out of the sky)
       if (W.b === 'petard' && every(id, (M.sky ? 1.7 : 2.1) / as)) { const list = crowd(M.sky ? 720 : 460), n = 2 + (l >= 2) + evo;
-        for (let k = 0; k < n && list.length; k++) { const e = list[Math.floor(h2(S.steps, k + p.id * 3) * list.length)];
-          if (M.sky) S.proj.push({ id: S.nid++, own: p.id, kind: 'firework', lob: 1, sky: 1, x: e.x, y: e.y - 45, vx: 0, vy: 0, t0: t + k * 0.12, ttl: 0.6 + k * 0.12, ttl0: 0.6 + k * 0.12, hit: [], r: (M.boom || 85) * area, dmg: 14 * pw, mods: M, wid: id });
-          else lob('petard', e, 0.5, { r: (M.boom || 50 + 8 * l) * area, dmg: 11 * pw, mods: M, wid: id }); } }
+        for (let k = 0; k < Math.max(1, n - 1) && list.length; k++) { const e = list[Math.floor(h2(S.steps, k + p.id * 3) * list.length)];
+          if (M.sky) S.proj.push({ id: S.nid++, own: p.id, kind: 'firework', lob: 1, sky: 1, x: e.x, y: e.y - 45, vx: 0, vy: 0, t0: t + k * 0.12, ttl: 0.6 + k * 0.12, ttl0: 0.6 + k * 0.12, hit: [], r: (M.boom || 85) * area, dmg: 14 * pw * n / Math.max(1, n - 1), mods: M, wid: id });
+          else lob('petard', e, 0.5, { r: (M.boom || 50 + 8 * l) * area, dmg: 11 * pw * n / Math.max(1, n - 1), mods: M, wid: id }); } }
       // Энергетик: a can lobbed into the crowd: blast + chain lightning
       if (W.b === 'can' && every(id, 3.0 / as)) { const list = crowd(560), n = 1 + (l >= 2);
         for (let k = 0; k < n && list.length; k++) lob('can', list[Math.floor(h2(S.steps, k + p.id) * list.length)], 0.6, { r: 80 * area, dmg: 16 * pw, mods: { shock: 2 + (l >= 3 ? 2 : 0) }, wid: id }); }
@@ -553,15 +562,14 @@
         if (M.coo && every(id + ':coo', 2.4 / as)) { near(p.x, p.y - 30, 150 * area, (e) => { e.freezeT = Math.max(e.freezeT || 0, t + 0.8); hurtEnemy(S, e, 6 * pw, p, 'coo'); }); ev(S, { k: 'coo', pid: p.id, x: p.x, y: p.y, r: 150 * area }); } }
     }
     if (!p.evo) return;
-    if (p.hero === 'hasan' && every('evo', 0.3)) near(p.x, p.y - 30, 170 * area, (e) => { const d = dist(e.x, e.y, p.x, p.y) || 1;
-      if (ETYPES[e.type].sc < 1.5 && !e.elite) { e.kx += (p.x - e.x) / d * 90; e.ky += (p.y - e.y) / d * 90; } hurtEnemy(S, e, 7 * p.m.dmg * p.m.sdmg, p, 'twirl'); });
+    if (p.hero === 'hasan' && every('evo', 0.3)) near(p.x, p.y - 30, 170 * area, (e) => { if (h2(e.id, S.steps) < 0.04) e.rootT = Math.max(e.rootT || 0, t + 1); hurtEnemy(S, e, 7 * p.m.dmg * p.m.sdmg, p, 'twirl'); });
     if (p.hero === 'danil' && every('evo', 0.2)) for (let k = 0; k < 6; k++) { const a = t * 2.4 + k * Math.PI / 3, cx = p.x + Math.cos(a) * 130, cy = p.y - 40 + Math.sin(a) * 100;
       near(cx, cy, 34, (e) => hurtEnemy(S, e, 9 * p.m.dmg * p.m.sdmg, p, 'card')); }
   }
 
   function useQ(S, p, t) {
     // aim: Danil at the nearest crowd (charm cone), everyone else where he faces
-    p.qa = p.hero === 'danil' && p.ax !== undefined ? Math.atan2(p.ay, p.ax) : Math.atan2(p.fy, p.fx);
+    p.qa = p.hero === 'danil' && p.ax !== undefined ? Math.atan2(p.ay, p.ax) : p.hero === 'vitya' ? Math.atan2(-p.fy, -p.fx) : Math.atan2(p.fy, p.fx);
     p.qT = t; p.qCD = QCD[p.hero] * p.m.cd; ev(S, { k: 'q', pid: p.id, hero: p.hero, x: p.x, y: p.y, ang: p.qa }); say(S, p, 'q');
     const area = p.m.area, ca = Math.cos(p.qa), sa = Math.sin(p.qa);
     // Danil «Фан-чант»: a megaphone cone of hearts — enemies in it are charmed (stop, wander, take +50%), friends nearby get the fan buff
@@ -570,7 +578,7 @@
       for (const q of S.players) if (alive(q) && dist(q.x, q.y, p.x, p.y) < 320) q.buffT = Math.max(q.buffT, t + 4); }
     // Vitya «Залп по ветру»: a gas jet — shoves the cone back, poisons it and leaves a short trail of small clouds along the line
     if (p.hero === 'vitya') { near(p.x, p.y, JET.r * area, (e) => { if (!inCone(p, e, p.qa, JET.r * area, JET.half)) return; const d = dist(e.x, e.y, p.x, p.y);
-        const f = 1 - 0.5 * d / (JET.r * area); e.kx += ca * 720 * f; e.ky += sa * 720 * f; e.poisT = t + 4; e.slowT = Math.max(e.slowT, t + 1.2); hurtEnemy(S, e, 6 * p.m.dmg * p.m.sdmg, p, 'gas'); });
+        KB_T = t; const f = (1 - 0.5 * d / (JET.r * area)) * kb(e); e.kx += ca * 420 * f; e.ky += sa * 420 * f; e.poisT = t + 4; e.slowT = Math.max(e.slowT, t + 1.2); hurtEnemy(S, e, 6 * p.m.dmg * p.m.sdmg, p, 'gas'); });
       [[110, 55], [200, 62], [290, 70]].forEach(([d, r]) => addCloud(S, p, p.x + ca * d * area, p.y - 10 + sa * d * 0.75 * area, r * area, 5)); }
     // Лёха «Прикрыл!»: a riot shield in front — a bash on raise, then it blocks spit from the front while he walks behind it
     if (p.hero === 'leha') near(p.x + ca * 60, p.y - 20 + sa * 45, 110, (e) => { hurtEnemy(S, e, 10 * p.m.dmg, p, 'bash', ca * 560, sa * 560); e.slowT = Math.max(e.slowT, t + 1); });
@@ -606,7 +614,10 @@
     const keep = p.hero === 'vitya' ? 380 : 190, dt = dist(cx, cy, p.x, p.y);
     if (dt > keep) { mx += (cx - p.x) / dt * 0.8; my += (cy - p.y) / dt * 0.8; } else if (p.hero === 'vitya' && dt < 260 && dt > 1) { mx -= (cx - p.x) / dt; my -= (cy - p.y) / dt; }
     for (const q of S.players) { if (q === p || q.out) continue; const d = dist(q.x, q.y, p.x, p.y) || 1; if (d < 170) { mx -= (q.x - p.x) / d * (170 - d) / 170 * 2.5; my -= (q.y - p.y) / d * (170 - d) / 170 * 2.5; } }
-    const dc = dist(C[0], C[1], p.x, p.y); if (dc > 900 && !S.bus) { mx += (C[0] - p.x) / dc * 0.6; my += (C[1] - p.y) / dc * 0.6; }
+    const be = S.boss && S.boss.go && !S.boss.dead && !S.boss.hide && bossE(S);
+    if (be) { const d = dist(be.x, be.y, p.x, p.y) || 1, want = (p.hero === 'hasan' ? 170 : 360) + be.r;      // a boss fight: hold a ring around the boss
+      const k = d > want + 60 ? 1.6 : d < want - 60 ? -1.2 : 0; mx += (be.x - p.x) / d * k; my += (be.y - p.y) / d * k; }
+    else { const dc = dist(C[0], C[1], p.x, p.y); if (dc > 900 && !S.bus) { mx += (C[0] - p.x) / dc * 0.6; my += (C[1] - p.y) / dc * 0.6; } }
     const down = S.players.find((q) => q.down && !q.out && p.hero !== 'vitya'); if (down) { const d = dist(down.x, down.y, p.x, p.y) || 1; if (d > 40) { mx += (down.x - p.x) / d * 2.4; my += (down.y - p.y) / d * 2.4; } }
     // the bus: pick friends up first; home only once the humans are aboard
     if (S.bus && !down && (S.bus.to === 'meleuz' || S.players.every((q) => q.bot || q.out || q.inBus))) {
@@ -633,6 +644,246 @@
       if (slot >= 1 && slot <= p.pick.length) applyPick(S, p, p.pick[slot - 1].id, S.t); }
   }
 
+  // camera (per player, so every client follows its own hero)
+  const camStep = (p) => { const tgx = clamp(p.x - VIEW.W / 2 + p.vx * 0.25, WORLD.x0, WORLD.x1 - VIEW.W), tgy = clamp(p.y - 60 - VIEW.H / 2 + p.vy * 0.2, WORLD.y0, WORLD.y1 - VIEW.H);
+    p.camV[0] += (28 * (tgx - p.cam[0]) - 10.5 * p.camV[0]) * DT; p.cam[0] += p.camV[0] * DT;
+    p.camV[1] += (28 * (tgy - p.cam[1]) - 10.5 * p.camV[1]) * DT; p.cam[1] += p.camV[1] * DT; };
+
+  // ---------------- bosses (BOSSES.md): Влад — Король крыс (park, wave 10), Владимир Ильич (Мелеуз, wave 20) ----------------
+  // A boss is an enemy (ETYPES boss: 1) driven by bossStep; everything the scene must see lives in S.boss (synced whole).
+  // Cut-scenes (S.cut) freeze the world like a level-up pick; lines are ids into root.BLINES (live/blines.js, voiced files).
+  const BL = root.BLINES || {}, TAU = Math.PI * 2;
+  const lineDur = (id) => clamp(1.4 + ((BL[id] || ['', ''])[1].length) * 0.06, 2.2, 6.5);
+  const CUTS = {
+    rk_in: ['rk_in_0', 'rk_in_1', 'rk_in_2', 'rk_in_3', 'rk_in_4'], rk_p2: ['rk_p2_0', 'rk_p2_1'], rk_p3: ['rk_p3_0', 'rk_p3_1', 'rk_p3_2'], rk_end: ['rk_end_0', 'rk_end_1'],
+    ln_in: ['ln_in_0', 'ln_in_1', 'ln_in_2', 'ln_in_3', 'ln_in_4'], ln_b: ['ln_b_0', 'ln_b_1', 'ln_b_2', 'ln_b_3', 'ln_b_4'], ln_f: ['ln_f_0', 'ln_f_1', 'ln_f_2'],
+    ln_p3: ['ln_p3'], ln_end: ['ln_end'], ln_solo: ['ln_b_0', 'ln_solo'] };
+  const startCut = (S, key, fx, fy, then) => {
+    const ids = CUTS[key].filter((id) => { const who = (BL[id] || [])[0]; return !HEROES[who] || S.players.some((p) => p.hero === who && !p.out); });
+    S.cut = { key, ids, i: 0, t0: S.rt, fx, fy, then: then || null }; };
+  const bark = (S, id, x, y) => ev(S, { k: 'bark', id, x, y });
+  const heroNear = (S, x, y) => { let b = null, bd = 1e9; for (const p of S.players) if (alive(p)) { const d = dist(p.x, p.y, x, y); if (d < bd) { bd = d; b = p; } } return b; };
+  const bossE = (S) => S.boss && S.enemies.find((e) => e.id === S.boss.id);
+  function cutStep(S, inps) {
+    const c = S.cut; let skip = false;
+    for (const p of S.players) { if (p.bot || p.out) continue; const inp = inps[p.id] || {}, v = !!(inp.e || inp.act); if (v && !p.prevCut) skip = true; p.prevCut = v; }
+    if (S.rt - c.t0 < lineDur(c.ids[c.i]) && !(skip && S.rt - c.t0 > 0.6)) return;
+    c.i++; c.t0 = S.rt; if (c.i < c.ids.length) return;
+    S.cut = null; const then = c.then;
+    if (then === 'go') { const e = bossE(S); if (e) e.inv = 0; S.boss.go = 1; S.boss.next = S.t + 1.5; }
+    if (then === 'betray') betray(S);
+    if (then === 'end') { S.bossWave = 0; S.clear = 1; S.clearT = 0; S.boss.gone = 1; ev(S, { k: 'clear', n: S.wave }); }
+  }
+  function startBoss(S) {
+    const kind = S.map === 'park' ? 'vlad' : 'lenin', [x, y] = kind === 'vlad' ? [C[0], C[1] - 40] : LV.LENIN, T = ETYPES[kind];
+    S.enemies = S.enemies.filter((e) => dist(e.x, e.y, x, y) > 700);
+    const e = mkEnemy(S, kind, x, y, T.hp * hpScale(S), { boss: 1, inv: 9e9 }); S.enemies.push(e);
+    S.bossWave = 1; S.traps = [];
+    S.boss = { kind, id: e.id, ph: 1, atk: null, next: 9e9, lasers: [], rings: [], tiles: null, vuln: 0, hits: [], scared: 0, scareCD: 0, tauntT: S.t + 12, hide: 0, holeCD: 0,
+      dash: null, km: null, n: 0, t0: S.t, said: {} };
+    ev(S, { k: 'boss', kind, x, y }); startCut(S, kind === 'vlad' ? 'rk_in' : 'ln_in', x, y, 'go');
+  }
+  function bossDead(S, e) {
+    const B = S.boss; B.dead = S.t; B.atk = null; B.lasers = []; B.rings = []; B.tiles = null; B.dx = e.x; B.dy = e.y;
+    S.chests.push({ id: S.nid++, x: e.x + 60, y: e.y + 40, t0: S.t });
+    for (const o of S.enemies) if (o.run || o.type === 'komissar') o.hp = 0;
+    const km = B.km && S.players.find((p) => p.id === B.km.pid); if (km) { km.nat = 0; km.hp = km.hpMax * 0.5; km.inv = S.t + 2; B.km = null; }
+    ev(S, { k: 'bossdead', kind: B.kind, x: e.x, y: e.y }); startCut(S, B.kind === 'vlad' ? 'rk_end' : 'ln_end', e.x, e.y, 'end');
+  }
+  const bossHit = (S, e, dmg) => { const B = S.boss; if (!B || e.id !== B.id) return; B.hits.push([S.t, dmg]); };
+  // a rat stampede / ring: plain rats that run straight and vanish (they bite whoever they cross, once)
+  const runner = (S, x, y, dx, dy, sp, ttl) => { if (blocked(x, y, 18)) return;
+    S.enemies.push(mkEnemy(S, 'sprinter', x, y, ETYPES.sprinter.hp * hpScale(S) * 0.5, { run: [dx * sp, dy * sp], runEnd: S.t + ttl, hitP: [] })); };
+  function runStep(S, e, t) {
+    e.vx = e.run[0]; e.vy = e.run[1]; e.x += e.vx * DT; e.y += e.vy * DT; e.dist += Math.hypot(e.vx, e.vy) * DT; e.face = e.vx >= 0 ? 1 : -1;
+    for (const p of S.players) if (alive(p) && !e.hitP.includes(p.id) && dist(p.x, p.y, e.x, e.y) < e.r + 26) { e.hitP.push(p.id); e.biteT = t; hurtPlayer(S, p, ETYPES.sprinter.dmg * 1.4 * enemyX(S), e); }
+    if (t > e.runEnd || e.x < WORLD.x0 || e.x > WORLD.x1 || e.y < WORLD.y0 || e.y > WORLD.y1) e.hp = 0;
+  }
+  const lobAt = (S, x0, y0, tx, ty, ttl, kind, r, dmg, extra) => { S.eproj.push(Object.assign({ lob: 1, kind, x: x0, y: y0, vx: (tx - x0) / ttl, vy: (ty - 40 - y0) / ttl, ttl, ttl0: ttl, r, dmg }, extra));
+    ev(S, { k: 'bwarn', x: tx, y: ty, r, until: S.t + ttl }); };
+  const star = (S, x, y, a, sp, kind, dmg) => S.eproj.push({ kind, x, y: y - 40, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.8, ttl: 5, dmg });
+
+  function bossStep(S, e, t) {
+    const T = ETYPES[e.type]; if (e.run) return runStep(S, e, t);
+    if (e.type === 'komissar') return komStep(S, e, t);
+    const B = S.boss; if (!B || B.dead) return;
+    e.kx = e.ky = 0; B.hits = B.hits.filter((h) => t - h[0] < 2); B.hpf = e.hp / e.hpMax;
+    if (!B.go) return;                                                        // waiting for its cut-scene
+    if (T.boss && e.type === 'vlad') vladStep(S, e, t, B); else leninStep(S, e, t, B);
+    // taunts: whoever is closest gets it (Vlad), Lenin only shouts his attack names
+    if (e.type === 'vlad' && t > B.tauntT && !B.hide) { B.tauntT = t + 13 + 6 * h1(S.steps); const p = heroNear(S, e.x, e.y);
+      const id = p && h1(S.steps + 3) < 0.55 ? 'rk_t_' + p.hero : 'rk_t_' + Math.floor(h1(S.steps + 5) * 3); bark(S, id, e.x, e.y); B.taunt = t; }
+  }
+
+  // ---- Влад ----
+  const HOLE_R = [[520, 0], [-520, 0], [0, 400], [0, -400]];
+  const holes = () => HOLE_R.map(([dx, dy]) => [C[0] + dx, C[1] + dy]);
+  function vladStep(S, e, t, B) {
+    const hp = e.hp / e.hpMax;
+    if (B.ph === 1 && hp < 0.65) { B.ph = 2; B.atk = null; B.next = t + 2; e.r = 30;                       // the throne falls apart — into rats
+      for (let k = 0; k < 10; k++) { const a = k / 10 * TAU; S.enemies.push(mkEnemy(S, 'ghoul', e.x + Math.cos(a) * 90, e.y + Math.sin(a) * 70, ETYPES.ghoul.hp * hpScale(S))); }
+      ev(S, { k: 'boom', x: e.x, y: e.y, r: 170, kind: 'dust' }); startCut(S, 'rk_p2', e.x, e.y); return; }
+    if (B.ph === 2 && hp < 0.3) { B.ph = 3; B.atk = null; B.next = t + 2.5; e.r = 64; B.hide = 0; e.inv = 0; e.vx = e.vy = 0; startCut(S, 'rk_p3', e.x, e.y); return; }
+    const tg = heroNear(S, e.x, e.y); if (!tg) return;
+    const d = dist(tg.x, tg.y, e.x, e.y) || 1, ux = (tg.x - e.x) / d, uy = (tg.y - e.y) / d;
+    // scared: a burst of damage makes him cower for a second (and dive into a sewer when he can)
+    const burst = B.hits.reduce((a, h) => a + h[1], 0);
+    if (burst > e.hpMax * 0.06 && t > B.scareCD) { B.scareCD = t + 7; B.scared = t + 1.1; bark(S, 'rk_s_' + Math.floor(h1(S.steps) * 3), e.x, e.y); if (B.ph === 2) B.holeCD = Math.min(B.holeCD, t + 1.2); }
+    // the sewer: under the ground he can't be hit; he comes out of the manhole farthest from the team
+    if (B.hide) { if (t >= B.hide) { let best = null, bd = -1; for (const h of holes()) { const q = heroNear(S, h[0], h[1]), dd = q ? dist(q.x, q.y, h[0], h[1]) : 0; if (dd > bd) { bd = dd; best = h; } }
+        e.x = best[0]; e.y = best[1] + 10; B.hide = 0; e.inv = 0; ev(S, { k: 'hole', x: best[0], y: best[1], out: 1 }); } return; }
+    if (B.dash) { e.x += B.dash.vx * DT; e.y += B.dash.vy * DT; collide(e, 24);
+      for (const p of S.players) if (alive(p) && !B.dash.hit.includes(p.id) && dist(p.x, p.y, e.x, e.y) < 60) { B.dash.hit.push(p.id); hurtPlayer(S, p, 22 * enemyX(S), e); p.vx += B.dash.vx * 0.5; p.vy += B.dash.vy * 0.5; }
+      if (t > B.dash.until) B.dash = null; return; }
+    if (t < B.scared) return;
+    // movement per phase
+    let mx = 0, my = 0, sp = 0;
+    if (B.ph === 1) { sp = 55; const want = 320; mx = d > want ? ux : -ux; my = d > want ? uy : -uy; if (Math.abs(d - want) < 40) mx = my = 0; }
+    if (B.ph === 2) { sp = 215;
+      if (d < 190 && t > B.holeCD) { B.holeCD = t + 9; B.hide = t + 1.3; e.inv = t + 99; ev(S, { k: 'hole', x: e.x, y: e.y }); bark(S, 'rk_hole', e.x, e.y); return; }
+      const want = 400; mx = (d > want ? ux : -ux) - uy * 0.6; my = (d > want ? uy : -uy) + ux * 0.6; }
+    if (B.ph === 3) {                                                         // the rat-king ball: rolls at you, bounces off the square's edge
+      e.vx += ux * 520 * DT; e.vy += uy * 520 * DT; const v = Math.hypot(e.vx, e.vy), vm = 430; if (v > vm) { e.vx *= vm / v; e.vy *= vm / v; }
+      const ox = e.x, oy = e.y; e.x += e.vx * DT; e.y += e.vy * DT; e.x = clamp(e.x, C[0] - 1100, C[0] + 1100); e.y = clamp(e.y, C[1] - 760, C[1] + 760); collide(e, 50);
+      if (e.x !== ox + e.vx * DT) e.vx *= -0.8; if (e.y !== oy + e.vy * DT) e.vy *= -0.8; e.dist += v * DT;
+      for (const p of S.players) if (alive(p) && dist(p.x, p.y, e.x, e.y) < e.r + 30 && t > (p.ballT || 0)) { p.ballT = t + 0.8; hurtPlayer(S, p, 24 * enemyX(S), e); p.vx += e.vx * 1.2; p.vy += e.vy * 1.2; } }
+    else if (sp) { const l = Math.hypot(mx, my) || 1; e.vx = mx / l * sp; e.vy = my / l * sp; e.x += e.vx * DT; e.y += e.vy * DT; e.dist += sp * DT * (mx || my ? 1 : 0); collide(e, 24);
+      e.x = clamp(e.x, C[0] - 1300, C[0] + 1300); e.y = clamp(e.y, C[1] - 900, C[1] + 900); }
+    if (Math.abs(e.vx) > 4) e.face = e.vx > 0 ? 1 : -1;
+    // attacks
+    if (!B.atk && t >= B.next) { const list = B.ph === 1 ? ['lanes', 'cheese', 'summon'] : B.ph === 2 ? ['dash', 'traps', 'cheese', 'dash'] : ['ring', 'cheese', 'lanes'];
+      B.atk = { k: list[B.n++ % list.length], t0: t }; const A = B.atk;
+      if (A.k === 'lanes') { const a = Math.atan2(uy, ux) + (h1(S.steps) < 0.5 ? Math.PI / 2 : 0), ax = Math.cos(a), ay = Math.sin(a) * 0.75, al = Math.hypot(ax, ay);
+        A.ax = ax / al; A.ay = ay / al; A.cx = tg.x - A.ax * 1050; A.cy = tg.y - A.ay * 1050; A.gaps = [0, 1, 2].map((j) => [(h1(S.steps + j * 7) - 0.5) * 900, (h1(S.steps + j * 7 + 3) - 0.5) * 900]);
+        ev(S, { k: 'lanes', x: A.cx, y: A.cy, ax: A.ax, ay: A.ay, gaps: A.gaps, until: t + 1.1 }); if (h1(S.steps + 1) < 0.5) bark(S, 'rk_wave', e.x, e.y); }
+      if (A.k === 'cheese') { const up = S.players.filter(alive), n = B.ph === 3 ? 6 : 4;
+        for (let k = 0; k < n; k++) { const p = up[k % up.length], ox = (h1(S.steps + k) - 0.5) * 240, oy = (h1(S.steps + k + 9) - 0.5) * 180;
+          lobAt(S, ...vladHand(e, B), p.x + p.vx * 0.6 + ox, p.y + p.vy * 0.6 + oy, 1.0 + k * 0.15, 'cheese', 78, 14 * enemyX(S), { slow: 1 }); } }
+      if (A.k === 'summon') { for (let k = 0; k < 5; k++) { const a = k / 5 * TAU; const x = e.x + Math.cos(a) * 130, y = e.y + Math.sin(a) * 100; if (!blocked(x, y, 20)) S.enemies.push(mkEnemy(S, 'ghoul', x, y, ETYPES.ghoul.hp * hpScale(S))); }
+        ev(S, { k: 'summon', x: e.x, y: e.y }); }
+      if (A.k === 'dash') { const L = Math.min(800, d + 250); A.tx = e.x + ux * L; A.ty = e.y + uy * L; ev(S, { k: 'bline', x: e.x, y: e.y, x2: A.tx, y2: A.ty, w: 70, until: t + 0.7 }); }
+      if (A.k === 'traps') { if (!B.said.trap) { B.said.trap = 1; bark(S, 'rk_trap', e.x, e.y); }
+        S.players.filter(alive).forEach((p, k) => { for (let j = 0; j < 2; j++) { const a = Math.atan2(p.fy, p.fx) + (j - 0.5) * 1.1 + (h1(S.steps + k * 3 + j) - 0.5) * 0.6, r = 140 + 90 * h1(S.steps + k + j * 5);
+          const x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r * 0.75; if (!blocked(x, y, 20)) S.traps.push({ id: S.nid++, x, y, t0: t, arm: t + 0.5, snap: 0 }); } });
+        if (S.traps.length > 14) S.traps.splice(0, S.traps.length - 14); }
+      if (A.k === 'ring') { const g0 = Math.floor(h1(S.steps) * 18); for (let k = 0; k < 18; k++) { if ((k - g0 + 18) % 6 < 2) continue; const a = k / 18 * TAU; runner(S, e.x + Math.cos(a) * 70, e.y + Math.sin(a) * 50, Math.cos(a), Math.sin(a) * 0.75, 400, 3.5); }
+        ev(S, { k: 'summon', x: e.x, y: e.y }); } }
+    const A = B.atk; if (!A) return;
+    if (A.k === 'lanes' && t >= A.t0 + 1.1) { const px = -A.ay, py = A.ax;
+      for (let row = 0; row < 3; row++) for (let s = -700; s <= 700; s += 78) { if (Math.abs(s - A.gaps[row][0]) < 110 || Math.abs(s - A.gaps[row][1]) < 110) continue;
+        runner(S, A.cx + px * s - A.ax * row * 170, A.cy + py * s - A.ay * row * 170, A.ax, A.ay, 520, 4.6); }
+      B.atk = null; B.next = t + 3.4; }
+    else if (A.k === 'dash' && t >= A.t0 + 0.7) { const dd = dist(A.tx, A.ty, e.x, e.y) || 1; B.dash = { vx: (A.tx - e.x) / dd * 1150, vy: (A.ty - e.y) / dd * 1150, until: t + dd / 1150, hit: [] }; B.atk = null; B.next = t + 2.6; }
+    else if (A.k !== 'lanes' && A.k !== 'dash' && t >= A.t0 + 0.8) { B.atk = null; B.next = t + (B.ph === 3 ? 2.6 : 3.2); }
+  }
+
+  // ---- Владимир Ильич ----
+  const LAS_W = 30, LAS_GROUND = 280;                    // the beams leave his eyes and hit the paving LAS_GROUND px out from the pedestal
+  // where things leave the boss sprites (measured on the art): Ilyich's fist lands in front of the pedestal; Vlad throws from the plunger tip
+  const FIST = (e) => [e.x - 27, e.y + 15];
+  const vladHand = (e, B) => B.ph === 1 ? [e.x + 54, e.y - 262] : B.ph === 3 ? [e.x + 60, e.y - 256] : [e.x + 30 * e.face, e.y - 118];
+  const laserHits = (S, B, e, t) => { for (const L of B.lasers) { if (t < L.on) continue; const ca = Math.cos(L.a), sa = Math.sin(L.a);
+      for (const p of S.players) { if (!alive(p)) continue; const dx = p.x - e.x, dy = (p.y - e.y) / 0.75, along = dx * ca + dy * sa, perp = Math.abs(-dx * sa + dy * ca);
+        if (along > LAS_GROUND && along < 1700 && perp < LAS_W + 16) hurtPlayer(S, p, 12 * enemyX(S), e); } } };
+  function leninStep(S, e, t, B) {
+    const hp = e.hp / e.hpMax; e.vx = e.vy = 0; e.x = LV.LENIN[0]; e.y = LV.LENIN[1];
+    if (B.ph === 1 && hp < 0.7) { B.ph = 2; B.atk = null; B.lasers = []; B.next = t + 3; leninSides(S, e); return; }
+    if (B.ph === 2 && hp < 0.35) { B.ph = 3; B.atk = null; B.lasers = []; B.next = t + 3; B.world = t + 2; B.rev = t + 11; startCut(S, 'ln_p3', e.x, e.y); return; }
+    // lasers turn; «Революционный поворот» / «Мировая революция»: they stop, show the new way, and turn back
+    for (const L of B.lasers) if (t >= L.on && !(L.hold > t)) L.a += L.spin * DT;
+    if (B.world && t >= B.world && !B.lasers.some((L) => L.world)) { const a0 = h1(S.steps) * TAU; B.lasers.push({ a: a0, on: t + 1.2, spin: 0.38, world: 1 }, { a: a0 + Math.PI, on: t + 1.2, spin: 0.38, world: 1 }); bark(S, 'ln_laser', e.x, e.y); }
+    if (B.world && t >= B.rev) { B.rev = t + 9; for (const L of B.lasers) if (L.world) { L.hold = t + 0.8; L.spin = -L.spin; } }
+    laserHits(S, B, e, t);
+    // shock rings from the fist: they roll outward; the gaps are where you stand
+    for (const R of B.rings) { const r = (t - R.t0) * R.sp; if (r < 0) continue; for (const p of S.players) { if (!alive(p) || R.hit.includes(p.id)) continue;
+        const dx = p.x - (R.x ?? e.x), dy = (p.y - (R.y ?? e.y)) / 0.75, d = Math.hypot(dx, dy); if (Math.abs(d - r) > 30) continue; const a = Math.atan2(dy, dx);
+        if (R.gaps.some((g) => Math.abs(Math.atan2(Math.sin(a - g), Math.cos(a - g))) < 0.32)) continue; R.hit.push(p.id); hurtPlayer(S, p, 16 * enemyX(S), e); } }
+    B.rings = B.rings.filter((R) => (t - R.t0) * R.sp < 1600);
+    // «Красный октябрь»: the paving goes red cell by cell; burning cells hurt, the safe ones move every cycle
+    if (B.tiles) { const Tl = B.tiles, a = t - Tl.t0;
+      if (a > 2.6) { Tl.n++; Tl.t0 = t; Tl.seed = S.steps; if (Tl.n >= 3) B.tiles = null; }
+      else if (a > 1.0) for (const p of S.players) { if (!alive(p)) continue; const cx = Math.floor((p.x - Tl.x0) / Tl.cs), cy = Math.floor((p.y - Tl.y0) / Tl.cs);
+        if (cx >= 0 && cy >= 0 && cx < Tl.nx && cy < Tl.ny && hotCell(Tl, cx, cy)) hurtPlayer(S, p, 13 * enemyX(S), e); } }
+    // «Пятилетка»: five strikes under the team, each one faster
+    const A = B.atk;
+    if (A && A.k === 'five') { if (A.i < 5 && t >= A.nextW) { const up = S.players.filter(alive), p = up[A.i % Math.max(1, up.length)];
+        if (p) { const dl = [1.0, 0.85, 0.7, 0.55, 0.42][A.i]; A.q.push([p.x + p.vx * 0.3, p.y + p.vy * 0.3, t + dl]); ev(S, { k: 'bwarn', x: p.x + p.vx * 0.3, y: p.y + p.vy * 0.3, r: 115, until: t + dl, red: 1 }); A.nextW = t + dl * 0.75; } A.i++; }
+      for (const q of A.q) if (q[2] && t >= q[2]) { q[2] = 0; ev(S, { k: 'boom', x: q[0], y: q[1], r: 115, kind: 'red' }); for (const p of S.players) if (alive(p) && dist(p.x, p.y, q[0], q[1]) < 115) hurtPlayer(S, p, 18 * enemyX(S), e); }
+      if (A.i >= 5 && A.q.every((q) => !q[2])) { B.atk = null; B.next = t + 1.8; } return; }
+    if (A && A.k === 'coll') { if (t >= A.t0 + 3.2 && !A.hit) { A.hit = 1; B.lasers = B.lasers.filter((L) => !L.coll); const x = e.x + Math.cos(A.a) * 430, y = e.y + Math.sin(A.a) * 430 * 0.75;
+        A.sx = x; A.sy = y; ev(S, { k: 'bwarn', x, y, r: 230, until: t + 0.8, red: 1 }); A.boom = t + 0.8; }
+      if (A.boom && t >= A.boom) { A.boom = 0; ev(S, { k: 'boom', x: A.sx, y: A.sy, r: 230, kind: 'slam' }); for (const p of S.players) if (alive(p) && dist(p.x, p.y, A.sx, A.sy) < 230) hurtPlayer(S, p, 26 * enemyX(S), e); B.atk = null; B.next = t + 2; }
+      return; }
+    if (A && A.k === 'fist' && !A.done && t >= A.t0 + 0.9) { A.done = 1; const [fx, fy] = FIST(e); ev(S, { k: 'boom', x: fx, y: fy, r: 200, kind: 'slam' });
+      for (let j = 0; j < (B.ph === 3 ? 4 : 3); j++) B.rings.push({ t0: t + j * 0.5, sp: 430, x: fx, y: fy, gaps: [0, 1, 2].map((k) => h1(S.steps + j * 5 + k) * TAU), hit: [] }); }
+    if (A && A.k === 'march' && A.i < 3 && t >= A.t0 + A.i * 0.5) { const g0 = Math.floor(h1(S.steps + A.i) * 24), g1 = (g0 + 12) % 24;
+      for (let k = 0; k < 24; k++) { if ((k - g0 + 24) % 24 < 3 || (k - g1 + 24) % 24 < 3) continue; star(S, e.x, e.y, k / 24 * TAU + A.i * 0.13, 290, 'star', 11 * enemyX(S)); } A.i++; }
+    if (A && t >= A.end) { B.atk = null; B.next = t + (B.ph === 3 ? 1.6 : 2.2); if (A.k === 'decree') { B.vuln = t + 4; ev(S, { k: 'vuln', x: e.x, y: e.y }); B.next = t + 4.5; } }
+    if (!B.atk && t >= B.next) { const list = B.ph === 1 ? ['gaze', 'fist', 'march'] : B.ph === 2 ? ['five', 'gaze', 'coll', 'fist', 'turn', 'march'] : ['oct', 'march', 'fist', 'decree'];
+      const k = list[B.n++ % list.length], tg = heroNear(S, e.x, e.y), a0 = tg ? Math.atan2((tg.y - e.y) / 0.75, tg.x - e.x) : 0, N = { t0: t, k };
+      B.atk = N;
+      if (k === 'gaze' || k === 'turn') { const s = h1(S.steps) < 0.5 ? 0.45 : -0.45; B.lasers = [{ a: a0 - 0.6, on: t + 1.3, spin: s }, { a: a0 + 0.6, on: t + 1.3, spin: s }]; N.end = t + 6;
+        if (k === 'turn') N.flip = t + 3.4; if (!B.said.laser) { B.said.laser = 1; bark(S, 'ln_laser', e.x, e.y); } }
+      if (k === 'fist') { N.end = t + 3.2; const [fx, fy] = FIST(e); ev(S, { k: 'bwarn', x: fx, y: fy, r: 200, until: t + 0.9, red: 1 }); }
+      if (k === 'march') { N.i = 0; N.end = t + 1.8; }
+      if (k === 'five') { N.i = 0; N.q = []; N.nextW = t + 0.3; bark(S, 'ln_five', e.x, e.y); }
+      if (k === 'coll') { N.a = a0; B.lasers.push({ a: a0 - 1.3, on: t + 0.8, spin: 0.43, coll: 1 }, { a: a0 + 1.3, on: t + 0.8, spin: -0.43, coll: 1 }); bark(S, 'ln_coll', e.x, e.y); }
+      if (k === 'oct') { B.tiles = { x0: e.x - 900, y0: e.y - 640, cs: 150, nx: 12, ny: 9, t0: t, n: 0, seed: S.steps }; N.end = t + 7.8; bark(S, 'ln_oct', e.x, e.y); }
+      if (k === 'decree') { N.end = t + 4.2; N.i = 0; bark(S, 'ln_decree', e.x, e.y);
+        B.rings.push({ t0: t + 0.6, sp: 470, gaps: [a0, a0 + 2.1, a0 + 4.2], hit: [] }, { t0: t + 1.6, sp: 470, gaps: [a0 + 1, a0 + 3.1, a0 + 5.2], hit: [] }); N.k2 = 'march'; } }
+    if (B.atk && B.atk.flip && t >= B.atk.flip) { B.atk.flip = 0; for (const L of B.lasers) { L.hold = t + 0.7; L.spin = -L.spin; } }
+    if (B.atk && B.atk.k === 'gaze' || B.atk && B.atk.k === 'turn') { if (t >= B.atk.end - 0.1) B.lasers = B.lasers.filter((L) => L.world); }
+    if (B.atk && B.atk.k === 'decree' && B.atk.i < 3 && t >= B.atk.t0 + 1 + B.atk.i * 0.6) { const i = B.atk.i++; for (let k = 0; k < 20; k++) { if (k % 5 === i) continue; star(S, e.x, e.y, k / 20 * TAU + i * 0.2, 320, 'star', 11 * enemyX(S)); } }
+  }
+  const hotCell = (Tl, cx, cy) => { const dx = (cx + 0.5) * Tl.cs + Tl.x0 - LV.LENIN[0], dy = (cy + 0.5) * Tl.cs + Tl.y0 - LV.LENIN[1];
+    if (Math.hypot(dx, dy) < 170) return false; return h2(Tl.seed + cx * 17, cy * 31 + Tl.n) < 0.5; };
+
+  // ---- Лёха — «Красный комиссар» ----
+  function leninSides(S, e) {
+    const L = S.players.find((p) => p.hero === 'leha' && alive(p)); if (!L) return;
+    const humans = S.players.filter((p) => !p.bot && !p.out);
+    if (!L.bot && humans.length === 1) { startCut(S, 'ln_solo', L.x, L.y); L.crisisT = S.t + 10; return; }      // alone at the keyboard: he stays himself, with a doubt
+    startCut(S, 'ln_b', L.x, L.y, 'betray');
+  }
+  function betray(S) {
+    const L = S.players.find((p) => p.hero === 'leha' && alive(p)); if (!L || !S.boss) return;
+    const few = S.players.filter((p) => !p.bot && !p.out).length <= 2;
+    const e = mkEnemy(S, 'komissar', L.x, L.y, ETYPES.komissar.hp * hpScale(S) * (few ? 0.55 : 1), {}); S.enemies.push(e);
+    L.nat = 1; L.vx = L.vy = 0; S.boss.km = { eid: e.id, pid: L.id, mode: 0, until: S.t + (few ? 25 : 45), atk: null, next: S.t + 1.5, aim: 0 };
+    ev(S, { k: 'betray', pid: L.id, x: L.x, y: L.y });
+  }
+  function freeLeha(S, e, beaten) {
+    const B = S.boss, K = B && B.km; if (!K) return; const L = S.players.find((p) => p.id === K.pid); e.hp = 0; B.km = null;
+    if (!L) return; L.nat = 0; L.x = e.x; L.y = e.y; L.hp = L.hpMax * 0.5; L.inv = S.t + 2; if (!beaten) L.rootT = S.t + 2;
+    ev(S, { k: 'freed', pid: L.id, x: L.x, y: L.y }); if (beaten) startCut(S, 'ln_f', L.x, L.y); else bark(S, 'ln_f_0', LV.LENIN[0], LV.LENIN[1]);
+  }
+  function komStep(S, e, t) {
+    const B = S.boss, K = B && B.km; if (!K || K.eid !== e.id) { e.hp = 0; return; }
+    if (t >= K.until) return freeLeha(S, e, 0); K.hpf = e.hp / e.hpMax;
+    const L = S.players.find((p) => p.id === K.pid); if (L && L.bot && t > (K.botMode || 0)) { K.botMode = t + 10; K.mode = (K.mode + 1) % 3; }
+    const tg = heroNear(S, e.x, e.y); if (!tg) return; const d = dist(tg.x, tg.y, e.x, e.y) || 1, ux = (tg.x - e.x) / d, uy = (tg.y - e.y) / d;
+    const A = K.atk, still = A && A.k === 'speech';
+    if (!still) { let mx = 0, my = 0;
+      if (K.mode === 0) { mx = d > 230 ? ux : 0; my = d > 230 ? uy : 0; }
+      if (K.mode === 1) { mx = d > 470 ? ux : d < 380 ? -ux : -uy * 0.5; my = d > 470 ? uy : d < 380 ? -uy : ux * 0.5; }
+      if (K.mode === 2) { const gx = LV.LENIN[0] + Math.cos(t * 0.6) * 260, gy = LV.LENIN[1] + 80 + Math.sin(t * 0.6) * 190, gd = dist(gx, gy, e.x, e.y) || 1; mx = (gx - e.x) / gd; my = (gy - e.y) / gd; }
+      const l = Math.hypot(mx, my); if (l > 0.01) { e.vx = mx / l * 175; e.vy = my / l * 175; } else { e.vx = e.vy = 0; }
+      e.x += e.vx * DT; e.y += e.vy * DT; e.dist += Math.hypot(e.vx, e.vy) * DT; collide(e, 22); }
+    else { e.vx = e.vy = 0; }
+    e.face = tg.x > e.x ? 1 : -1;
+    if (!A && t >= K.next) { const opts = K.mode === 0 ? ['burst', 'nades', 'burst'] : K.mode === 1 ? ['burst', 'burst', 'nades'] : ['speech', 'burst', 'nades'];
+      const k = opts[Math.floor(h1(S.steps) * 3)]; K.atk = { k, t0: t, i: 0 }; K.aim = Math.atan2(uy, ux) - 0.7 * (h1(S.steps + 1) < 0.5 ? 1 : -1);
+      if (k === 'speech') { e.shieldT = t + 2.5; bark(S, 'km_2', e.x, e.y); } else if (h1(S.steps + 2) < 0.4) bark(S, k === 'burst' ? 'km_0' : 'km_1', e.x, e.y); }
+    const N = K.atk; if (!N) return;
+    if (N.k === 'burst') { const want = Math.atan2(uy, ux), da = Math.atan2(Math.sin(want - K.aim), Math.cos(want - K.aim)); K.aim += clamp(da, -1.3 * DT, 1.3 * DT);
+      if (Math.floor((t - N.t0) / 0.09) !== Math.floor((t - N.t0 - DT) / 0.09)) S.eproj.push({ kind: 'kbul', x: e.x + Math.cos(K.aim) * 40, y: e.y - 52, vx: Math.cos(K.aim) * 620, vy: Math.sin(K.aim) * 620, ttl: 1.3, dmg: 5 * enemyX(S) });
+      if (t - N.t0 > 1.5) { K.atk = null; K.next = t + 1.6; } }
+    else if (N.k === 'nades') { if (N.i < 3 && t >= N.t0 + N.i * 0.35) { const up = S.players.filter(alive), p = up[N.i % up.length];
+        lobAt(S, e.x, e.y - 60, p.x + (h1(S.steps) - 0.5) * 160, p.y + (h1(S.steps + 4) - 0.5) * 120, 1.0, 'nade', 90, 16 * enemyX(S)); N.i++; }
+      if (t - N.t0 > 1.6) { K.atk = null; K.next = t + 1.6; } }
+    else if (N.k === 'speech' && t - N.t0 > 2.5) { K.atk = null; K.next = t + 1.2; }
+  }
+
   // ---------------- step ----------------
   function step(S, inpAll) {
     if (S.over) { S.t += DT; S.steps++; if (S.ev.length > 96) S.ev.splice(0, S.ev.length - 96); return S; }
@@ -640,19 +891,24 @@
     S.rt = (S.rt || 0) + DT; S.steps++;
     S.pend = S.players.filter((p) => p.pick && !p.out).map((p) => p.id); S.pause = S.pend.length ? 1 : 0;
     if (S.pause) { pauseStep(S, inps); if (S.ev.length > 96) S.ev.splice(0, S.ev.length - 96); return S; }
+    if (S.cut) { cutStep(S, inps); return S; }
     if (LV.id !== S.map) useMap(S.map);
     const t = S.t + DT; S.t = t;
     buildGrid(S);
     // ---- waves: 1–10 in the park → the bus to Meleuz → 11–20 → the bus home waits while the endless night goes on ----
     if (S.bus) { S.swarmT += DT;
       if (S.endless) { S.waveT += DT; if (S.waveT >= WAVE_LEN) { S.waveT = 0; S.wave++; S.score += Math.round(250 * S.wave * scoreX(S)); ev(S, { k: 'wave', n: S.wave }); checkUnlocks(S); } } }
-    else if (S.brk > 0) { S.brk -= DT; if (S.brk <= 0) { S.wave++; S.waveT = 0; ev(S, { k: 'wave', n: S.wave }); checkUnlocks(S); const p = S.players[Math.floor(h1(S.wave) * S.players.length)]; say(S, p, 'wave'); } }
+    else if (S.brk > 0) { S.brk -= DT; if (S.brk <= 0) { S.wave++; S.waveT = 0; ev(S, { k: 'wave', n: S.wave }); checkUnlocks(S); const p = S.players[Math.floor(h1(S.wave) * S.players.length)]; say(S, p, 'wave');
+        if ((S.wave === WAVES && S.map === 'park') || (S.wave === 2 * WAVES && S.map === 'meleuz')) S.bossAt = t + 2.5; } }
+    else if (S.bossAt) { if (t >= S.bossAt) { S.bossAt = 0; startBoss(S); } }
+    else if (S.bossWave) { S.waveT = Math.min(S.waveT + DT, WAVE_LEN - 1); }
     // the wave timer runs out → no more spawns; the break starts only once the last enemy of the wave is dead
     else if (S.clear) { S.clearT += DT;
       // a straggler stuck behind props must never hold the wave: after 25 s, far ones are brought in (just off-screen of the nearest hero)
       if (S.clearT > 25 && Math.floor(S.clearT) !== Math.floor(S.clearT - DT)) for (const e of S.enemies) {
         let q = null, qd = 1e9; for (const o of S.players) if (alive(o)) { const d = dist(o.x, o.y, e.x, e.y); if (d < qd) { qd = d; q = o; } }
-        if (!q || qd < 750) continue;
+        const moved = dist(e.x, e.y, e.sx ?? 1e9, e.sy ?? 1e9); e.sx = e.x; e.sy = e.y;
+        if (!q || (qd < 750 && (moved > 25 || qd < 300))) continue;                // far away, or stuck against a wall
         for (let k = 0; k < 8; k++) { const a = Math.atan2(e.y - q.y, e.x - q.x) + k * 0.8, x = clamp(q.x + Math.cos(a) * 700, 80, WORLD.x1 - 80), y = clamp(q.y + Math.sin(a) * 520, 180, WORLD.y1 - 60);
           if (!blocked(x, y, e.r)) { e.x = x; e.y = y; break; } } }
       if (!S.enemies.length) { S.clear = 0; S.score += Math.round(250 * S.wave * scoreX(S));
@@ -669,7 +925,7 @@
     const swarm = S.bus && !S.endless ? 1 + S.swarmT / 25 : 1, crowdX = S.spor === 'crowd' ? 2 : 1;      // waiting for the bus: the swarm only grows
     // crowd size: the park ramps 1 → 10; Meleuz starts again at a mid-park crowd and only creeps up — its waves get tougher, not bigger
     const wN = S.map === 'meleuz' ? Math.min(9, 4 + (S.wave - 11) * 0.5) : S.wave;
-    const want = S.brk > 0 || S.clear ? 0 : Math.min(190 * crowdX * (swarm > 1 ? 1.25 : 1), Math.round((7 + wN * 5 + S.waveT * (0.08 + wN * 0.025)) * coop * (S.solo ? 0.7 : 1) * swarm * crowdX));
+    const want = S.brk > 0 || S.clear ? 0 : (S.bossWave ? 0.35 : 1) * Math.min(190 * crowdX * (swarm > 1 ? 1.25 : 1), Math.round((7 + wN * 5 + S.waveT * (0.08 + wN * 0.025)) * coop * (S.solo ? 0.7 : 1) * swarm * crowdX));
     S.spawnAcc += DT * (2 + wN * 0.8) * coop * swarm * crowdX * (S.spor === 'turbo' ? 1.5 : 1);
     const live = S.players.filter(alive);
     while (S.spawnAcc >= 1 && S.enemies.length < want && live.length) { S.spawnAcc -= 1;
@@ -687,7 +943,7 @@
     }
     if (S.spawnAcc > 3) S.spawnAcc = 3;
     // an elite every ~25 s from wave 2: a golden brute that drops a chest (a free upgrade for whoever opens it)
-    if (S.brk <= 0 && !S.clear && S.wave >= 2 && live.length && (S.eliteT -= DT) <= 0) { S.eliteT = Math.max(22, 38 - S.wave * 1.5);
+    if (S.brk <= 0 && !S.clear && !S.bossWave && S.wave >= 2 && live.length && (S.eliteT -= DT) <= 0) { S.eliteT = Math.max(22, 38 - S.wave * 1.5);
       const p = live[Math.floor(h1(S.steps) * live.length)], a = h1(S.steps + 5) * Math.PI * 2;
       const x = clamp(p.x + Math.cos(a) * 1200, 80, WORLD.x1 - 80), y = clamp(p.y + Math.sin(a) * 900, 180, WORLD.y1 - 60);
       if (!blocked(x, y, 40)) { const L2 = ELITES[S.map], ty = L2[Math.floor(h1(S.steps + 9) * L2.length)], hp = ETYPES[ty].hp * 6 * hpScale(S) * (S.spor === 'chonk' ? 2 : 1);
@@ -699,6 +955,8 @@
       const edge = (k) => { const v = !!inp[k], e = v && !p.prev[k]; p.prev[k] = v; return e; };
       const qE = edge('q'), rE = edge('r'), eE = edge('e');
       if (p.out || p.inBus) continue;
+      if (p.nat) { const K = S.boss && S.boss.km, e = K && S.enemies.find((o) => o.id === K.eid);
+        if (!e) { p.nat = 0; continue; } p.x = e.x; p.y = e.y; if (!p.bot && inp.slot >= 1 && inp.slot <= 3) K.mode = inp.slot - 1; camStep(p); continue; }
       if (p.down) { const g = inGas(S, p.x, p.y); p.downT -= DT * (g ? 1.5 : 1); if (g) p.gasDown = t;
         if (S.solo && p.selfRes > 0 && (eE || p.bot)) { p.selfRes--; p.down = 0; p.hp = p.hpMax * 0.5; p.inv = t + 2; ev(S, { k: 'revive', pid: p.id, by: p.id, x: p.x, y: p.y }); }
         const helpers = S.players.filter((q) => q !== p && alive(q) && q.hero !== 'vitya' && dist(q.x, q.y, p.x, p.y) < 85);
@@ -716,12 +974,14 @@
       const ix = (inp.right ? 1 : 0) - (inp.left ? 1 : 0), iy = (inp.down ? 1 : 0) - (inp.up ? 1 : 0), il = Math.hypot(ix, iy) || 1;
       const slowLeha = p.hero === 'leha' ? 1 - 0.04 * p.tier : 1, fast = t - p.fastT < 2 ? 1.25 : 1;
       const spd = HEROES[p.hero].spd * p.m.spd * slowLeha * fast * (t - p.qT < 4 && p.hero === 'hasan' ? 1.1 : 1) * (S.spor === 'turbo' ? 1.3 : 1);
-      const tx = ix / il * spd, ty = iy / il * spd, acc = 2600 * DT;
+      const held = t < (p.rootT || 0), slow = t < (p.slowT || 0) ? 0.6 : 1;
+      const tx = held ? 0 : ix / il * spd * slow, ty = held ? 0 : iy / il * spd * slow, acc = 2600 * DT;
       p.vx += clamp(tx - p.vx, -acc, acc); p.vy += clamp(ty - p.vy, -acc, acc);
       if (ix || iy) { p.fx = ix / il; p.fy = iy / il; p.dir = Math.abs(iy) > Math.abs(ix) * 1.2 ? (iy > 0 ? 0 : 2) : (ix > 0 ? 1 : 3); p.stillT = 0; } else p.stillT += DT;
       p.qCD = Math.max(0, p.qCD - DT);
       const mx = p.vx, my = p.vy;
       p.x += mx * DT; p.y += my * DT; collide(p, 24);
+      for (const tr of S.traps) if (!tr.snap && t > tr.arm && dist(p.x, p.y, tr.x, tr.y) < 36) { tr.snap = t; p.rootT = t + 1.2; hurtPlayer(S, p, 8 * enemyX(S), null); ev(S, { k: 'snap', x: tr.x, y: tr.y, pid: p.id }); }
       if (S.bus && dist(p.x, p.y, S.bus.x + DOOR[0], S.bus.y + DOOR[1]) < 95) { p.inBus = 1; p.vx = p.vy = 0; ev(S, { k: 'board', pid: p.id, x: p.x, y: p.y }); continue; }
       const moved = Math.hypot(mx, my) * DT; if (moved > 0.05) { const b = Math.floor(p.dist / 62); p.dist += moved; if (Math.floor(p.dist / 62) !== b) ev(S, { k: 'step', pid: p.id, x: p.x, y: p.y }); }
       if (qE && p.qCD <= 0) useQ(S, p, t);
@@ -735,11 +995,9 @@
             if (t - p.gasT > 0.95) { p.gasT = t; const d = (g.big ? 4 : 3) * (v ? v.m.deo : 1); hurtPlayer(S, p, d, v, true); p.st.gasIn++; if (v) { v.st.ally += d; v.st.allyHit++; }
               if (!p.inGas) { say(S, p, 'gas'); if (v && S.sayT === t && h2(S.steps, 11) < 0.5) { S.banterV = t + 2.2; S.banterW = v.id; } } } } }
         p.inGas = g ? 1 : 0; }
-      // camera (per player, so every client follows its own hero)
-      const tgx = clamp(p.x - VIEW.W / 2 + p.vx * 0.25, WORLD.x0, WORLD.x1 - VIEW.W), tgy = clamp(p.y - 60 - VIEW.H / 2 + p.vy * 0.2, WORLD.y0, WORLD.y1 - VIEW.H);
-      p.camV[0] += (28 * (tgx - p.cam[0]) - 10.5 * p.camV[0]) * DT; p.cam[0] += p.camV[0] * DT;
-      p.camV[1] += (28 * (tgy - p.cam[1]) - 10.5 * p.camV[1]) * DT; p.cam[1] += p.camV[1] * DT;
+      camStep(p);
     }
+    S.traps = S.traps.filter((tr) => (tr.snap ? t - tr.snap < 1.5 : t - tr.t0 < 25));
     for (const p of S.players) if (p.out || p.down) { p.camV[0] *= 0.9; p.camV[1] *= 0.9; }
     // everyone left is on the bus: to Meleuz, or home (the run ends, the endless night's score counts)
     if (S.bus) { const act = S.players.filter((p) => !p.out);
@@ -750,8 +1008,9 @@
     for (const e of S.enemies) {
       const T = ETYPES[e.type]; let tg = null, td = 1e9;
       for (const p of targets) { const d = dist(p.x, p.y, e.x, e.y); if (d < td) { td = d; tg = p; } }
-      const frozen = t < (e.freezeT || 0);
-      let spd = (frozen ? 0 : 1) * T.spd * (t < e.slowT ? 0.45 : 1) * (t < e.poisT ? 0.8 : 1) * (inGas(S, e.x, e.y) ? 0.8 : 1) * (S.clear && S.clearT > 8 ? 1.9 : 1) * (S.spor === 'turbo' ? 1.5 : 1);
+      if (T.boss || T.mini || e.run) bossStep(S, e, t); else {
+      const frozen = t < (e.freezeT || 0), rooted = t < (e.rootT || 0); if (rooted) { e.kx = e.ky = 0; }
+      let spd = (frozen || rooted ? 0 : 1) * T.spd * (t < e.slowT ? 0.45 : 1) * (t < e.poisT ? 0.8 : 1) * (inGas(S, e.x, e.y) ? 0.8 : 1) * (S.clear && S.clearT > 8 ? 1.9 : 1) * (S.spor === 'turbo' ? 1.5 : 1);
       let dx = 0, dy = 0; const charmed = t < (e.charmT || -9);
       // «Яжемать»: stops, revs up the pram, then rams in a straight line
       if (T.charge && !charmed && !frozen) {
@@ -771,7 +1030,7 @@
       else if (e.flee) { const p = tg || { x: C[0], y: C[1] }; const d = dist(p.x, p.y, e.x, e.y) || 1; dx = (e.x - p.x) / d; dy = (e.y - p.y) / d; spd *= 1.4; e.hp -= DT * 30; }
       else if (e.chg === 2) { dx = e.cdx; dy = e.cdy; spd = T.spd * 4.4; }
       else if (tg) { dx = (tg.x - e.x) / (td || 1); dy = (tg.y - e.y) / (td || 1);
-        if (T.ranged && td < 520) { dx *= -0.5; dy *= -0.5; if (td < 380) { dx *= 2; dy *= 2; } } }
+        if (T.ranged && td < 520 && !(S.clear && S.clearT > 8)) { dx *= -0.5; dy *= -0.5; if (td < 380) { dx *= 2; dy *= 2; } } }
       // separation from neighbours
       near(e.x, e.y, e.r * 1.6, (o) => { if (o === e) return; const ox = e.x - o.x, oy = e.y - o.y, d = Math.hypot(ox, oy) || 0.1, R = e.r + o.r;
         if (d < R) { dx += ox / d * (R - d) / R * 1.6; dy += oy / d * (R - d) / R * 1.6; } });
@@ -788,6 +1047,7 @@
         if (T.ranged && td < 640 && t > e.shotT) { e.shotT = t + 3.6 + h2(e.id, S.steps) * 2; const d = td || 1;
           if (T.lob) { S.eproj.push({ lob: 1, x: e.x, y: e.y - 40, vx: (tg.x - e.x) / 0.9, vy: (tg.y - e.y) / 0.9, ttl: 0.9, ttl0: 0.9, r: 62, dmg: T.dmg * enemyX(S) }); ev(S, { k: 'toss', x: e.x, y: e.y }); }   // Алкаш: a bottle in an arc
           else { S.eproj.push({ x: e.x, y: e.y - 40, vx: (tg.x - e.x) / d * 340, vy: (tg.y - 40 - e.y + 40) / d * 340, ttl: 2.4, dmg: T.dmg * enemyX(S) }); ev(S, { k: 'spit', x: e.x, y: e.y }); } }
+      }
       }
       // gas damage
       const g = inGas(S, e.x, e.y); if (g && Math.floor((t - g.t0) / 0.5) !== Math.floor((t - DT - g.t0) / 0.5)) { const v = S.players.find((q) => q.id === g.owner);
@@ -836,7 +1096,8 @@
       const lh = S.players.find((q) => q.hero === 'leha' && alive(q) && t - q.qT < 4 + q.m.shield && dist(q.x, q.y - 40, b.x, b.y) < 150 && (b.x - q.x) * q.fx + (b.y - q.y + 40) * q.fy > 10);
       const hz = S.players.find((q) => q.hero === 'hasan' && alive(q) && t - q.qT < 4 && dist(q.x, q.y - 30, b.x, b.y) < 150 * q.m.area);
       if (lh || hz) { b.ttl = 0; ev(S, { k: 'block', x: b.x, y: b.y, by: lh ? 'leha' : 'hasan' }); continue; }
-      if (b.lob) { if (b.ttl <= 0) { ev(S, { k: 'shatter', x: b.x, y: b.y + 40 }); for (const p of S.players) if (alive(p) && dist(p.x, p.y, b.x, b.y + 40) < b.r) hurtPlayer(S, p, b.dmg, null); } continue; }
+      if (b.lob) { if (b.ttl <= 0) { ev(S, b.kind ? { k: 'boom', x: b.x, y: b.y + 40, r: b.r, kind: b.kind } : { k: 'shatter', x: b.x, y: b.y + 40 });
+          for (const p of S.players) if (alive(p) && dist(p.x, p.y, b.x, b.y + 40) < b.r) { hurtPlayer(S, p, b.dmg, null); if (b.slow) p.slowT = t + 1.5; } } continue; }
       for (const p of S.players) { if (!alive(p)) continue;
         if (dist(p.x, p.y - 40, b.x, b.y) < 30) { hurtPlayer(S, p, b.dmg, null); b.ttl = 0; break; } } }
     S.eproj = S.eproj.filter((b) => b.ttl > 0);
@@ -863,7 +1124,7 @@
       for (const p of S.players) { if (p.out) continue; p.queue = (p.queue || 0) + 1; if (!p.pick) openNext(S, p); }
       const p = S.players[Math.floor(h1(S.lvl) * S.players.length)]; say(S, p, 'lvl'); }
     // ---- defeat ----
-    { const outside = S.players.filter((p) => !p.out && !p.inBus);
+    { const outside = S.players.filter((p) => !p.out && !p.inBus && !p.nat);
       if (outside.length ? outside.every((p) => p.down) : S.players.every((p) => p.out)) { S.over = t; finishRun(S); } }    // S.won stays 1 in the endless night
     if (S.ev.length > 96) S.ev.splice(0, S.ev.length - 96);
     return S;
@@ -880,7 +1141,7 @@
     ev(S, { k: 'bus', to, x: S.bus.x, y: S.bus.y }); };
   // the PAZik drives off: a fresh level, everyone at its square, a breather before wave 11
   function travel(S, to) {
-    useMap(to); S.map = to; S.bus = null; S.swarmT = 0;
+    useMap(to); S.map = to; S.bus = null; S.swarmT = 0; S.boss = null; S.traps = []; S.bossWave = 0;
     for (const k of ['enemies', 'proj', 'eproj', 'clouds', 'zones', 'gems', 'chests', 'food', 'marks']) S[k] = [];
     S.players.forEach((p, i) => { if (p.out) return; const a = i / 4 * Math.PI * 2 + 0.6; p.inBus = 0; p.x = C[0] + Math.cos(a) * 110; p.y = C[1] + Math.sin(a) * 90; p.vx = p.vy = 0;
       p.cam = [p.x - VIEW.W / 2, p.y - 60 - VIEW.H / 2]; p.camV = [0, 0]; p.trX = undefined; p.lash = null; });
@@ -954,7 +1215,7 @@
     for (const [x, y] of LAMPS) if (onPave(x, y) && dist(x, y, C[0], C[1]) < 200) f.push('lamp in plaza centre'); };
 
   root.SIM = { DT, L, VIEW, WORLD, HINT, C, PLAZA, PATHS, SUBS, PROPS, SOLIDS, POND, LAMPS, WALLS, LV, HEROES, ORDER, ETYPES, UPG, QCD, LEHA_GUNS, WAVE_LEN, BREAK, WAVES,
-    MAPS, MAPN, SPORS, QUESTS, DOOR, useMap, scoreX,
+    MAPS, MAPN, SPORS, QUESTS, DOOR, useMap, scoreX, CUTS, lineDur, startBoss, HOLE_R, hotCell, LAS_W, LAS_GROUND,
     onPave, inGas, collide, cardFor, kettleCards, recalc, lv, create, spawn, respawn, outOfPlay, step, at, scriptInput, demoCheck, selfCheck, botInput };
   if (typeof module !== 'undefined') module.exports = root.SIM;
 })(typeof window !== 'undefined' ? window : globalThis);
