@@ -32,7 +32,7 @@
     const E = []; for (const e of S.enemies) if (nearP(e.x, e.y)) E.push(e.id, ET.indexOf(e.type) + (e.elite ? 100 : 0), r1(e.x), r1(e.y), r1(e.vx), r1(e.vy), r1(e.hp), r1(e.hpMax), r1(e.dist), r2(e.spawnT), r2(e.hitT), r2(e.biteT || -9), e.face, r2(e.charmT || -9), r2(e.burnT || -9), r2(e.freezeT || -9),
       e.chg || 0, r2(e.cdx || 0), r2(e.howlT || -99));
     const G = []; for (const g of S.gems) if (nearP(g.x, g.y, 1200)) G.push(g.id, r1(g.x), r1(g.y), g.v);
-    const B = S.proj.filter((b) => nearP(b.x, b.y)).map((b) => [b.id, b.kind, r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), b.c || 0, b.tox || 0, r2(b.ttl), r2(b.ttl0 || 0), (b.mods && b.mods.burn ? 1 : 0) | (b.mods && b.mods.shock ? 2 : 0)]);
+    const B = S.proj.filter((b) => nearP(b.x, b.y)).map((b) => [b.id, b.kind, r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), b.c || 0, b.tox || 0, r2(b.ttl), r2(b.ttl0 || 0), (b.mods && b.mods.burn ? 1 : 0) | (b.mods && b.mods.shock ? 2 : 0), b.own]);
     const EB = S.eproj.filter((b) => nearP(b.x, b.y)).map((b) => [r1(b.x), r1(b.y), r2(b.ttl), b.lob ? r2(b.ttl0) : 0]);
     const since = evSince[pid] ?? -1;                                       // only events this friend has not been sent yet
     const ev = S.ev.filter((e) => e.t > since && (e.x === undefined || nearP(e.x, e.y, 2000) || e.k === 'say'));
@@ -48,7 +48,7 @@
       enemies.push({ id: a[i], type: ty, elite: a[i + 1] >= 100 ? 1 : 0, x: a[i + 2], y: a[i + 3], vx: a[i + 4], vy: a[i + 5], hp: a[i + 6], hpMax: a[i + 7], dist: a[i + 8], spawnT: a[i + 9], hitT: a[i + 10], biteT: a[i + 11], face: a[i + 12], charmT: a[i + 13], burnT: a[i + 14], freezeT: a[i + 15],
         chg: a[i + 16], cdx: a[i + 17], howlT: a[i + 18], r: SIM.ETYPES[ty].r }); }
     const gems = []; for (let i = 0; i < n.G.length; i += 4) gems.push({ id: n.G[i], x: n.G[i + 1], y: n.G[i + 2], v: n.G[i + 3] });
-    const proj = n.B.map((b) => ({ id: b[0], kind: b[1], x: b[2], y: b[3], vx: b[4], vy: b[5], c: b[6], tox: b[7], ttl: b[8], ttl0: b[9], mods: b[10] ? { burn: b[10] & 1, shock: b[10] & 2 } : null }));
+    const proj = n.B.map((b) => ({ id: b[0], kind: b[1], x: b[2], y: b[3], vx: b[4], vy: b[5], c: b[6], tox: b[7], ttl: b[8], ttl0: b[9], mods: b[10] ? { burn: b[10] & 1, shock: b[10] & 2 } : null, own: b[11] }));
     const eproj = n.EB.map((b) => ({ x: b[0], y: b[1], ttl: b[2], lob: b[3] ? 1 : 0, ttl0: b[3] }));
     const players = n.players.map(([row, m, tokens, pick, cam, items, fused, gifts]) => { const o = {}; PF.forEach((k, i) => (o[k] = row[i])); o.hero = HN[o.hero];
       o.m = { area: m[0], cd: m[1], shield: m[2], spd: m[3] }; o.tokens = tokens || []; o.pick = pick || null; o.items = items || { sig: 1 }; o.fused = fused || []; o.gifts = gifts || {}; o.cam = cam || [o.x - 960, o.y - 600]; return o; });

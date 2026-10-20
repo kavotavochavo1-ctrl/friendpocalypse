@@ -35,7 +35,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
   S.programs = () => { L.init(W, H, { night: NIGHT, slash: SLASH, pond: POND }, { pixel: 2 }); L.glyphs('0123456789×+/:-'); };
 
   const SS = L.SS;
-  const INK = [0.12, 0.06, 0.05], GAS = [0.55, 0.78, 0.18], GAS2 = [0.78, 0.86, 0.3], WARM = [1.0, 0.62, 0.26];
+  const INK = [0.12, 0.06, 0.05], GAS = [0.55, 0.78, 0.18], GAS2 = [0.78, 0.86, 0.3], GAS0 = GAS, GAS20 = GAS2, WARM = [1.0, 0.62, 0.26];
   const hcol = (h) => SIM.HEROES[h].col;
   // world-space labels (nameplates, crits) never sit under a HUD panel: top-left stack, top-right map, wave box, ability bar
   const hudFree = (x, y) => y > 150 && x > 80 && x < W - 80 && !(y < 330 && (x < 520 || x > W - 340)) && !(y < 290 && Math.abs(x - W / 2) < 420) && !(y > H - 190 && Math.abs(x - W / 2) < 300);
@@ -89,18 +89,23 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       x += Math.cos(an) * sl; y += Math.sin(an) * sl * 0.78; pts.push([x, y - lift * Math.sin(Math.PI * s) * 0.9 + drop * s]); }
     return pts; };
   // the painted strand laid along a polyline: slice j of the texture spans pts[j] → pts[j+1] (thick at the face, thin curling tip)
-  const ribbonPts = (n, pts, th, a = 1) => { const N = pts.length - 1;
-    G.blend('add'); for (let j = 2; j < N; j++) G.draw(L.P.glow, { u_col: [1, 0.6, 0.18], u_k: 2.2, u_amt: 0.14 * a * j / N }, G.xf(pts[j][0] - th * 0.9, pts[j][1] - th * 0.9, th * 1.8, th * 1.8)); G.blend();   // glow grows to the tip, the face stays clear
+  const ribbonPts = (n, pts, th, a = 1, tint = [1.2, 1.0, 0.75, 0.3], gcol = [1, 0.6, 0.18]) => { const N = pts.length - 1;
+    G.blend('add'); for (let j = 2; j < N; j++) G.draw(L.P.glow, { u_col: gcol, u_k: 2.2, u_amt: 0.14 * a * j / N }, G.xf(pts[j][0] - th * 0.9, pts[j][1] - th * 0.9, th * 1.8, th * 1.8)); G.blend();   // glow grows to the tip, the face stays clear
     for (let j = 0; j < N; j++) { const [x0, y0] = pts[j], [x1, y1] = pts[j + 1], an = Math.atan2(y1 - y0, x1 - x0), sl = Math.hypot(x1 - x0, y1 - y0), tj = th * (1 - 0.45 * j / N);
-      L.sprite(n, 0, 0, { m: M.of(M.t(x0, y0), M.r(an)), w: sl * 1.15, h: tj, pivot: [0, tj / 2], src: [j / N, 0, (j + 1) / N, 1], u: { alpha: a, tint: [1.2, 1.0, 0.75, 0.3] } }); } };
+      L.sprite(n, 0, 0, { m: M.of(M.t(x0, y0), M.r(an)), w: sl * 1.15, h: tj, pivot: [0, tj / 2], src: [j / N, 0, (j + 1) / N, 1], u: { alpha: a, tint } }); } };
+  // the hero's own weapon after an element evolution (sigEvo): its colour, plus a mote height over the hero for the idle aura
+  const EVOC = { hasan_shock: [0.45, 0.75, 1], hasan_fire: [1, 0.5, 0.15], danil_mail: [0.85, 0.88, 1], danil_fan: [1, 0.4, 0.8],
+    vitya_boom: [1, 0.6, 0.15], vitya_frost: [0.6, 0.88, 1], leha_rail: [0.45, 0.8, 1], leha_inc: [1, 0.42, 0.12] };
+  const sigOf = (ST, id) => { const o = ST.players.find((q) => q.id === id); return o && o.sigEvo; };
   const pigeon = (x, y, w, fr, flip) => { const n = 'fx_pigeon' + fr; spr(n, x, y, w, w * G.tex(n).h / G.tex(n).w, 0, { flip }); };   // two flap frames, own heights
   const scrA = (a) => Math.atan2(Math.sin(a) * 0.78, Math.cos(a));                   // world direction → screen angle (3/4 squash)
   const CARDC = [[1, 0.35, 0.75], [0.4, 0.75, 1], [1, 0.85, 0.3], [0.75, 0.5, 1]];
   const GUNUP = ['ПИСТОЛЕТ', 'ПП!', 'ДРОБОВИК!', 'РПГ!'];
   // Vitya's gas (procedural, the original soft look): a faint ground glow + soft puffs inside + a denser ring of smaller puffs
   // along the rim, so the radius reads from the gas itself — no outline
-  const drawCloud = (id, x, y, r, life, a, ally, big) => {
-    G.blend('add'); G.draw(L.P.glow, { u_col: ally ? [0.8, 0.5, 0.1] : [0.4, 0.8, 0.1], u_k: 1.4, u_amt: 0.22 * life }, G.xf(x - r, y - r * 0.75, 2 * r, 1.5 * r)); G.blend();
+  const CLOUDC = { frost: [[0.62, 0.86, 1.0], [0.88, 0.97, 1.0], [0.35, 0.65, 1]], boom: [[0.72, 0.8, 0.2], [1.0, 0.66, 0.22], [0.9, 0.55, 0.1]] };
+  const drawCloud = (id, x, y, r, life, a, ally, big, mode) => { const GAS = mode ? CLOUDC[mode][0] : GAS0, GAS2 = mode ? CLOUDC[mode][1] : GAS20;
+    G.blend('add'); G.draw(L.P.glow, { u_col: ally ? [0.8, 0.5, 0.1] : mode ? CLOUDC[mode][2] : [0.4, 0.8, 0.1], u_k: 1.4, u_amt: 0.22 * life }, G.xf(x - r, y - r * 0.75, 2 * r, 1.5 * r)); G.blend();
     const n = big ? 16 : 7, m = Math.max(10, Math.min(30, Math.round(r / 7)));
     for (let j = 0; j < n; j++) { const an = L.rnd(id, j) * 6.28 + a * (0.3 + 0.4 * L.rnd(id, j + 9)), rr = r * 0.55 * Math.sqrt(L.rnd(id, j + 3));
       const px = x + Math.cos(an) * rr, py = y + Math.sin(an) * rr * 0.7 - 30 - 18 * a, pr = r * (0.38 + 0.2 * L.rnd(id, j + 5)) * (0.7 + 0.3 * SS(0, 1, a));
@@ -261,7 +266,13 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     // ===== gas clouds (soft, above actors, low alpha so actors stay readable) =====
     for (const c of ST.clouds) { if (!vis(c.x, c.y, c.r)) continue; const a = GT - c.t0, life = SS(0, 0.3, a) * SS(c.ttl, c.ttl - 0.8, a);
       const ally = ST.players.some((p) => p.hero !== 'vitya' && !p.out && ((p.x - c.x) / c.r) ** 2 + ((p.y - c.y) / (c.r * 0.75)) ** 2 < 1);
-      drawCloud(c.id, sx(c.x), sy(c.y), c.r, life, a, ally, c.big);
+      const se = sigOf(ST, c.owner), mode = se === 'vitya_frost' ? 'frost' : se === 'vitya_boom' ? 'boom' : null;
+      drawCloud(c.id, sx(c.x), sy(c.y), c.r, life, a, ally, c.big, mode);
+      if (mode === 'frost') for (let j = 0; j < 6; j++) { const an = rnd(c.id, j + 70) * 6.28 + GT * 0.4, rr = c.r * 0.7 * Math.sqrt(rnd(c.id, j + 80)), tw = 0.5 + 0.5 * Math.sin(GT * 3 + j * 1.7);   // snowflakes in the fog
+        L.star(sx(c.x) + Math.cos(an) * rr, sy(c.y) + Math.sin(an) * rr * 0.7 - 40 - 20 * ((GT * 0.3 + rnd(c.id, j)) % 1), 9, [0.9, 0.97, 1], 0.7 * life * tw); }
+      if (mode === 'boom') { const fuse = c.ign ? SS(c.ign - 0.9, c.ign, GT) : 0;                                   // sparks crackle inside; a lit fuse glows before it goes off
+        for (let j = 0; j < 5; j++) { const an = rnd(c.id, j + 90) * 6.28 + GT * 2, rr = c.r * 0.6 * rnd(c.id, j + 95); if ((Math.floor(GT * 14) + j) % 3) L.star(sx(c.x) + Math.cos(an) * rr, sy(c.y) + Math.sin(an) * rr * 0.7 - 34, 7, [1, 0.75, 0.3], 0.8 * life); }
+        if (fuse > 0 && GT < c.ign) L.glow(sx(c.x), sy(c.y) - 30, c.r * (0.6 + 0.4 * fuse), [1, 0.5, 0.1], (0.25 + 0.3 * Math.sin(GT * 30)) * fuse, 2); }
       if (c.cyc) book('fxa_cyclone', loopQ(GT * 0.9, c.id * 0.13), sx(c.x), sy(c.y) - 14, c.r * 3, c.r * 3, { a: 0.85 * life });
       if (c.big) for (let j = 0; j < 10; j++) { const an = GT * 2.2 + j * 0.63, rr = c.r * (0.3 + 0.5 * rnd(c.id, j + 200));          // debris in the storm
         L.solid(sx(c.x) + Math.cos(an) * rr, sy(c.y) - 40 + Math.sin(an) * rr * 0.5 - 30 * rnd(c.id, j), 10, 5, j % 2 ? [0.45, 0.28, 0.12] : [0.6, 0.45, 0.15], GT * 5 + j, 5, 2.5, life); } }
@@ -283,7 +294,9 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       if (b.kind === 'bullet' || b.kind === 'pellet' || b.kind === 'rocket') { const o = ST.players.find((q) => q.hero === 'leha' && q.id === b.own) || ST.players.find((q) => q.hero === 'leha'), mz = o && RIG.muzzle['p' + o.id];
         if (mz) { const s0x = sx(o.x) + Math.cos(an) * 46, s0y = sy(o.y) - 52 + Math.sin(an) * 30, w = Math.max(0, 1 - (Math.hypot(x - s0x, y - s0y)) / 160);
           x += (mz.tip[0] - s0x) * w; y += (mz.tip[1] - s0y) * w; } }
-      if (b.kind === 'card') { const ci = (b.c || 0) % 4, col = b.tox ? GAS2 : CARDC[ci], fl = Math.cos(GT * 13 + b.id);
+      if (b.kind === 'card') { const se = sigOf(ST, b.own), ci = (b.c || 0) % 4, col = b.tox ? GAS2 : se === 'danil_fan' ? [1, 0.4, 0.8] : CARDC[ci], fl = Math.cos(GT * 13 + b.id);
+        if (se === 'danil_mail') { pigeon(x, y - 34, 50, Math.floor(GT * 16 + b.id) % 2, b.vx < 0); L.puff(x - b.vx * 0.03, y - 26 - b.vy * 0.03, 8, [0.9, 0.9, 1], 0.3, b.id); }
+        if (se === 'danil_fan') for (let j = 1; j <= 3; j++) spr('fx_heart', x - b.vx * 0.024 * j, y - b.vy * 0.024 * j - 6 * Math.sin(GT * 9 + j), 26 - 4 * j, 23 - 4 * j, 0, { a: 1 - 0.2 * j });
         for (let j = 1; j <= 3; j++) L.star(x - b.vx * 0.014 * j, y - b.vy * 0.014 * j, 12 - 2 * j, col, 0.55 / j);
         L.glow(x, y, 30, col, 0.45, 2.5);
         spr('fx_card' + ci, x, y, 32 * Math.max(0.2, Math.abs(fl)), 46, 0.12 * Math.sin(GT * 7 + b.id), { tint: b.tox ? [0.7, 1.3, 0.4, 0.7] : fl < 0 ? [0.8, 0.75, 0.95, 0.5] : undefined }); }
@@ -308,6 +321,12 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         L.shadow(x, y + 46, 10, 4, 0.4); L.rrect(x - 7, y - 11 - hgt, 14, 22, 3, [0.3, 0.95, 0.9], [0.1, 0.55, 0.5]); L.solid(x - 7, y - 4 - hgt, 14, 5, [0.95, 0.3, 0.5], GT * 9, 7, 2.5); }
       else if (b.kind === 'rocket') { for (let j = 1; j < 7; j++) L.puff(x - Math.cos(an) * 20 * j, y - Math.sin(an) * 20 * j - 3 * j, 7 + 4 * j, [0.55, 0.5, 0.48], 0.4 / Math.sqrt(j), b.id + j);
         L.glow(x - Math.cos(an) * 22, y - Math.sin(an) * 22, 34, [1, 0.6, 0.2], 0.95, 2.5); spr('fx_rocket', x, y, 44, 16, an); }
+      else if ((b.kind === 'pellet' || b.kind === 'bullet') && sigOf(ST, b.own) === 'leha_rail') {        // Рельсотрон: a long blue-white beam that crackles
+        L.glow(x, y, 22, [0.5, 0.8, 1], 0.7, 2.5); streak(x - Math.cos(an) * 110, y - Math.sin(an) * 110, an, 120, 9, [0.5, 0.82, 1], 1.6); L.solid(x - 14, y - 1, 28, 2, [0.9, 0.97, 1], an, 14, 1);
+        if (Math.floor(GT * 30 + b.id) % 3 === 0) bolt(x - Math.cos(an) * 70, y - Math.sin(an) * 70, x, y, GT * 60 + b.id, 0.6); }
+      else if ((b.kind === 'pellet' || b.kind === 'bullet') && sigOf(ST, b.own) === 'leha_inc') {         // Зажигательные: a burning tracer with a flame on its head
+        L.glow(x, y, 20, [1, 0.45, 0.12], 0.7, 2.5); streak(x - Math.cos(an) * 50, y - Math.sin(an) * 50, an, 56, 8, [1, 0.42, 0.12], 1.5);
+        book('fxa_flame', loopQ(GT * 2.5, b.id * 0.07), x, y - 8, 22, 30, { add: 1, a: 0.8 }); L.puff(x - Math.cos(an) * 30, y - Math.sin(an) * 30 - 4, 6, [0.35, 0.3, 0.3], 0.3, b.id); }
       else if (b.kind === 'pellet') { L.glow(x, y, 12, [1, 0.7, 0.3], 0.5, 2.5); streak(x - Math.cos(an) * 22, y - Math.sin(an) * 22, an, 26, 6, [1, 0.75, 0.3], 1.2); }
       else { L.glow(x, y, 16, [1, 0.8, 0.4], 0.5, 2.5); streak(x - Math.cos(an) * 40, y - Math.sin(an) * 40, an, 46, 7, [1, 0.85, 0.45], 1.4); L.solid(x - 9, y - 1, 18, 2, [1, 0.97, 0.8], an, 9, 1); } }
     for (const b of ST.eproj) { const x = sx(b.x), y = sy(b.y);
@@ -326,7 +345,10 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
           if (qk > 0.12 && qk < 0.7) for (const [gx, gy] of lashPts(ox, my, qk - 0.06, aim, sd, R).filter((_, j) => j % 3 === 2))   // smear of the previous pose
             L.glow(gx, gy, 16, [1, 0.6, 0.2], 0.1, 2);
           const pts = lashPts(ox, my, qk, aim, sd, R), tip = pts[pts.length - 1];
-          ribbonPts('fx_whip_long', pts, 26, 1 - SS(0.9, 1, qk));
+          const se = p.sigEvo, wa = 1 - SS(0.9, 1, qk);
+          ribbonPts('fx_whip_long', pts, 26, wa, se === 'hasan_shock' ? [0.8, 1.05, 1.45, 0.5] : se === 'hasan_fire' ? [1.6, 0.75, 0.3, 0.55] : undefined, se ? EVOC[se] : undefined);
+          if (se === 'hasan_shock' && qk > 0.15 && qk < 0.9) for (let j = 3; j < pts.length - 1; j += 3) bolt(pts[j][0], pts[j][1], pts[j + 1][0], pts[j + 1][1] + (rnd(GT, j) - 0.5) * 18, GT * 40 + j, 0.75 * wa);   // the lash crackles
+          if (se === 'hasan_fire' && qk > 0.1) for (let j = 4; j < pts.length; j += 3) book('fxa_flame', loopQ(GT * 2, j * 0.13), pts[j][0], pts[j][1] - 12, 22 + j * 2, 30 + j * 3, { add: 1, a: 0.85 * wa });   // flames lick along it
           if (qk > 0.64 && qk < 0.84) { const c = (qk - 0.64) / 0.2, ta = Math.atan2(tip[1] - pts[pts.length - 3][1], tip[0] - pts[pts.length - 3][0]);   // the crack
             L.star(tip[0], tip[1], 30 * (1 - c), [1, 0.95, 0.8], 0.7 * (1 - c)); book('fxa_sparks', c, tip[0], tip[1], 70, 70, { add: 1, a: 0.6 });
             book('fxa_shock', c, tip[0], tip[1], 80, 80, { add: 1, a: 0.35, tint: [1.3, 0.85, 0.4, 0.9] }); streak(tip[0] - Math.cos(ta) * 70, tip[1] - Math.sin(ta) * 70, ta, 80, 6, [1, 0.9, 0.6], 0.45 * (1 - c)); }
@@ -367,7 +389,8 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         const ca = Math.cos(e.ang), mz = RIG.muzzle['p' + p.id], as = mz ? mz.a : scrA(e.ang), L0 = [48, 56, 70, 84][Math.min(3, e.g)];
         const mx = mz ? mz.tip[0] : sx(p.x) + ca * L0, my = mz ? mz.tip[1] : sy(p.y) - 52 + Math.sin(e.ang) * L0 * 0.6, gx = mz ? mz.grip[0] : sx(p.x) + ca * 20, gy = mz ? mz.grip[1] : sy(p.y) - 56;
         if (a < 0.06) { const k = 1 - a / 0.06, big = e.g === 2 ? 1 : 0;          // muzzle: hot core + flame tongues (shotgun: a wide fan of them)
-          L.glow(mx, my, [26, 20, 46, 34][Math.min(3, e.g)], [1, 0.85, 0.5], 0.9 * k, 2.2); L.star(mx, my, [20, 14, 30, 24][Math.min(3, e.g)], [1, 0.95, 0.7], k);
+          const mc = p.sigEvo === 'leha_rail' ? [0.55, 0.85, 1] : p.sigEvo === 'leha_inc' ? [1, 0.5, 0.15] : [1, 0.85, 0.5];
+          L.glow(mx, my, [26, 20, 46, 34][Math.min(3, e.g)] * (p.sigEvo ? 1.4 : 1), mc, 0.9 * k, 2.2); L.star(mx, my, [20, 14, 30, 24][Math.min(3, e.g)], [1, 0.95, 0.7], k);
           for (const o of big ? [-0.32, -0.16, 0, 0.16, 0.32] : [0]) streak(mx, my, as + o, (big ? 70 : e.g >= 3 ? 50 : e.g === 1 ? 26 : 34) * (o ? 0.8 : 1), big ? 16 : 12, [1, 0.6, 0.2], 1.3 * k); }
         if (e.g === 2 || e.g >= 3) for (let j = 0; j < 4; j++) { const q = a / 0.5, back = e.g >= 3 ? -1 : 1;
           L.puff(mx + back * Math.cos(as) * (16 + 40 * q) * (1 + j * 0.3) - (back < 0 ? Math.cos(as) * 90 : 0), my + back * Math.sin(as) * 20 * q - 14 * q - (back < 0 ? Math.sin(as) * 50 : 0), 12 + 18 * q, [0.6, 0.56, 0.52], 0.45 * (1 - q), e.t + j); }
@@ -384,7 +407,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       if (e.k === 'splat' && a < 0.4) { const q = a / 0.4; for (let j = 0; j < 8; j++) { const an = j * 0.785, d = e.r * 0.8 * q; L.puff(ex + Math.cos(an) * d, ey + Math.sin(an) * d * 0.7 - 20 * (1 - q), 14, [1, 0.95, 0.8], 0.7 * (1 - q), e.t + j); } }
       if (e.k === 'shatter' && a < 0.45) { const q = a / 0.45; for (let j = 0; j < 7; j++) { const an = rnd(e.t, j) * 6.28, d = 60 * q; L.solid(ex + Math.cos(an) * d, ey - 10 + Math.sin(an) * d * 0.6 - 40 * q * (1 - q), 7, 4, [0.4, 0.85, 0.4], an + q * 8, 3.5, 2, 1 - q); }
         L.ring(ex, ey, 62 * (0.5 + q), 44 * (0.5 + q), [0.6, 1, 0.6], 0.5 * (1 - q), 0.06); }
-      if (e.k === 'rev' && a < 0.7) { lab('rev' + e.id % 9, '!', ex, ey - 150 - 10 * Math.sin(a * 20), { size: 46, al: 0.5, col: '#ff7060', a: 1 - a / 0.7, font: FONT }); }
+      if (e.k === 'rev' && a < 0.7 && hudFree(ex, ey - 150)) { lab('rev' + e.id % 9, '!', ex, ey - 150 - 10 * Math.sin(a * 20), { size: 46, al: 0.5, col: '#ff7060', a: 1 - a / 0.7, font: FONT }); }
       if (e.k === 'howl' && a < 1.0) { const q = a / 1; for (let j = 0; j < 3; j++) L.ring(ex, ey - 60, 40 + 140 * ((q + j * 0.25) % 1), 30 + 100 * ((q + j * 0.25) % 1), [1, 0.4, 0.3], 0.5 * (1 - q), 0.05);
         if (hudFree(ex, ey - 170)) lab('howl' + e.id % 5, 'АУУУУ!', ex, ey - 170, { size: 30, al: 0.5, col: '#ff9070', a: 1 - q, font: FONT }); }
       if (e.k === 'board' && a < 0.6) { const q = a / 0.6; for (let j = 0; j < 6; j++) L.star(ex + Math.cos(j * 1.05) * 50 * q, ey - 60 - 40 * q, 12, [1, 0.9, 0.5], 1 - q); }
@@ -407,7 +430,13 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       if (e.k === 'shot' && a < 0.05) { const p = ST.players.find((o) => o.id === e.pid); if (p) { const mz = RIG.muzzle['p' + p.id]; L.glow(mz ? mz.tip[0] : sx(p.x) + Math.cos(e.ang) * 48, mz ? mz.tip[1] : sy(p.y) - 52 + Math.sin(e.ang) * 30, 30 + 10 * e.g, [1, 0.8, 0.4], 0.6, 2.4); } }
     }
     // ability auras that last
-    for (const p of ST.players) { if (p.out || p.down || !vis(p.x, p.y, 500)) continue; const x = sx(p.x), y = sy(p.y), qa = GT - p.qT, ua = GT - p.ultT;
+    for (const p of ST.players) { if (p.out || p.down || p.inBus || !vis(p.x, p.y, 500)) continue; const x = sx(p.x), y = sy(p.y), qa = GT - p.qT, ua = GT - p.ultT;
+      if (p.sigEvo && EVOC[p.sigEvo]) { const c = EVOC[p.sigEvo], se = p.sigEvo, hy = p.hero === 'hasan' ? 112 : p.hero === 'vitya' ? 30 : 70;          // element motes rising off the weapon
+        L.glow(x, y - hy, 34, c, 0.28 + 0.08 * Math.sin(GT * 5), 2);
+        for (let j = 0; j < 4; j++) { const ph = (GT * 0.8 + j / 4 + p.id * 0.13) % 1, ox = (rnd(p.id * 9 + j, Math.floor(GT * 0.8 + j / 4)) - 0.5) * 50;
+          if (se === 'danil_fan') spr('fx_heart', x + ox, y - hy - 50 * ph, 12, 11, 0, { a: 0.8 * (1 - ph) });
+          else L.star(x + ox, y - hy - 50 * ph, se === 'vitya_frost' ? 9 : 6, c, 0.85 * (1 - ph)); }
+        if ((se === 'hasan_shock' || se === 'leha_rail') && Math.floor(GT * 7 + p.id) % 5 === 0) bolt(x - 18, y - hy - 10, x + 18, y - hy + 8, GT * 30 + p.id, 0.5); }
       // «Подкрутил усы» / evolution: the mustache halves spin round him as two blades (motion blur arcs + the painted strands)
       const blades = (R, spd, amt) => { for (let k = 0; k < 2; k++) { const an = GT * spd + k * Math.PI, ex = Math.cos(an) * R, ey = Math.sin(an) * R * 0.75;
         G.blend('add'); G.draw(L.P.slash, { u_col: [1, 0.62, 0.2], u_amt: 0.55 * amt, u_ac: an - 0.5, u_hs: 0.7, u_w: 0.07, u_core: 0.7 }, G.xf(x - R, y - 60 - R * 0.75, 2 * R, 1.5 * R)); G.blend();
@@ -670,7 +699,16 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     ['alchemy_hud', abil('leha', null, 1.2, (s, p) => { p.items = { sig: 3, leha_rail: 2, salute: 1, tapok: 3, speaker: 3, pigeon: 2, fury: 1, armor: 3, hp: 2 }; p.sigEvo = 'leha_rail';
       p.fused = [['tapok', 'speaker']]; SIM.recalc(p); })],
     ['status', abil('hasan', null, 0.4, (s, p) => { s.enemies.forEach((e, i) => { if (i % 3 === 0) e.burnT = s.t + 3; else if (i % 3 === 1) e.freezeT = s.t + 3; }); p.items.pigeon = 3; SIM.recalc(p); })],
-    ['leha_q', abil('leha', 'q', 0.4)], ['leha_r', abil('leha', 'r', 1.0)], ...melQA()];
+    ['leha_q', abil('leha', 'q', 0.4)], ['leha_r', abil('leha', 'r', 1.0)], ...melQA(), ...sigQA()];
+  // the hero's own weapon after each element evolution, mid-attack
+  const sigQA = () => { const evo = (hero, id, secs) => abil(hero, null, secs, (s, p) => { p.items = { sig: 3, [id]: 1 }; p.sigEvo = id; p.tier = 2; SIM.recalc(p); });
+    const whip = (id) => { const s0 = evo('hasan', id, 0.05), p = s0.players[0]; p.inv = 0; p.hurtT = -9;
+      return Object.assign({}, s0, { ev: [{ k: 'whip', pid: 0, x: p.x, y: p.y, ang: 0.3, side: 1, pull: 0, n: 2, R: 200, t: s0.t - 0.17 }] }); };
+    const cards = (id) => { const s = evo('danil', id, 0.3), p = s.players[0];
+      for (let k = 0; k < 3; k++) s.proj.push({ id: 900 + k, own: 0, kind: 'card', x: p.x + 110 + k * 90, y: p.y - 60 - k * 20, vx: 900, vy: -120, c: k, ttl: 0.5, hit: [] }); return s; };
+    const gun = (id) => { const s = evo('leha', id, 0.6), p = s.players[0]; s.ev.push({ k: 'shot', pid: 0, x: p.x, y: p.y, ang: 0.2, g: 1, t: s.t - 0.01 }); return s; };
+    return [['sig_hasan_shock', whip('hasan_shock')], ['sig_hasan_fire', whip('hasan_fire')], ['sig_danil_mail', cards('danil_mail')], ['sig_danil_fan', cards('danil_fan')],
+      ['sig_vitya_boom', evo('vitya', 'vitya_boom', 1.2)], ['sig_vitya_frost', evo('vitya', 'vitya_frost', 1.2)], ['sig_leha_rail', gun('leha_rail')], ['sig_leha_inc', gun('leha_inc')]]; };
   // Мелеуз: the town, its folk, its items, the bus and the endless night's HUD
   const melQA = () => {
     const mel = (secs, f, at) => { const s = SIM.create({ heroes: ['hasan', 'danil', 'vitya', 'leha'], humans: [0], map: 'meleuz' }); s.wave = 14; s.brk = 0;

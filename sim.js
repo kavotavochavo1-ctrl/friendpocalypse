@@ -35,7 +35,7 @@
     bomber: { hp: 18, spd: 132, r: 22, dmg: 18, xp: 2, sc: 1.0, from: 5, bomb: 1, w: 0.12, map: 'park' },
     // Мелеуз: the town folk, possessed by the same shadow
     gopnik: { hp: 26, spd: 104, r: 22, dmg: 10, xp: 1, sc: 1.0, from: 11, w: 1, map: 'meleuz' },
-    dog: { hp: 14, spd: 196, r: 18, dmg: 7, xp: 1, sc: 0.8, from: 11, w: 0.45, map: 'meleuz', pack: 2 },
+    dog: { hp: 14, spd: 196, r: 18, dmg: 7, xp: 1, sc: 0.8, from: 11, w: 0.45, map: 'meleuz', pack: 1 },
     alkash: { hp: 30, spd: 72, r: 22, dmg: 11, xp: 2, sc: 1.0, from: 12, ranged: 1, lob: 1, w: 0.15, map: 'meleuz' },
     starshiy: { hp: 140, spd: 64, r: 38, dmg: 18, xp: 5, sc: 1.6, from: 13, w: 0.1, map: 'meleuz' },
     mom: { hp: 46, spd: 88, r: 30, dmg: 20, xp: 3, sc: 1.05, from: 14, charge: 1, w: 0.1, map: 'meleuz' },
@@ -228,7 +228,7 @@
         [1950, 1400, 1300, 220, 0.66], [3250, 1400, 1300, 220, -0.66], [1950, 2400, 1300, 220, -0.66], [3250, 2400, 1300, 220, 0.66]];
       M.SUBS = [[1250, 820, 330, 270, 'statue'], [3950, 820, 360, 290, 'gazebo'], [1250, 2980, 330, 270, 'pergola'], [3950, 2980, 400, 300, 'pond']];
       M.POND = [M.SUBS[3][0], M.SUBS[3][1] + 20, 300, 190];
-      M.BUS = [4840, C[1] + 60]; M.KIOSK = [3330, 2230];
+      M.BUS = [4840, C[1] + 60]; M.KIOSK = [3830, 1675];
       // lamps ring the plaza (the reference's light pools) and line the paths
       for (let i = 0; i < 8; i++) { const a = (i + 0.5) / 8 * Math.PI * 2; addP('lamp', C[0] + Math.cos(a) * (PLAZA[0] + 70), C[1] + Math.sin(a) * (PLAZA[1] + 60)); }
       for (const d of [-1, 1]) for (let k = 1; k <= 3; k++) { const off = PLAZA[1] + 380 * k; addP('lamp', C[0] - 210, C[1] + d * off); addP('lamp', C[0] + 210, C[1] + d * off); }
@@ -259,7 +259,7 @@
       M.SUBS = [[1150, 980, 420, 260, 'glory'], [4020, 1010, 480, 230, 'admin'], [1200, 3290, 400, 170, 'mosque'], [3720, 2860, 400, 220, 'emb'],
         [1730, 1610, 170, 110, 'lenin'], [3480, 1600, 210, 120, 'tractor'], [C[0], 700, 300, 120, 'church']];
       M.POND = [4320, 3500, 820, 400];                                          // the Belaya bend
-      M.BUS = [4840, C[1] + 60]; M.KIOSK = [3200, 2420]; M.FLAME = [1150, 1150];
+      M.BUS = [4840, C[1] + 60]; M.KIOSK = [3870, 1665]; M.FLAME = [1150, 1150];
       addP('church', C[0], 600); M.WALLS.push([C[0] - 250, 360, C[0] + 250, 590]);
       addP('admin', 4020, 780); M.WALLS.push([3560, 300, 4480, 760]);
       addP('mosque', 1200, 3150); M.WALLS.push([920, 2860, 1480, 3130]);
@@ -375,9 +375,11 @@
   const SAY_CD = { gas: 25, low: 30, q: 30, cant_revive: 30 };
   const say = (S, p, cat, force) => {
     if (!p || p.out || (p.down && cat !== 'down')) return; p.ccd = p.ccd || {};             // knocked-out / downed heroes stay quiet
-    if (!force && (S.t < p.vcd || S.t - S.sayT < 5 || S.t < (p.ccd[cat] || 0) || h2(S.steps, p.id + 3) > (SAY_P[cat] ?? 0.8))) return;
+    // fewer heroes in the run → each one talks more (two friends should hear about as much chatter as four)
+    const f = clamp(S.players.filter((q) => !q.out).length / 4, 0.4, 1);
+    if (!force && (S.t < p.vcd || S.t - S.sayT < 5 || S.t < (p.ccd[cat] || 0) || h2(S.steps, p.id + 3) > (SAY_P[cat] ?? 0.8) / f)) return;
     if (force && S.t - S.sayT < 1.5) return;
-    p.vcd = S.t + 16 + 10 * h2(S.steps, p.id); p.ccd[cat] = S.t + (SAY_CD[cat] || (cat.startsWith('combo') ? 60 : 12)); S.sayT = S.t; ev(S, { k: 'say', who: p.hero, cat, v: Math.floor(h2(S.steps, p.id + 7) * 4), x: p.x, y: p.y, pid: p.id });
+    p.vcd = S.t + (16 + 10 * h2(S.steps, p.id)) * f; p.ccd[cat] = S.t + (SAY_CD[cat] || (cat.startsWith('combo') ? 60 : 12)) * f; S.sayT = S.t; ev(S, { k: 'say', who: p.hero, cat, v: Math.floor(h2(S.steps, p.id + 7) * 4), x: p.x, y: p.y, pid: p.id });
   };
   const combo = (S, key, x, y, p, bonus) => {
     if (S.t - (S.comboK[key] || -9) < 7) return; S.comboK[key] = S.t; S.comboT = S.t;
@@ -400,7 +402,7 @@
     const T = ETYPES[e.type]; S.kills++; if (p) { p.st.kills++; if (S.t > p.ultLock) p.ult = Math.min(1, p.ult + 0.0032 * T.xp); }
     S.score += Math.round(T.xp * 10 * (e.elite ? 10 : 1) * scoreX(S));
     ev(S, { k: 'kill', x: e.x, y: e.y, type: e.type, kind, pid: p ? p.id : -1, sc: T.sc });
-    S.gems.push({ id: S.nid++, x: e.x, y: e.y - 4, v: T.xp, t0: S.t });
+    S.gems.push({ id: S.nid++, x: e.x, y: e.y - 4, v: T.xp * (S.map === 'meleuz' ? 1.6 : 1), t0: S.t });
     if (e.elite || h2(e.id, S.steps) < 0.015) S.food.push({ id: S.nid++, x: e.x + 20, y: e.y + 10, t0: S.t });
     if (T.bomb) explode(S, e.x, e.y, 100, 0, null, 'bomb');
     if (e.elite && S.kettleW !== S.wave && S.spor !== 'nokettle') { S.kettleW = S.wave; S.chests.push({ id: S.nid++, x: e.x, y: e.y, t0: S.t }); }
@@ -647,6 +649,12 @@
     else if (S.brk > 0) { S.brk -= DT; if (S.brk <= 0) { S.wave++; S.waveT = 0; ev(S, { k: 'wave', n: S.wave }); checkUnlocks(S); const p = S.players[Math.floor(h1(S.wave) * S.players.length)]; say(S, p, 'wave'); } }
     // the wave timer runs out → no more spawns; the break starts only once the last enemy of the wave is dead
     else if (S.clear) { S.clearT += DT;
+      // a straggler stuck behind props must never hold the wave: after 25 s, far ones are brought in (just off-screen of the nearest hero)
+      if (S.clearT > 25 && Math.floor(S.clearT) !== Math.floor(S.clearT - DT)) for (const e of S.enemies) {
+        let q = null, qd = 1e9; for (const o of S.players) if (alive(o)) { const d = dist(o.x, o.y, e.x, e.y); if (d < qd) { qd = d; q = o; } }
+        if (!q || qd < 750) continue;
+        for (let k = 0; k < 8; k++) { const a = Math.atan2(e.y - q.y, e.x - q.x) + k * 0.8, x = clamp(q.x + Math.cos(a) * 700, 80, WORLD.x1 - 80), y = clamp(q.y + Math.sin(a) * 520, 180, WORLD.y1 - 60);
+          if (!blocked(x, y, e.r)) { e.x = x; e.y = y; break; } } }
       if (!S.enemies.length) { S.clear = 0; S.score += Math.round(250 * S.wave * scoreX(S));
         if (S.wave === WAVES && S.map === 'park') busArrive(S, 'meleuz');
         else if (S.wave >= 2 * WAVES) { S.won = 1; S.endless = 1; busArrive(S, 'home'); checkUnlocks(S); }
@@ -659,8 +667,10 @@
     // ---- spawning: hold a target count around the team, outside every camera ----
     const n = S.players.length, coop = COOP[Math.min(8, n)], humans = Math.max(1, n);
     const swarm = S.bus && !S.endless ? 1 + S.swarmT / 25 : 1, crowdX = S.spor === 'crowd' ? 2 : 1;      // waiting for the bus: the swarm only grows
-    const want = S.brk > 0 || S.clear ? 0 : Math.min(190 * crowdX * (swarm > 1 ? 1.25 : 1), Math.round((7 + Math.min(S.wave, 24) * 5 + S.waveT * (0.08 + S.wave * 0.025)) * coop * (S.solo ? 0.7 : 1) * swarm * crowdX));
-    S.spawnAcc += DT * (2 + Math.min(S.wave, 24) * 0.8) * coop * swarm * crowdX * (S.spor === 'turbo' ? 1.5 : 1);
+    // crowd size: the park ramps 1 → 10; Meleuz starts again at a mid-park crowd and only creeps up — its waves get tougher, not bigger
+    const wN = S.map === 'meleuz' ? Math.min(9, 4 + (S.wave - 11) * 0.5) : S.wave;
+    const want = S.brk > 0 || S.clear ? 0 : Math.min(190 * crowdX * (swarm > 1 ? 1.25 : 1), Math.round((7 + wN * 5 + S.waveT * (0.08 + wN * 0.025)) * coop * (S.solo ? 0.7 : 1) * swarm * crowdX));
+    S.spawnAcc += DT * (2 + wN * 0.8) * coop * swarm * crowdX * (S.spor === 'turbo' ? 1.5 : 1);
     const live = S.players.filter(alive);
     while (S.spawnAcc >= 1 && S.enemies.length < want && live.length) { S.spawnAcc -= 1;
       const k = S.steps * 13 + S.enemies.length, p = live[Math.floor(h1(k) * live.length)], a = h1(k + 1) * Math.PI * 2, r = 1150 + 250 * h1(k + 2);
@@ -755,7 +765,7 @@
           else if (!e.slamT && td < 230 && t > (e.slamCD || 0)) { e.slamT = t + 0.7; e.slamCD = t + 4.5; ev(S, { k: 'warn', x: e.x, y: e.y, r: 190, until: t + 0.7, slam: 1 }); }
           if (e.slamT) spd = 0; }
         if (T.howl && t > (e.howlT || e.born + 2)) { e.howlT = t + 7; ev(S, { k: 'howl', x: e.x, y: e.y, id: e.id });
-          for (let j = 0; j < 3; j++) { const a = j * 2.1 + h1(e.id + j), ox = e.x + Math.cos(a) * 90, oy = e.y + Math.sin(a) * 70;
+          for (let j = 0; j < 2; j++) { const a = j * 2.1 + h1(e.id + j), ox = e.x + Math.cos(a) * 90, oy = e.y + Math.sin(a) * 70;
             if (!blocked(ox, oy, 24)) S.enemies.push(mkEnemy(S, 'dog', ox, oy, ETYPES.dog.hp * hpScale(S))); } } }
       if (charmed) { dx = Math.sin(t * 1.7 + e.id) * 0.35; dy = Math.cos(t * 1.3 + e.id * 2) * 0.35; }
       else if (e.flee) { const p = tg || { x: C[0], y: C[1] }; const d = dist(p.x, p.y, e.x, e.y) || 1; dx = (e.x - p.x) / d; dy = (e.y - p.y) / d; spd *= 1.4; e.hp -= DT * 30; }
@@ -861,7 +871,7 @@
   const xpNeed = (S, l) => Math.round(1.5 * (4 + 3.5 * l + 0.22 * l * l) * (0.1 + 0.35 * S.players.length));   // solo ~lvl 18, four players ~lvl 24 by the end
   const openNext = (S, p) => { p.pickT = S.rt;
     if (p.kq > 0) { p.kq--; p.pick = kettleCards(S, p); } else if (p.queue > 0) { p.queue--; p.pick = rollPick(S, p); } else p.pick = null; };
-  const hpScale = (S) => { const w1 = S.wave - 1; return (1 + 0.18 * w1 + 0.025 * w1 * w1) * COOP_HP[Math.min(8, S.players.length)] * enemyX(S); };
+  const hpScale = (S) => { const w1 = S.wave - 1; return (1 + 0.18 * w1 + 0.025 * w1 * w1) * COOP_HP[Math.min(8, S.players.length)] * enemyX(S) * (S.map === 'meleuz' ? 1.3 : 1); };
   // «Дела» → S.unlock (the page keeps them between runs)
   const QDONE = { icecream: (S) => S.wave >= 5, pigeon: (S) => S.found.length >= 3, meleuz: (S) => S.map === 'meleuz', condensed: (S) => S.endless, kumys: (S) => S.sporWon };
   const checkUnlocks = (S) => { for (const q of QUESTS) if (!S.unlock[q.id] && QDONE[q.id](S)) { S.unlock[q.id] = 1; ev(S, { k: 'unlock', id: q.id }); } };
