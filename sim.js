@@ -5,10 +5,11 @@
 (function (root) {
   const DT = 1 / 120, L = 36.0;
   const VIEW = { W: 1920, H: 1080 }, WORLD = { x0: 0, y0: 0, x1: 5200, y1: 3800 };
-  const C = [2600, 1900];                                                    // plaza centre
-  const PLAZA = [600, 500];                                                  // plaza radii (3/4 view squash)
-  const HINT = 'WASD — бег · Q — способность · R — ульта · E — поднять друга · 1/2/3 — улучшение';
-  const h1 = (n) => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
+  // the current level (useMap swaps the whole set: Парк → Мелеуз); plaza centre + radii (3/4 view squash)
+  let C = [2600, 1900], PLAZA = [600, 500], PATHS, SUBS, PROPS, SOLIDS, POND, LAMPS, WALLS, LV;
+  const HINT = 'WASD — бег · Q — способность · R — ульта · E — ларёк / встать · 1/2/3 — улучшение';
+  let SEED = 0;                                                              // «Забег дня»: everyone gets the same seed
+  const h1 = (n) => { const v = Math.sin((n + SEED) * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
   const h2 = (a, b) => h1(a * 12.9898 + b * 78.233);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
@@ -25,14 +26,45 @@
   const LEHA_GUNS = ['ПИСТОЛЕТ', 'ПП', 'ДРОБОВИК', 'РПГ'];
 
   // ---------------- enemies ----------------
+  // map: which level spawns them; skin: the art (scene); elite: the type an elite of that level uses
   const ETYPES = {
-    ghoul: { hp: 22, spd: 99, r: 22, dmg: 9, xp: 1, sc: 1.0, from: 1, w: 1 },
-    sprinter: { hp: 12, spd: 180, r: 18, dmg: 6, xp: 1, sc: 0.8, from: 2, w: 0.35 },
-    brute: { hp: 130, spd: 63, r: 38, dmg: 16, xp: 5, sc: 1.65, from: 3, w: 0.1 },
-    spitter: { hp: 28, spd: 79, r: 22, dmg: 7, xp: 2, sc: 1.05, from: 4, ranged: 1, w: 0.14 },
-    bomber: { hp: 18, spd: 132, r: 22, dmg: 18, xp: 2, sc: 1.0, from: 5, bomb: 1, w: 0.12 },
+    ghoul: { hp: 22, spd: 99, r: 22, dmg: 9, xp: 1, sc: 1.0, from: 1, w: 1, map: 'park' },
+    sprinter: { hp: 12, spd: 180, r: 18, dmg: 6, xp: 1, sc: 0.8, from: 2, w: 0.35, map: 'park' },
+    brute: { hp: 130, spd: 63, r: 38, dmg: 16, xp: 5, sc: 1.65, from: 3, w: 0.1, map: 'park' },
+    spitter: { hp: 28, spd: 79, r: 22, dmg: 7, xp: 2, sc: 1.05, from: 4, ranged: 1, w: 0.14, map: 'park' },
+    bomber: { hp: 18, spd: 132, r: 22, dmg: 18, xp: 2, sc: 1.0, from: 5, bomb: 1, w: 0.12, map: 'park' },
+    // Мелеуз: the town folk, possessed by the same shadow
+    gopnik: { hp: 26, spd: 104, r: 22, dmg: 10, xp: 1, sc: 1.0, from: 11, w: 1, map: 'meleuz' },
+    dog: { hp: 14, spd: 196, r: 18, dmg: 7, xp: 1, sc: 0.8, from: 11, w: 0.45, map: 'meleuz', pack: 2 },
+    alkash: { hp: 30, spd: 72, r: 22, dmg: 11, xp: 2, sc: 1.0, from: 12, ranged: 1, lob: 1, w: 0.15, map: 'meleuz' },
+    starshiy: { hp: 140, spd: 64, r: 38, dmg: 18, xp: 5, sc: 1.6, from: 13, w: 0.1, map: 'meleuz' },
+    mom: { hp: 46, spd: 88, r: 30, dmg: 20, xp: 3, sc: 1.05, from: 14, charge: 1, w: 0.1, map: 'meleuz' },
+    alpha: { hp: 110, spd: 168, r: 30, dmg: 15, xp: 5, sc: 1.45, from: 999, w: 0, map: 'meleuz', howl: 1 },    // «Вожак стаи»: elites only
   };
-  const WAVE_LEN = 60, BREAK = 9, WAVES = 10, LASH_HIT = 0.21;              // Hasan's whip: snap 0.21 s after the swing starts (scene LASH)
+  const ELITES = { park: ['brute'], meleuz: ['starshiy', 'alpha'] };      // «Батя района» (a starshiy elite) and «Вожак стаи»
+  const WAVE_LEN = 60, BREAK = 9, WAVES = 10, LASH_HIT = 0.21;
+  // «Споры»: one optional rule per run, chosen in the room; x = score multiplier
+  const SPORS = {
+    glass: { n: 'Хрустальный', d: 'Любой удар кладёт', x: 1.6 },
+    turbo: { n: 'Турбо', d: 'Всё в 1.5 раза быстрее', x: 1.4 },
+    smol: { n: 'Мелкий', d: 'Герой меньше, урон и бег ×0.8', x: 1.3 },
+    pacifist: { n: 'Пацифист', d: 'Без общих оружий, только своё', x: 1.5 },
+    oh1: { n: 'Ой', d: 'Враги: здоровье и урон ×1.25', x: 1.3, k: 1.25 },
+    oh2: { n: 'Ой-ой', d: 'Враги: здоровье и урон ×1.5', x: 1.6, k: 1.5 },
+    oh3: { n: 'Ну всё', d: 'Враги: здоровье и урон ×2', x: 2, k: 2 },
+    crowd: { n: 'Толпа', d: 'Врагов вдвое больше', x: 1.4 },
+    chonk: { n: 'Жиробасы', d: 'Враги вдвое толще и крупнее', x: 1.4 },
+    nokettle: { n: 'Без котла', d: 'Котлы не падают', x: 1.3 },
+    speedrun: { n: 'Спидран', d: 'Парк за 13 минут', x: 1.3 },
+  };
+  // «Дела»: milestones that open items for good (S.unlock → the page saves them); rewards are weapons / passives only
+  const QUESTS = [
+    { id: 'icecream', n: 'Дожить до 5-й волны', r: ['icecream'] },
+    { id: 'pigeon', n: 'Открыть 3 рецепта в котле', r: ['pigeon'] },
+    { id: 'meleuz', n: 'Доехать до Мелеуза', r: ['sugar', 'tractor'], d: 'Рафинад и Трактор появятся и в парке' },
+    { id: 'condensed', n: 'Пройти Мелеуз (20 волн)', r: ['condensed'] },
+    { id: 'kumys', n: 'Выиграть любой спор (доехать до Мелеуза)', r: ['kumys'], d: 'Кумыс появится и в парке' },
+  ];              // Hasan's whip: snap 0.21 s after the swing starts (scene LASH)
   // ability sizes (kept compact so 4–8 players don't paint the whole screen)
   const ULT_STAGE = 5, ULT_GAS = 230, TORNADO = { r: 140, ttl: 4, spd: 150 }, CHARM = { r: 360, half: 0.62, ttl: 2.5 }, JET = { r: 380, half: 0.45 };
   const stageCard = (p, ua, k) => { const a = ua * 1.6 + k * Math.PI / 4, R = 150 * p.m.area; return [p.x + Math.cos(a) * R, p.y - 30 + Math.sin(a) * R * 0.72]; };
@@ -62,6 +94,10 @@
     icecream: { n: 'Пломбир', el: 'холод', b: 'icecream', mods: { chill: 1, freeze: 1, freezeP: 0.15 }, lock: 'icecream', lv: ['Шарики замедляют, иногда морозят', ...LVUP.slice(1)] },
     speaker: { n: 'Колонка', el: 'звук', b: 'speaker', lv: ['Бас бьёт волной вокруг', '+20% радиус, +25% урона', 'Волна оглушает'] },
     pigeon: { n: 'Голуби', el: 'стая', b: 'pigeon', lock: 'pigeon', lv: ['Голубь кружит и клюёт врагов', '+1 голубь, +25% урона', 'Клюют чаще и больнее'] },
+    // Мелеуз: in the pool on the second map (and everywhere once «Доехать до Мелеуза» is done)
+    sugar: { n: 'Рафинад', el: 'сахар', b: 'sugar', lock: 'meleuz', map: 'meleuz', lv: ['Кубик скачет от врага к врагу', '+1 кубик, +2 отскока', 'Каждый отскок бьёт на 20% сильнее'] },
+    tractor: { n: 'Трактор «Универсал»', el: 'таран', b: 'tractor', lock: 'meleuz', map: 'meleuz', lv: ['Трактор таранит толпу по прямой', '+25% урона, трактор шире', 'Два трактора за раз'] },
+    condensed: { n: 'Сгущёнка', el: 'липкость', b: 'condensed', lock: 'condensed', lv: ['Липкая лужа: враги вязнут и получают +25% урона', '+25% урона, лужа больше', 'Две банки за раз'] },
     // evolutions — tier 1: two level-3 base weapons; tier 2: an evolved one + a base one
     fried: { n: 'Жареное мороженое', b: 'icecream', from: ['petard', 'icecream'], mult: 1.5, mods: { burn: 1, chill: 1, freeze: 1, freezeP: 0.3, boom: 70 }, d: 'Шарики взрываются огнём и льдом' },
     salute: { n: 'Салют', b: 'petard', from: ['petard', 'can'], mult: 1.5, mods: { burn: 1, shock: 3, boom: 85, sky: 1 }, d: 'Фейерверки падают с неба, искры бьют током' },
@@ -72,6 +108,8 @@
     coo: { n: 'Курлык-хор', b: 'pigeon', from: ['pigeon', 'speaker'], mult: 1.3, mods: { coo: 1 }, d: 'Голуби курлычут: всех вокруг оглушает' },
     aurora: { n: 'Северное сияние', b: 'petard', from: ['salute', 'icecream'], tier: 2, mult: 2.2, mods: { burn: 1, chill: 1, freeze: 1, freezeP: 0.4, boom: 110, sky: 1, shock: 2 }, d: 'Небо сыплет огнём, льдом и током' },
     nuke: { n: 'Ядерные голуби', b: 'pigeon', from: ['kamikaze', 'can'], tier: 2, mult: 2.4, mods: { boom: 130, burn: 2, shock: 3 }, d: 'Голуби-боеголовки' },
+    caramel: { n: 'Жжёный сахар', b: 'sugar', from: ['sugar', 'petard'], mult: 1.5, mods: { burn: 2, boom: 55 }, d: 'Кубики горят и лопаются карамелью' },
+    etractor: { n: 'Электротрактор', b: 'tractor', from: ['tractor', 'can'], mult: 1.5, mods: { shock: 3 }, d: 'Трактор бьёт током всех, кого сбил' },
   };
   // the hero's own weapon evolves with a shared one: the shared slot is freed, the hero's weapon takes the element
   const HEVO = {
@@ -89,12 +127,19 @@
     hp: { n: 'Шаурма', d: '+20 к макс. HP, лечит' }, spd: { n: 'Кроссовки', d: '+7% скорости бега' }, pick: { n: 'Магнит', d: '+35% радиус сбора' },
     armor: { n: 'Толстокожий', d: '-7% входящего урона' }, regen: { n: 'Чай с мёдом', d: '+0.4 HP в секунду' }, crit: { n: 'Везунчик', d: '+6% шанс крита' },
     cd: { n: 'Без перерыва', d: '-9% перезарядки Q и ульты' },
+    kumys: { n: 'Кумыс', d: 'Вампиризм: лечит 2% от урона', lock: 'kumys', map: 'meleuz' },
     deo: { n: 'Дезодорант', d: 'Витя: на 40% меньше урона друзьям', hero: 'vitya' }, plate: { n: 'Бронеплита', d: 'Лёха: щит +1.6 с, -5% урона', hero: 'leha' },
     // passive evolutions (two level-3 passives → one; single level)
     fury: { n: 'Ярость везунчика', from: ['dmg', 'crit'], max: 1, d: '+45% урона, крит 25%, криты ×2.5' },
     scooter: { n: 'Самокат', from: ['spd', 'pick'], max: 1, d: '+25% к бегу, сбор опыта ×3' },
     lunch: { n: 'Бабушкин обед', from: ['hp', 'regen'], max: 1, d: '+70 к HP, +2 HP в секунду' },
     espresso: { n: 'Двойной эспрессо', from: ['as', 'cd'], max: 1, d: '+35% скорости атак, -30% перезарядки' },
+  };
+  // «Бабушкины гостинцы»: endless stacking boosts once every item is maxed and every slot is taken (Megabonk-style)
+  const GIFTS = {
+    g_dmg: { n: 'Бабушкин пирожок', d: '+8% урона', k: 0.08 }, g_as: { n: 'Крепкий чай', d: '+7% скорости атаки', k: 0.07 },
+    g_area: { n: 'Широкая душа', d: '+8% радиус атак', k: 0.08 }, g_hp: { n: 'Домашние котлеты', d: '+15 к макс. HP', k: 15 },
+    g_crit: { n: 'Счастливый билет', d: '+3% шанс крита', k: 0.03 }, g_pick: { n: 'Бабкина авоська', d: '+15% радиус сбора', k: 0.15 },
   };
   // every recipe in one list: { id, from: [a, b], kind: 'w' | 'h' | 'p' | 'awake', hero? }
   const RECIPES = [
@@ -112,13 +157,17 @@
   const usedW = (p) => sharedW(p).length - (p.fused || []).length;
   const ownedP = (p) => Object.keys(p.items).filter((id) => PASSIVES[id] && p.items[id]);
   const isFused = (p, id) => (p.fused || []).some((f) => f.includes(id));
-  const unlocked = (S, id) => !WEAPONS[id].lock || (S.unlock && S.unlock[WEAPONS[id].lock]);
+  // in the pool: a Meleuz item on its own map, any locked item once its «дело» is done
+  const unlocked = (S, id) => { const q = WEAPONS[id] || PASSIVES[id]; return !q.lock || (q.map && q.map === S.map) || !!(S.unlock && S.unlock[q.lock]); };
+  const gift = (p, id) => (p.gifts && p.gifts[id]) || 0;
   // derived stats from item levels (recomputed on every pick: no drifting multipliers)
   function recalc(p) {
     const H = HEROES[p.hero], m = p.m, L = (id) => lv(p, id), fury = L('fury'), sc = L('scooter'), lu = L('lunch'), es = L('espresso');
-    Object.assign(m, { dmg: 1 + 0.12 * L('dmg') + 0.45 * fury, as: 1 + 0.1 * L('as') + 0.35 * es, area: 1 + 0.12 * L('area'), spd: 1 + 0.07 * L('spd') + 0.25 * sc,
-      pick: H.pick * (1 + 0.35 * L('pick')) * (sc ? 3 : 1), armor: (1 - 0.07 * L('armor')) * (1 - 0.05 * L('plate')), regen: 0.4 * L('regen') + 2 * lu,
-      crit: 0.04 + 0.06 * L('crit') + (fury ? 0.21 : 0), critX: fury ? 2.5 : 2, cd: (1 - 0.09 * L('cd')) * (es ? 0.7 : 1),
+    const gf = (id) => gift(p, id) * GIFTS[id].k, smol = p.smol ? 0.8 : 1;
+    Object.assign(m, { dmg: (1 + 0.12 * L('dmg') + 0.45 * fury + gf('g_dmg')) * smol, as: 1 + 0.1 * L('as') + 0.35 * es + gf('g_as'), area: 1 + 0.12 * L('area') + gf('g_area'),
+      spd: (1 + 0.07 * L('spd') + 0.25 * sc) * smol, leech: 0.02 * L('kumys'),
+      pick: H.pick * (1 + 0.35 * L('pick') + gf('g_pick')) * (sc ? 3 : 1), armor: (1 - 0.07 * L('armor')) * (1 - 0.05 * L('plate')), regen: 0.4 * L('regen') + 2 * lu,
+      crit: 0.04 + 0.06 * L('crit') + (fury ? 0.21 : 0) + gf('g_crit'), critX: fury ? 2.5 : 2, cd: (1 - 0.09 * L('cd')) * (es ? 0.7 : 1),
       deo: Math.pow(0.6, L('deo')), shield: 1.6 * L('plate'), extra: 0, rico: 1, pullN: 3, ttl: 1, sdmg: 1, sarea: 1, srate: 1, pierce: 0, double: 0, smods: null });
     const g = L('sig');
     if (p.hero === 'hasan') { if (g >= 2) { m.sdmg = 1.25; m.extra = 1; } if (g >= 3) { m.sarea = 1.25; m.pullN = 2; } }
@@ -126,12 +175,13 @@
     if (p.hero === 'vitya') { if (g >= 2) { m.sarea = 1.2; m.srate = 0.8; } if (g >= 3) { m.sdmg = 1.3; m.double = 1; } }
     if (p.hero === 'leha') { p.tier = p.evo ? 3 : [0, 1, 2][Math.max(0, g - 1)]; if (g >= 2) m.sdmg = 1.15; if (g >= 3) m.sdmg = 1.3; }
     if (p.sigEvo) { const E = HEVO[p.sigEvo]; m.smods = E.mods; m.sdmg *= 1 + 0.2 * L(p.sigEvo); if (E.mods.home) m.extra += 1; if (E.mods.pierce) m.pierce += E.mods.pierce; }
-    p.hpMax = H.hp + 20 * L('hp') + 70 * lu; p.hp = Math.min(p.hp, p.hpMax);
+    p.hpMax = H.hp + 20 * L('hp') + 70 * lu + gift(p, 'g_hp') * GIFTS.g_hp.k; p.hp = Math.min(p.hp, p.hpMax);
   }
   // cards: { id, kind: 'sig' | 'w' | 'p' | 'heal' | 'reroll' | 'fission' | 'fusion' | 'recipe', n, d, tag, ... }
   function cardFor(p, id) {
     if (id === 'heal') return { id, kind: 'heal', n: 'Перекус', d: 'Лечит 40% HP', tag: '' };
     if (id === 'reroll') return { id, kind: 'reroll', n: 'Перебросить', d: `Новые карты (осталось ${p.rerolls})`, tag: '' };
+    if (GIFTS[id]) { const g = GIFTS[id], n = gift(p, id); return { id, kind: 'gift', n: g.n, d: g.d, tag: n ? 'ГОСТИНЕЦ ×' + (n + 1) : 'ГОСТИНЕЦ' }; }
     if (id === 'sig') { const l = lv(p, 'sig'); return { id, kind: 'sig', n: SIG[p.hero].n, d: SIG[p.hero].lv[Math.min(l, MAXL - 1)], tag: 'Ур. ' + (l + 1) }; }
     if (HEVO[id]) { const l = lv(p, id); return { id, kind: 'sig', n: HEVO[id].n, d: '+20% урона', tag: 'Ур. ' + (l + 1) }; }
     if (WEAPONS[id]) { const w = WEAPONS[id], l = lv(p, id); return { id, kind: 'w', n: w.n, d: w.from ? (l ? '+25% урона' : w.d) : w.lv[l], tag: l ? 'Ур. ' + (l + 1) : 'НОВОЕ', el: w.el }; }
@@ -152,59 +202,118 @@
       cards.push({ id: 'fuse:' + maxed[i] + '+' + maxed[j], kind: 'fusion', a: maxed[i], b: maxed[j], n: 'Сплав', d: `${iname(p, maxed[i])} + ${iname(p, maxed[j])} в одном слоте`, tag: 'СПЛАВ' }); i = maxed.length; break; }
     return cards; };
   // icon texture per item / recipe result (HUD, cards, almanac)
-  const iconOf = (id, hero) => id === 'sig' ? `ic_${hero}_base` : id.startsWith('awake_') ? `ic_${id.slice(6)}_evo` : id === 'evo' ? `ic_${hero}_evo`
+  const iconOf = (id, hero) => id === 'sig' ? `ic_${hero}_base` : id.startsWith('awake_') ? `ic_${id.slice(6)}_evo` : id === 'evo' ? `ic_${hero}_evo` : GIFTS[id] ? 'it_' + id.slice(2)
     : (WEAPONS[id] && !WEAPONS[id].from) || (PASSIVES[id] && !PASSIVES[id].from) ? 'it_' + id : 'ic_' + id;
-  const UPG = { WEAPONS, PASSIVES, SIG, HEVO, RECIPES, MAXL, MAXW, MAXP, rname, rdesc, iconOf };
+  const UPG = { WEAPONS, PASSIVES, SIG, HEVO, RECIPES, GIFTS, MAXL, MAXW, MAXP, rname, rdesc, iconOf };
 
-  // ---------------- the level, as data ----------------
-  // paved areas (drawn + spawn-safe): rects [cx, cy, w, h, rot] and sub-plazas [x, y, rx, ry]
-  const PATHS = [[C[0], 950, 330, 1900, 0], [C[0], 2850, 330, 1900, 0], [1150, C[1], 2300, 300, 0], [4050, C[1], 2300, 300, 0],
-    [1950, 1400, 1300, 220, 0.66], [3250, 1400, 1300, 220, -0.66], [1950, 2400, 1300, 220, -0.66], [3250, 2400, 1300, 220, 0.66]];
-  const SUBS = [[1250, 820, 330, 270, 'statue'], [3950, 820, 360, 290, 'gazebo'], [1250, 2980, 330, 270, 'pergola'], [3950, 2980, 400, 300, 'pond']];
-  const onPave = (x, y) => {
-    if (((x - C[0]) / PLAZA[0]) ** 2 + ((y - C[1]) / PLAZA[1]) ** 2 < 1) return true;
-    for (const [sx, sy, rx, ry] of SUBS) if (((x - sx) / rx) ** 2 + ((y - sy) / ry) ** 2 < 1) return true;
-    for (const [cx, cy, w, h, r] of PATHS) { const dx = x - cx, dy = y - cy, c = Math.cos(-r), s = Math.sin(-r);
+  // ---------------- the levels, as data (useMap swaps the current one in) ----------------
+  // paved areas (drawn + spawn-safe): rects [cx, cy, w, h, rot] and sub-plazas [x, y, rx, ry, kind]; props [kind, x, y, scale, flip]
+  const FOOT = { lamp: 13, bench: 0, tree: 26, cypress: 18, autumn: 24, bush: 46, flowers: 0, fence: 0, bin: 16, statue: 85, gazebo: 175, pergola: 0,
+    mlamp: 14, bollard: 12, spruce: 30, thuja: 18, glory: 120, lenin: 60, tmonument: 125, kiosk: 62, rail: 0 };
+  // buildings block a footprint rect (WALLS); the scene draws set pieces at a fixed world width (sizes.js)
+  const onPaveM = (M, x, y) => {
+    if (((x - M.C[0]) / M.PLAZA[0]) ** 2 + ((y - M.C[1]) / M.PLAZA[1]) ** 2 < 1) return true;
+    for (const [sx, sy, rx, ry] of M.SUBS) if (((x - sx) / rx) ** 2 + ((y - sy) / ry) ** 2 < 1) return true;
+    for (const [cx, cy, w, h, r] of M.PATHS) { const dx = x - cx, dy = y - cy, c = Math.cos(-r), s = Math.sin(-r);
       if (Math.abs(dx * c - dy * s) < w / 2 && Math.abs(dx * s + dy * c) < h / 2) return true; }
     return false;
   };
-  // props: [kind, x, y, scale, flip]
-  const PROPS = [];
-  const addP = (k, x, y, s = 1, f = 0) => PROPS.push([k, Math.round(x), Math.round(y), s, f]);
-  // lamps ring the plaza (the reference's light pools) and line the paths
-  for (let i = 0; i < 8; i++) { const a = (i + 0.5) / 8 * Math.PI * 2; addP('lamp', C[0] + Math.cos(a) * (PLAZA[0] + 70), C[1] + Math.sin(a) * (PLAZA[1] + 60)); }
-  for (const d of [-1, 1]) for (let k = 1; k <= 3; k++) { const off = PLAZA[1] + 380 * k; addP('lamp', C[0] - 210, C[1] + d * off); addP('lamp', C[0] + 210, C[1] + d * off); }
-  for (const d of [-1, 1]) for (let k = 1; k <= 3; k++) { const off = PLAZA[0] + 420 * k; addP('lamp', C[0] + d * off, C[1] - 190); addP('lamp', C[0] + d * off, C[1] + 210); }
-  for (const [x, y, rx, ry] of SUBS) for (let i = 0; i < 4; i++) { const a = (i + 0.5) / 4 * Math.PI * 2; addP('lamp', x + Math.cos(a) * (rx + 40), y + Math.sin(a) * (ry + 40)); }
-  // benches face the plaza from its rim, between the lamps
-  for (let i = 0; i < 8; i++) { if (i % 2) continue; const a = i / 8 * Math.PI * 2 + 0.05; addP('bench', C[0] + Math.cos(a) * (PLAZA[0] + 95), C[1] + Math.sin(a) * (PLAZA[1] + 75)); }
-  // hedges + fences frame the garden beds along the plaza (gaps where the paths enter)
-  for (let i = 0; i < 16; i++) { const a = (i + 0.5) / 16 * Math.PI * 2, n = ((a / (Math.PI / 4)) % 2 + 2) % 2;
-    if (n < 0.45 || n > 1.55) continue;                                       // path openings at the 8 path directions
-    addP(i % 3 ? 'bush' : 'fence', C[0] + Math.cos(a) * (PLAZA[0] + 190), C[1] + Math.sin(a) * (PLAZA[1] + 170), i % 3 ? 0.9 : 1); }
-  // landmarks
-  addP('statue', SUBS[0][0], SUBS[0][1] + 20, 1); addP('gazebo', SUBS[1][0], SUBS[1][1] + 60, 1); addP('pergola', SUBS[2][0], SUBS[2][1] + 30, 1);
-  // trees and flower beds scattered over the gardens (deterministic, off the paving, not crowding)
-  for (let i = 0, n = 0; i < 900 && n < 70; i++) { const x = 120 + h2(i, 1) * (WORLD.x1 - 240), y = 200 + h2(i, 2) * (WORLD.y1 - 300);
-    if (onPave(x, y) || onPave(x, y + 60) || onPave(x + 90, y) || onPave(x - 90, y)) continue;
-    if (PROPS.some((p) => dist(p[1], p[2], x, y) < (p[0] === 'tree' ? 230 : 160))) continue;
-    const r = h2(i, 3); addP(r < 0.42 ? 'tree' : r < 0.6 ? 'cypress' : r < 0.72 ? 'autumn' : r < 0.86 ? 'bush' : 'flowers', x, y, 0.85 + 0.3 * h2(i, 4), h2(i, 5) > 0.5); n++; }
-  for (let i = 0; i < 12; i++) { const a = h2(i, 9) * 6.28, r = 900 + h2(i, 10) * 1300, x = C[0] + Math.cos(a) * r, y = C[1] + Math.sin(a) * r * 0.8;
-    if (!onPave(x, y) && x > 100 && y > 150 && x < WORLD.x1 - 100 && y < WORLD.y1 - 100 && !PROPS.some((p) => dist(p[1], p[2], x, y) < 140)) addP('bin', x, y); }
-  const FOOT = { lamp: 13, bench: 0, tree: 26, cypress: 18, autumn: 24, bush: 46, flowers: 0, fence: 0, bin: 16, statue: 85, gazebo: 175, pergola: 0 };
-  const SOLIDS = [];
-  for (const [k, x, y, s] of PROPS) { if (FOOT[k]) SOLIDS.push({ x, y: y - 6, r: FOOT[k] * s });
-    if (k === 'bench') { SOLIDS.push({ x: x - 44, y: y - 10, r: 22 }, { x: x + 44, y: y - 10, r: 22 }); }
-    if (k === 'fence') { for (const o of [-80, 0, 80]) SOLIDS.push({ x: x + o, y: y - 6, r: 20 }); }
-    if (k === 'pergola') { SOLIDS.push({ x: x - 95, y: y - 6, r: 24 }, { x: x + 95, y: y - 6, r: 24 }); } }
-  const POND = [SUBS[3][0], SUBS[3][1] + 20, 300, 190];                     // water ellipse blocks movement
-  const LAMPS = PROPS.filter((p) => p[0] === 'lamp').map((p) => [p[1], p[2]]);
+  function buildMap(id) {
+    const mz = id === 'meleuz', C = [2600, 1900], PLAZA = mz ? [640, 520] : [600, 500];
+    const M = { id, C, PLAZA, PROPS: [], WALLS: [] }, PROPS = M.PROPS;
+    const addP = (k, x, y, s = 1, f = 0) => PROPS.push([k, Math.round(x), Math.round(y), s, f]), onPave = (x, y) => onPaveM(M, x, y);
+    const near0 = (x, y, d) => PROPS.some((p) => dist(p[1], p[2], x, y) < d);
+    if (!mz) {
+      M.PATHS = [[C[0], 950, 330, 1900, 0], [C[0], 2850, 330, 1900, 0], [1150, C[1], 2300, 300, 0], [4050, C[1], 2300, 300, 0],
+        [1950, 1400, 1300, 220, 0.66], [3250, 1400, 1300, 220, -0.66], [1950, 2400, 1300, 220, -0.66], [3250, 2400, 1300, 220, 0.66]];
+      M.SUBS = [[1250, 820, 330, 270, 'statue'], [3950, 820, 360, 290, 'gazebo'], [1250, 2980, 330, 270, 'pergola'], [3950, 2980, 400, 300, 'pond']];
+      M.POND = [M.SUBS[3][0], M.SUBS[3][1] + 20, 300, 190];
+      M.BUS = [4840, C[1] + 60]; M.KIOSK = [3330, 2230];
+      // lamps ring the plaza (the reference's light pools) and line the paths
+      for (let i = 0; i < 8; i++) { const a = (i + 0.5) / 8 * Math.PI * 2; addP('lamp', C[0] + Math.cos(a) * (PLAZA[0] + 70), C[1] + Math.sin(a) * (PLAZA[1] + 60)); }
+      for (const d of [-1, 1]) for (let k = 1; k <= 3; k++) { const off = PLAZA[1] + 380 * k; addP('lamp', C[0] - 210, C[1] + d * off); addP('lamp', C[0] + 210, C[1] + d * off); }
+      for (const d of [-1, 1]) for (let k = 1; k <= 3; k++) { const off = PLAZA[0] + 420 * k; addP('lamp', C[0] + d * off, C[1] - 190); addP('lamp', C[0] + d * off, C[1] + 210); }
+      for (const [x, y, rx, ry] of M.SUBS) for (let i = 0; i < 4; i++) { const a = (i + 0.5) / 4 * Math.PI * 2; addP('lamp', x + Math.cos(a) * (rx + 40), y + Math.sin(a) * (ry + 40)); }
+      // benches face the plaza from its rim, between the lamps
+      for (let i = 0; i < 8; i++) { if (i % 2) continue; const a = i / 8 * Math.PI * 2 + 0.05; addP('bench', C[0] + Math.cos(a) * (PLAZA[0] + 95), C[1] + Math.sin(a) * (PLAZA[1] + 75)); }
+      // hedges + fences frame the garden beds along the plaza (gaps where the paths enter)
+      for (let i = 0; i < 16; i++) { const a = (i + 0.5) / 16 * Math.PI * 2, n = ((a / (Math.PI / 4)) % 2 + 2) % 2;
+        if (n < 0.45 || n > 1.55) continue;                                       // path openings at the 8 path directions
+        addP(i % 3 ? 'bush' : 'fence', C[0] + Math.cos(a) * (PLAZA[0] + 190), C[1] + Math.sin(a) * (PLAZA[1] + 170), i % 3 ? 0.9 : 1); }
+      // landmarks
+      addP('statue', M.SUBS[0][0], M.SUBS[0][1] + 20, 1); addP('gazebo', M.SUBS[1][0], M.SUBS[1][1] + 60, 1); addP('pergola', M.SUBS[2][0], M.SUBS[2][1] + 30, 1);
+      addP('kiosk', M.KIOSK[0], M.KIOSK[1]);
+      // trees and flower beds scattered over the gardens (deterministic, off the paving, not crowding)
+      for (let i = 0, n = 0; i < 900 && n < 70; i++) { const x = 120 + h2(i, 1) * (WORLD.x1 - 240), y = 200 + h2(i, 2) * (WORLD.y1 - 300);
+        if (onPave(x, y) || onPave(x, y + 60) || onPave(x + 90, y) || onPave(x - 90, y)) continue;
+        if (PROPS.some((p) => dist(p[1], p[2], x, y) < (p[0] === 'tree' ? 230 : 160))) continue;
+        const r = h2(i, 3); addP(r < 0.42 ? 'tree' : r < 0.6 ? 'cypress' : r < 0.72 ? 'autumn' : r < 0.86 ? 'bush' : 'flowers', x, y, 0.85 + 0.3 * h2(i, 4), h2(i, 5) > 0.5); n++; }
+      for (let i = 0; i < 12; i++) { const a = h2(i, 9) * 6.28, r = 900 + h2(i, 10) * 1300, x = C[0] + Math.cos(a) * r, y = C[1] + Math.sin(a) * r * 0.8;
+        if (!onPave(x, y) && x > 100 && y > 150 && x < WORLD.x1 - 100 && y < WORLD.y1 - 100 && !near0(x, y, 140)) addP('bin', x, y); }
+    } else {
+      // Мелеуз: the central square (kurai flower), the administration with its flags (top right), the Monument of Glory with
+      // the eternal flame (top left), the church up the boulevard, Lenin and the tractor on the lawns, the mosque (bottom left),
+      // the Belaya embankment (bottom right), the bus stop at the end of the east boulevard
+      M.PATHS = [[C[0], 1270, 360, 1260, 0], [C[0], 2850, 360, 1900, 0], [1150, C[1], 2300, 320, 0], [4050, C[1], 2300, 320, 0],
+        [1850, 1400, 1250, 240, 0.62], [3350, 1400, 1250, 240, -0.62], [1900, 2500, 1300, 240, -0.62], [3300, 2450, 1300, 240, 0.62]];
+      M.SUBS = [[1150, 980, 420, 260, 'glory'], [4020, 1010, 480, 230, 'admin'], [1200, 3290, 400, 170, 'mosque'], [3720, 2860, 400, 220, 'emb'],
+        [1730, 1610, 170, 110, 'lenin'], [3480, 1600, 210, 120, 'tractor'], [C[0], 700, 300, 120, 'church']];
+      M.POND = [4320, 3500, 820, 400];                                          // the Belaya bend
+      M.BUS = [4840, C[1] + 60]; M.KIOSK = [3200, 2420]; M.FLAME = [1150, 1150];
+      addP('church', C[0], 600); M.WALLS.push([C[0] - 250, 360, C[0] + 250, 590]);
+      addP('admin', 4020, 780); M.WALLS.push([3560, 300, 4480, 760]);
+      addP('mosque', 1200, 3150); M.WALLS.push([920, 2860, 1480, 3130]);
+      addP('glory', 1150, 960); addP('lenin', 1730, 1600); addP('tmonument', 3480, 1600); addP('kiosk', M.KIOSK[0], M.KIOSK[1]);
+      // white bollards around the memorial square, triple-globe lamps on the square and the boulevards
+      for (let i = 0; i < 10; i++) { const a = (i + 0.5) / 10 * Math.PI * 2; if (Math.sin(a) > 0.55) continue; addP('bollard', 1150 + Math.cos(a) * 450, 980 + Math.sin(a) * 285); }
+      for (let i = 0; i < 8; i++) { const a = (i + 0.5) / 8 * Math.PI * 2; addP('mlamp', C[0] + Math.cos(a) * (PLAZA[0] + 70), C[1] + Math.sin(a) * (PLAZA[1] + 60)); }
+      for (const d of [-1, 1]) for (let k = 1; k <= 3; k++) { const off = PLAZA[0] + 420 * k; addP('mlamp', C[0] + d * off, C[1] - 210); addP('mlamp', C[0] + d * off, C[1] + 230); }
+      for (let k = 1; k <= 2; k++) { addP('mlamp', C[0] - 230, C[1] - PLAZA[1] - 360 * k); addP('mlamp', C[0] + 230, C[1] - PLAZA[1] - 360 * k); }
+      for (let k = 1; k <= 3; k++) { addP('mlamp', C[0] - 230, C[1] + PLAZA[1] + 380 * k); addP('mlamp', C[0] + 230, C[1] + PLAZA[1] + 380 * k); }
+      for (const [x, y, rx, ry, k] of M.SUBS) if (k === 'admin' || k === 'emb' || k === 'mosque') for (const sd of [-1, 1]) addP('mlamp', x + sd * (rx + 30), y + 10);
+      // the square's rim: benches and thujas between the boulevards
+      for (let i = 0; i < 8; i++) { if (i % 2) continue; const a = (i + 0.22) / 8 * Math.PI * 2; addP('bench', C[0] + Math.cos(a) * (PLAZA[0] + 95), C[1] + Math.sin(a) * (PLAZA[1] + 75)); }
+      for (let i = 0; i < 16; i++) { const a = (i + 0.5) / 16 * Math.PI * 2, n = ((a / (Math.PI / 4)) % 2 + 2) % 2;
+        if (n < 0.45 || n > 1.55) continue; addP(i % 2 ? 'thuja' : 'flowers', C[0] + Math.cos(a) * (PLAZA[0] + 190), C[1] + Math.sin(a) * (PLAZA[1] + 170), 0.9); }
+      // the embankment railing along the river bank
+      for (let i = 0; i < 9; i++) { const a = Math.PI * (1.05 + 0.1 * i), x = M.POND[0] + Math.cos(a) * (M.POND[2] + 40), y = M.POND[1] + Math.sin(a) * (M.POND[3] + 40);
+        if (x > 120 && x < WORLD.x1 - 60 && y < WORLD.y1 - 60) addP('rail', x, y); }
+      // blue spruces, thujas and flower beds over the lawns
+      for (let i = 0, n = 0; i < 1200 && n < 72; i++) { const x = 120 + h2(i, 21) * (WORLD.x1 - 240), y = 200 + h2(i, 22) * (WORLD.y1 - 300);
+        if (onPave(x, y) || onPave(x, y + 60) || onPave(x + 90, y) || onPave(x - 90, y)) continue;
+        if (M.WALLS.some(([x0, y0, x1, y1]) => x > x0 - 80 && x < x1 + 80 && y > y0 - 40 && y < y1 + 120)) continue;
+        if (((x - M.POND[0]) / (M.POND[2] + 90)) ** 2 + ((y - M.POND[1]) / (M.POND[3] + 90)) ** 2 < 1) continue;
+        if (PROPS.some((p) => dist(p[1], p[2], x, y) < (p[0] === 'spruce' ? 220 : 160))) continue;
+        const r = h2(i, 23); addP(r < 0.45 ? 'spruce' : r < 0.66 ? 'thuja' : r < 0.8 ? 'tree' : r < 0.9 ? 'bush' : 'flowers', x, y, 0.85 + 0.3 * h2(i, 24), h2(i, 25) > 0.5); n++; }
+      for (let i = 0; i < 10; i++) { const a = h2(i, 29) * 6.28, r = 900 + h2(i, 30) * 1300, x = C[0] + Math.cos(a) * r, y = C[1] + Math.sin(a) * r * 0.8;
+        if (!onPave(x, y) && x > 100 && y > 150 && x < WORLD.x1 - 100 && y < WORLD.y1 - 100 && !near0(x, y, 140)) addP('bin', x, y); }
+    }
+    M.SOLIDS = [];
+    for (const [k, x, y, s] of PROPS) { if (FOOT[k]) M.SOLIDS.push({ x, y: y - 6, r: FOOT[k] * s });
+      if (k === 'bench') { M.SOLIDS.push({ x: x - 44, y: y - 10, r: 22 }, { x: x + 44, y: y - 10, r: 22 }); }
+      if (k === 'fence' || k === 'rail') { for (const o of [-80, 0, 80]) M.SOLIDS.push({ x: x + o, y: y - 6, r: 20 }); }
+      if (k === 'pergola') { M.SOLIDS.push({ x: x - 95, y: y - 6, r: 24 }, { x: x + 95, y: y - 6, r: 24 }); }
+ }
+    M.LAMPS = PROPS.filter((p) => p[0] === 'lamp' || p[0] === 'mlamp').map((p) => [p[1], p[2]]);
+    return M;
+  }
+  const MAPS = { park: buildMap('park'), meleuz: buildMap('meleuz') };
+  const MAPN = { park: 'Парк', meleuz: 'Мелеуз' };
+  const useMap = (id) => { LV = MAPS[id] || MAPS.park; ({ C, PLAZA, PATHS, SUBS, PROPS, SOLIDS, POND, LAMPS, WALLS } = LV);
+    if (root.SIM) Object.assign(root.SIM, { C, PLAZA, PATHS, SUBS, PROPS, SOLIDS, POND, LAMPS, WALLS, LV }); return LV; };
+  useMap('park');
+  const onPave = (x, y) => onPaveM(LV, x, y);
+  const inWall = (x, y, r) => { for (const [x0, y0, x1, y1] of WALLS) if (x > x0 - r && x < x1 + r && y > y0 - r && y < y1 + r) return true; return false; };
   const blocked = (x, y, r) => { if (((x - POND[0]) / (POND[2] + r)) ** 2 + ((y - POND[1]) / (POND[3] + r)) ** 2 < 1) return true;
+    if (inWall(x, y, r)) return true;
     for (const o of SOLIDS) if (Math.abs(x - o.x) < o.r + r && dist(x, (y - o.y) * 1.4 + o.y, o.x, o.y) < o.r + r) return true; return false; };
   const collide = (o, r) => {
     for (const s of SOLIDS) { if (Math.abs(o.x - s.x) > s.r + r + 4 || Math.abs(o.y - s.y) > s.r + r + 4) continue;
       const dx = o.x - s.x, dy = (o.y - s.y) * 1.4, d = Math.hypot(dx, dy), R = s.r + r;
       if (d < R && d > 0) { o.x = s.x + dx / d * R; o.y = s.y + dy / d * R / 1.4; } }
+    for (const [x0, y0, x1, y1] of WALLS) if (o.x > x0 - r && o.x < x1 + r && o.y > y0 - r && o.y < y1 + r) {      // out through the nearest side
+      const l = o.x - (x0 - r), rr = x1 + r - o.x, t = o.y - (y0 - r), b = y1 + r - o.y, m = Math.min(l, rr, t, b);
+      if (m === l) o.x = x0 - r; else if (m === rr) o.x = x1 + r; else if (m === t) o.y = y0 - r; else o.y = y1 + r; }
     const ex = (o.x - POND[0]) / (POND[2] + r), ey = (o.y - POND[1]) / (POND[3] + r), e = Math.hypot(ex, ey);
     if (e < 1 && e > 0) { o.x = POND[0] + ex / e * (POND[2] + r); o.y = POND[1] + ey / e * (POND[3] + r); }
     o.x = clamp(o.x, WORLD.x0 + 60, WORLD.x1 - 60); o.y = clamp(o.y, WORLD.y0 + 140, WORLD.y1 - 50);
@@ -217,30 +326,41 @@
       atkT: 0, atkN: 0, atkSide: 1, lastAtk: -9, tier: 0, tokens: [], set: -1, hitN: 0, hitSet: [], fastT: -9, stillT: 0,
       m: { dmg: 1, as: 1, area: 1, spd: 1, pick: H.pick, armor: 1, regen: 0, crit: 0.04, cd: 1, extra: 0, rico: 1, pullN: 3, ttl: 1, deo: 1, shield: 0 },
       pick: null, pickT: 0, items: { sig: 1 }, fused: [], sigEvo: null, rerolls: 2, kq: 0, queue: 0, petN: 0, evo: 0, ultLock: 0, wcd: {}, vcd: 0, gasT: -9, buffT: -9, selfRes: 1,
+      inBus: 0, gifts: {}, smol: 0, lsB: 0,
       st: { dmg: 0, ally: 0, allyHit: 0, rev: 0, downs: 0, xp: 0, kills: 0, gasIn: 0 },
       prev: {}, cam: [C[0] - VIEW.W / 2, C[1] - VIEW.H / 2], camV: [0, 0] }; };
   const newPlayer = (id, hero, bot, i) => { const p = mkPlayer(id, hero, bot, i); recalc(p); return p; };
 
   function create(cfg = {}) {
-    const heroes = cfg.heroes || ORDER, S = { t: 0, steps: 0, wt0: 0, mode: cfg.mode || 'play', seed: cfg.seed || 1,
+    SEED = (cfg.seed || 0) % 9973; useMap(cfg.map || 'park');
+    const heroes = cfg.heroes || ORDER, S = { t: 0, steps: 0, wt0: 0, mode: cfg.mode || 'play', seed: cfg.seed || 0,
+      map: LV.id, spor: SPORS[cfg.spor] ? cfg.spor : null, daily: cfg.daily ? 1 : 0, bus: null, endless: 0, swarmT: 0, score: 0, drinks: 0, kioskNext: 3, sporWon: 0,
       players: [], enemies: [], proj: [], eproj: [], clouds: [], zones: [], gems: [], marks: [], booms: [], nid: 1, rt: 0, pause: 0, pend: [], clear: 0, clearT: 0,
       wave: 1, waveT: 0, brk: 0, xp: 0, lvl: 1, xpNext: 6, eliteT: 20, chests: [], food: [], spawnAcc: 0, over: 0, won: 0, freeze: 0, kills: 0,
       comboT: -9, comboK: {}, sayT: -9, banter: 0, ev: [], awards: null, me: 0, solo: 0,
       found: ((cfg.meta && cfg.meta.found) || []).slice(), unlock: Object.assign({}, cfg.meta && cfg.meta.unlock) };
     heroes.forEach((h, i) => S.players.push(newPlayer(i, h, cfg.humans ? !cfg.humans.includes(i) : 1, i)));
     S.solo = S.players.filter((p) => !p.bot).length <= 1 && S.players.length === 1 ? 1 : 0;
+    if (S.spor === 'smol') for (const p of S.players) { p.smol = 1; recalc(p); }
     S.xpNext = xpNeed(S, 1);
     return S;
   }
   // play mode: the local human is player 0 (hero from cfg), the other heroes are bots unless cfg.heroes says otherwise
   const spawn = (worldT, cfg = {}) => { const me = cfg.hero || 'hasan', rest = cfg.solo ? [] : ORDER.filter((h) => h !== me);
-    const S = create({ heroes: [me, ...rest], humans: [0], meta: cfg.meta }); S.wt0 = worldT; S.solo = cfg.solo ? 1 : 0; return S; };
-  const respawn = (S, worldT) => spawn(worldT, { hero: S.players[0].hero, solo: S.solo, meta: { found: S.found, unlock: S.unlock } });
+    const S = create({ heroes: [me, ...rest], humans: [0], meta: cfg.meta, spor: cfg.spor, seed: cfg.seed, daily: cfg.daily }); S.wt0 = worldT; S.solo = cfg.solo ? 1 : 0; return S; };
+  const respawn = (S, worldT) => spawn(worldT, { hero: S.players[0].hero, solo: S.solo, meta: { found: S.found, unlock: S.unlock }, spor: S.spor, seed: S.seed, daily: S.daily });
   const outOfPlay = () => false;
 
   // ---------------- helpers ----------------
   const ev = (S, o) => { o.t = S.t; S.ev.push(o); };
-  const alive = (p) => !p.down && !p.out;
+  const alive = (p) => !p.down && !p.out && !p.inBus;
+  // risk → reward: the spor's enemy factor, the night kiosk's energy drinks, the endless night's compounding waves
+  const sporK = (S) => (SPORS[S.spor] && SPORS[S.spor].k) || 1;
+  const scoreX = (S) => ((SPORS[S.spor] && SPORS[S.spor].x) || 1) * (1 + 0.1 * S.drinks);
+  const enemyX = (S) => sporK(S) * (1 + 0.1 * S.drinks) * (S.endless ? Math.pow(1.12, S.wave - 2 * WAVES) : 1);
+  const mkEnemy = (S, ty, x, y, hp, extra) => Object.assign({ id: S.nid++, type: ty, x, y, vx: 0, vy: 0, kx: 0, ky: 0, hp, hpMax: hp, r: ETYPES[ty].r * (S.spor === 'chonk' ? 1.4 : 1),
+    hitT: -9, atkT: 0, slowT: -9, poisT: -9, born: S.t, dist: 0, face: 1, flee: 0, shotT: S.t + 2 + h1(S.nid) * 2, spawnT: S.t }, extra);
+  const DOOR = [30, -14];                                                    // the bus's open door, from its base centre (bus_paz faces right)
   const GRID = 96;
   let grid = new Map();
   const buildGrid = (S) => { grid = new Map(); for (const e of S.enemies) { const k = Math.floor(e.x / GRID) * 4096 + Math.floor(e.y / GRID);
@@ -267,20 +387,23 @@
   const hurtEnemy = (S, e, dmg, p, kind, kx = 0, ky = 0) => {
     if (e.hp <= 0) return;
     if (S.marks.length && S.marks.some((m) => m.id === e.id && S.t < m.until)) dmg *= 1.5;
+    if (S.t < (e.gooT || -9)) dmg *= 1.25;                                    // stuck in condensed milk
     let crit = 0; if (p && h2(S.steps + e.id, dmg) < p.m.crit) { dmg *= p.m.critX || 2; crit = 1; }
     e.hp -= dmg; e.hitT = S.t; e.kx += kx; e.ky += ky; e.lastHit = p ? p.id : -1; e.lastKind = kind;
     if (p) { p.st.dmg += dmg;
+      if (p.m.leech && alive(p) && p.lsB > 0) { const h = Math.min(dmg * p.m.leech, p.lsB, p.hpMax - p.hp); if (h > 0) { p.hp += h; p.lsB -= h; } }   // Кумыс
       if (p.hero === 'hasan' && !p.hitSet.includes(e.id)) { p.hitSet.push(e.id); if (p.hitSet.length > 8) p.hitSet.shift(); } }
     if (crit) ev(S, { k: 'crit', x: e.x, y: e.y });
     if (e.hp <= 0) killEnemy(S, e, p, kind);
   };
   const killEnemy = (S, e, p, kind) => {
     const T = ETYPES[e.type]; S.kills++; if (p) { p.st.kills++; if (S.t > p.ultLock) p.ult = Math.min(1, p.ult + 0.0032 * T.xp); }
+    S.score += Math.round(T.xp * 10 * (e.elite ? 10 : 1) * scoreX(S));
     ev(S, { k: 'kill', x: e.x, y: e.y, type: e.type, kind, pid: p ? p.id : -1, sc: T.sc });
     S.gems.push({ id: S.nid++, x: e.x, y: e.y - 4, v: T.xp, t0: S.t });
     if (e.elite || h2(e.id, S.steps) < 0.015) S.food.push({ id: S.nid++, x: e.x + 20, y: e.y + 10, t0: S.t });
-    if (e.type === 'bomber') explode(S, e.x, e.y, 100, 0, null, 'bomb');
-    if (e.elite && S.kettleW !== S.wave) { S.kettleW = S.wave; S.chests.push({ id: S.nid++, x: e.x, y: e.y, t0: S.t }); }
+    if (T.bomb) explode(S, e.x, e.y, 100, 0, null, 'bomb');
+    if (e.elite && S.kettleW !== S.wave && S.spor !== 'nokettle') { S.kettleW = S.wave; S.chests.push({ id: S.nid++, x: e.x, y: e.y, t0: S.t }); }
     if (e.elite) { for (let i = 0; i < 6; i++) S.gems.push({ id: S.nid++, x: e.x + 80 * (h2(S.steps, i) - 0.5), y: e.y + 60 * (h2(S.steps, i + 3) - 0.5), v: 3, t0: S.t }); }
   };
   const explode = (S, x, y, r, dmg, p, kind, M) => {
@@ -288,7 +411,7 @@
     if (dmg > 0) near(x, y, r, (e) => { const d = dist(e.x, e.y, x, y) || 1; hurtEnemy(S, e, dmg * (1 - 0.4 * d / r), p, kind, (e.x - x) / d * 260, (e.y - y) / d * 260);
       if (M0 && e.hp > 0) { applyMods(S, e, p, M0, dmg); if (!first) first = e; } });
     if (M && M.shock && first) zap(S, first, p, M.shock, dmg * 0.5);
-    if (kind === 'bomb') for (const q of S.players) if (alive(q) && dist(q.x, q.y, x, y) < r) hurtPlayer(S, q, 18 * (1 + 0.06 * (S.wave - 1)), null);
+    if (kind === 'bomb') for (const q of S.players) if (alive(q) && dist(q.x, q.y, x, y) < r) hurtPlayer(S, q, 18 * (1 + 0.06 * (S.wave - 1)) * enemyX(S), null);
   };
   // element effects on a hit: burn (damage over time), chill (slow), freeze (stop), charm, shock (chain lightning)
   const applyMods = (S, e, p, M, base) => { if (!M || !e) return; const t = S.t, big = ETYPES[e.type].sc >= 1.5 || e.elite;
@@ -303,6 +426,7 @@
   const hurtPlayer = (S, p, dmg, src, ally) => {
     if (!alive(p) || (!ally && S.t < p.inv)) return;
     let d = dmg * p.m.armor; if (p.hero === 'leha') { if (p.stillT > 2) d *= 0.75; if (S.t - p.qT < 4 + p.m.shield) d *= 0.4; }
+    if (S.spor === 'glass' && !ally) d = Math.max(d, p.hp);                   // «Хрустальный»: any hit puts you down
     if (ally) { d = Math.min(d, p.hp - 1); if (d <= 0) return; } else p.inv = S.t + 0.45;
     p.hp -= d; p.hurtT = S.t; p.hurtBy = ally ? 'gas' : src ? src.type : 'boom/spit'; ev(S, { k: 'hurt', x: p.x, y: p.y, pid: p.id, ally: ally ? 1 : 0 });
     if (p.hp <= 0) { p.hp = 0; p.down = 1; p.downT = 30; p.revP = 0; p.st.downs++; ev(S, { k: 'down', x: p.x, y: p.y, pid: p.id, by: p.hurtBy });
@@ -406,6 +530,19 @@
           if (l >= 3) e.freezeT = Math.max(e.freezeT || 0, t + 0.35); });
         if (M.shock) for (const e of hits.slice(0, 3)) zap(S, e, p, M.shock, 9 * pw, p.x, p.y - 60);
         ev(S, { k: 'bass', pid: p.id, x: p.x, y: p.y, r: R, wid: id }); }
+      // Рафинад: a sugar cube ricocheting from enemy to enemy (lv 3: every bounce hits 20% harder; Жжёный сахар: burns and pops)
+      if (W.b === 'sugar' && every(id, 1.6 / as)) { const n = 1 + (l >= 2) + evo, used = [];
+        for (let k = 0; k < n; k++) { const e = nearest(S, p.x, p.y, 640, used); if (!e) break; used.push(e.id); const d = dist(e.x, e.y, p.x, p.y) || 1;
+          S.proj.push({ id: S.nid++, own: p.id, kind: 'sugar', wid: id, x: p.x, y: p.y - 50, vx: (e.x - p.x) / d * 860, vy: (e.y - p.y) / d * 860, ttl: 0.9, hit: [], dmg: 10 * pw,
+            rico: 3 + (l >= 2 ? 2 : 0) + evo * 2, ramp: l >= 3 ? 1.2 : 1, mods: M }); } }
+      // Трактор «Универсал»: drives through the crowd in a straight line and throws everyone aside (Электротрактор: shocks them)
+      if (W.b === 'tractor' && every(id, 4.4 / as)) { const e = nearest(S, p.x, p.y, 700, []), a = e ? Math.atan2(e.y - p.y, e.x - p.x) : Math.atan2(p.fy, p.fx), n = l >= 3 ? 2 : 1, ca = Math.cos(a), sa = Math.sin(a);
+        for (let k = 0; k < n; k++) { const off = (k - (n - 1) / 2) * 130;
+          S.proj.push({ id: S.nid++, own: p.id, kind: 'tractor', wid: id, x: p.x - ca * 260 - sa * off, y: p.y - sa * 200 + ca * off, vx: ca * 560, vy: sa * 480, ttl: 2.0, hit: [], dmg: 22 * pw, r: (l >= 2 ? 70 : 56) * area, mods: M }); }
+        ev(S, { k: 'tractor', pid: p.id, x: p.x, y: p.y }); }
+      // Сгущёнка: a can lobbed into the crowd → a sticky puddle: enemies wade through it and take +25% from everything
+      if (W.b === 'condensed' && every(id, 3.4 / as)) { const list = crowd(560), n = 1 + (l >= 3);
+        for (let k = 0; k < n && list.length; k++) lob('condensed', list[Math.floor(h2(S.steps, k + p.id * 5) * list.length)], 0.6, { r: (l >= 2 ? 130 : 105) * area, dmg: 5 * pw, wid: id }); }
       // Голуби: pigeons circle the hero and dive at enemies (камикадзе: they blow up; Курлык-хор: their cooing stuns)
       if (W.b === 'pigeon') { const n = 1 + (l >= 2) + evo, out = S.proj.filter((b) => b.kind === 'pigeon' && b.own === p.id && b.wid === id).length;
         p.petN += Math.max(0, n - out);
@@ -446,6 +583,7 @@
   // travelling zones: Hasan's tornado drifts where he faced, sucks small enemies into a spin, chips them, flings them at the end
   function zoneStep(S, t) {
     for (const z of S.zones) { const p = S.players.find((q) => q.id === z.owner); if (!p) { z.ttl = 0; continue; }
+      if (z.kind === 'goo') { near(z.x, z.y, z.r, (e) => { e.slowT = Math.max(e.slowT, t + 0.25); e.gooT = t + 0.25; if ((S.steps + z.id) % 60 === 0) hurtEnemy(S, e, z.dmg, p, 'goo'); }); continue; }
       z.x += z.vx * DT; z.y += z.vy * DT; const zx = z.x, zy = z.y; collide(z, 20); if (z.x !== zx) z.vx *= -1; if (z.y !== zy) z.vy *= -1;
       const a = t - z.t0, R = z.r, end = a + DT >= z.ttl;
       near(z.x, z.y, R * 1.8, (e) => { const dx = e.x - z.x, dy = e.y - z.y, d = Math.hypot(dx, dy) || 1, big = ETYPES[e.type].sc >= 1.5 || e.elite;
@@ -466,8 +604,11 @@
     const keep = p.hero === 'vitya' ? 380 : 190, dt = dist(cx, cy, p.x, p.y);
     if (dt > keep) { mx += (cx - p.x) / dt * 0.8; my += (cy - p.y) / dt * 0.8; } else if (p.hero === 'vitya' && dt < 260 && dt > 1) { mx -= (cx - p.x) / dt; my -= (cy - p.y) / dt; }
     for (const q of S.players) { if (q === p || q.out) continue; const d = dist(q.x, q.y, p.x, p.y) || 1; if (d < 170) { mx -= (q.x - p.x) / d * (170 - d) / 170 * 2.5; my -= (q.y - p.y) / d * (170 - d) / 170 * 2.5; } }
-    const dc = dist(C[0], C[1], p.x, p.y); if (dc > 900) { mx += (C[0] - p.x) / dc * 0.6; my += (C[1] - p.y) / dc * 0.6; }
+    const dc = dist(C[0], C[1], p.x, p.y); if (dc > 900 && !S.bus) { mx += (C[0] - p.x) / dc * 0.6; my += (C[1] - p.y) / dc * 0.6; }
     const down = S.players.find((q) => q.down && !q.out && p.hero !== 'vitya'); if (down) { const d = dist(down.x, down.y, p.x, p.y) || 1; if (d > 40) { mx += (down.x - p.x) / d * 2.4; my += (down.y - p.y) / d * 2.4; } }
+    // the bus: pick friends up first; home only once the humans are aboard
+    if (S.bus && !down && (S.bus.to === 'meleuz' || S.players.every((q) => q.bot || q.out || q.inBus))) {
+      const bx = S.bus.x + DOOR[0], by = S.bus.y + DOOR[1], d = dist(bx, by, p.x, p.y) || 1; mx += (bx - p.x) / d * 7; my += (by - p.y) / d * 7; }
     let gb = null, gd = 260; for (const g of S.gems) { const d = dist(g.x, g.y, p.x, p.y); if (d < gd) { gd = d; gb = g; } }
     if (gb && !down) { mx += (gb.x - p.x) / gd * 0.7; my += (gb.y - p.y) / gd * 0.7; }
     if (p.hp < p.hpMax * 0.6) for (const f of S.food) { const d = dist(f.x, f.y, p.x, p.y); if (d < 500) { mx += (f.x - p.x) / d * 1.5; my += (f.y - p.y) / d * 1.5; break; } }
@@ -497,48 +638,57 @@
     S.rt = (S.rt || 0) + DT; S.steps++;
     S.pend = S.players.filter((p) => p.pick && !p.out).map((p) => p.id); S.pause = S.pend.length ? 1 : 0;
     if (S.pause) { pauseStep(S, inps); if (S.ev.length > 96) S.ev.splice(0, S.ev.length - 96); return S; }
+    if (LV.id !== S.map) useMap(S.map);
     const t = S.t + DT; S.t = t;
     buildGrid(S);
-    // ---- waves ----
-    if (S.brk > 0) { S.brk -= DT; if (S.brk <= 0) { S.wave++; S.waveT = 0; ev(S, { k: 'wave', n: S.wave }); checkUnlocks(S); const p = S.players[Math.floor(h1(S.wave) * S.players.length)]; say(S, p, 'wave'); } }
+    // ---- waves: 1–10 in the park → the bus to Meleuz → 11–20 → the bus home waits while the endless night goes on ----
+    if (S.bus) { S.swarmT += DT;
+      if (S.endless) { S.waveT += DT; if (S.waveT >= WAVE_LEN) { S.waveT = 0; S.wave++; S.score += Math.round(250 * S.wave * scoreX(S)); ev(S, { k: 'wave', n: S.wave }); checkUnlocks(S); } } }
+    else if (S.brk > 0) { S.brk -= DT; if (S.brk <= 0) { S.wave++; S.waveT = 0; ev(S, { k: 'wave', n: S.wave }); checkUnlocks(S); const p = S.players[Math.floor(h1(S.wave) * S.players.length)]; say(S, p, 'wave'); } }
     // the wave timer runs out → no more spawns; the break starts only once the last enemy of the wave is dead
     else if (S.clear) { S.clearT += DT;
-      if (!S.enemies.length) { S.clear = 0; if (S.wave >= WAVES) { S.over = t; S.won = 1; finishRun(S); return S; }
-        S.brk = BREAK; ev(S, { k: 'break', n: S.wave }); for (const p of S.players) { p.tokens = []; if (p.down && !p.out) { p.down = 0; p.hp = p.hpMax * 0.5; } p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.3); }
-        S.banter = t + 2; } }
+      if (!S.enemies.length) { S.clear = 0; S.score += Math.round(250 * S.wave * scoreX(S));
+        if (S.wave === WAVES && S.map === 'park') busArrive(S, 'meleuz');
+        else if (S.wave >= 2 * WAVES) { S.won = 1; S.endless = 1; busArrive(S, 'home'); checkUnlocks(S); }
+        else { S.brk = BREAK; ev(S, { k: 'break', n: S.wave }); for (const p of S.players) { p.tokens = []; if (p.down && !p.out) { p.down = 0; p.hp = p.hpMax * 0.5; } p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.3); }
+          S.banter = t + 2; } } }
     else { S.waveT += DT; if (S.waveT >= WAVE_LEN) { S.waveT = WAVE_LEN; S.clear = 1; S.clearT = 0; ev(S, { k: 'clear', n: S.wave }); } }
+    if (S.spor === 'speedrun' && S.map === 'park' && t > 780) { ev(S, { k: 'timeout' }); S.over = t; S.won = 0; finishRun(S); return S; }
     if (S.banter && t > S.banter) { S.banter = 0; const up = S.players.filter(alive), a = up[Math.floor(h1(S.wave + 3) * up.length)]; if (a) { S.sayT = -9; a.vcd = 0; say(S, a, 'banter'); } }
     if (S.allyDownSay && t > S.allyDownSay[0]) { const a = S.players.find((q) => q.id === S.allyDownSay[1]); S.allyDownSay = 0; if (a && alive(a)) { a.vcd = 0; say(S, a, 'ally_down'); } }
     // ---- spawning: hold a target count around the team, outside every camera ----
     const n = S.players.length, coop = COOP[Math.min(8, n)], humans = Math.max(1, n);
-    const want = S.brk > 0 || S.clear ? 0 : Math.min(190, Math.round((7 + S.wave * 5 + S.waveT * (0.08 + S.wave * 0.025)) * coop * (S.solo ? 0.7 : 1)));
-    S.spawnAcc += DT * (2 + S.wave * 0.8) * coop;
+    const swarm = S.bus && !S.endless ? 1 + S.swarmT / 25 : 1, crowdX = S.spor === 'crowd' ? 2 : 1;      // waiting for the bus: the swarm only grows
+    const want = S.brk > 0 || S.clear ? 0 : Math.min(190 * crowdX * (swarm > 1 ? 1.25 : 1), Math.round((7 + Math.min(S.wave, 24) * 5 + S.waveT * (0.08 + S.wave * 0.025)) * coop * (S.solo ? 0.7 : 1) * swarm * crowdX));
+    S.spawnAcc += DT * (2 + Math.min(S.wave, 24) * 0.8) * coop * swarm * crowdX * (S.spor === 'turbo' ? 1.5 : 1);
     const live = S.players.filter(alive);
     while (S.spawnAcc >= 1 && S.enemies.length < want && live.length) { S.spawnAcc -= 1;
       const k = S.steps * 13 + S.enemies.length, p = live[Math.floor(h1(k) * live.length)], a = h1(k + 1) * Math.PI * 2, r = 1150 + 250 * h1(k + 2);
       let x = clamp(p.x + Math.cos(a) * r, 80, WORLD.x1 - 80), y = clamp(p.y + Math.sin(a) * r * 0.75, 180, WORLD.y1 - 60);
       if (blocked(x, y, 30) || S.players.some((q) => dist(q.x, q.y, x, y) < 900)) continue;
-      const types = Object.keys(ETYPES).filter((ty) => ETYPES[ty].from <= S.wave), cnt = {};
-      for (const o of S.enemies) cnt[o.type] = (cnt[o.type] || 0) + 1;
-      const wts = types.map((ty) => (ty === 'spitter' && (cnt.spitter || 0) > Math.max(3, S.enemies.length * 0.12)) || (ty === 'brute' && (cnt.brute || 0) > Math.max(2, S.enemies.length * 0.1)) ? 0 : ETYPES[ty].w);
-      let rw = h1(k + 3) * wts.reduce((a, b) => a + b, 0), ty = 'ghoul'; for (let i = 0; i < types.length; i++) { rw -= wts[i]; if (rw <= 0) { ty = types[i]; break; } }
-      const T = ETYPES[ty], w1 = S.wave - 1, hp = T.hp * (1 + 0.18 * w1 + 0.025 * w1 * w1) * COOP_HP[Math.min(8, n)];
-      S.enemies.push({ id: S.nid++, type: ty, x, y, vx: 0, vy: 0, kx: 0, ky: 0, hp, hpMax: hp, r: T.r, hitT: -9, atkT: 0, slowT: -9, poisT: -9, born: t, dist: 0, face: 1, flee: 0, shotT: t + 2 + h1(k) * 2, spawnT: t });
+      const types = Object.keys(ETYPES).filter((ty) => ETYPES[ty].map === S.map && ETYPES[ty].w > 0 && ETYPES[ty].from <= S.wave);
+      const nR = S.enemies.filter((o) => ETYPES[o.type].ranged).length, nB = S.enemies.filter((o) => ETYPES[o.type].sc >= 1.5).length;
+      const wts = types.map((ty) => (ETYPES[ty].ranged && nR > Math.max(3, S.enemies.length * 0.12)) || (ETYPES[ty].sc >= 1.5 && nB > Math.max(2, S.enemies.length * 0.1)) ? 0 : ETYPES[ty].w);
+      let rw = h1(k + 3) * wts.reduce((a, b) => a + b, 0), ty = types[0]; for (let i = 0; i < types.length; i++) { rw -= wts[i]; if (rw <= 0) { ty = types[i]; break; } }
+      const T = ETYPES[ty], hp = T.hp * hpScale(S) * (S.spor === 'chonk' ? 2 : 1);
+      S.enemies.push(mkEnemy(S, ty, x, y, hp));
+      for (let j = 0; j < (T.pack || 0); j++) { const ox = x + 60 * (h1(k + 7 + j) - 0.5) * 2, oy = y + 50 * (h1(k + 11 + j) - 0.5) * 2;       // stray dogs run in packs
+        if (!blocked(ox, oy, 24)) S.enemies.push(mkEnemy(S, ty, ox, oy, hp)); }
     }
     if (S.spawnAcc > 3) S.spawnAcc = 3;
     // an elite every ~25 s from wave 2: a golden brute that drops a chest (a free upgrade for whoever opens it)
     if (S.brk <= 0 && !S.clear && S.wave >= 2 && live.length && (S.eliteT -= DT) <= 0) { S.eliteT = Math.max(22, 38 - S.wave * 1.5);
       const p = live[Math.floor(h1(S.steps) * live.length)], a = h1(S.steps + 5) * Math.PI * 2;
-      const x = clamp(p.x + Math.cos(a) * 1200, 80, WORLD.x1 - 80), y = clamp(p.y + Math.sin(a) * 900, 180, WORLD.y1 - 60), w1 = S.wave - 1;
-      if (!blocked(x, y, 40)) { const hp = 130 * 6 * (1 + 0.18 * w1 + 0.025 * w1 * w1) * COOP_HP[Math.min(8, n)];
-        S.enemies.push({ id: S.nid++, type: 'brute', elite: 1, x, y, vx: 0, vy: 0, kx: 0, ky: 0, hp, hpMax: hp, r: 46, hitT: -9, atkT: 0, slowT: -9, poisT: -9, born: t, dist: 0, face: 1, flee: 0, shotT: 9e9, spawnT: t });
-        ev(S, { k: 'elite', x, y }); } }
+      const x = clamp(p.x + Math.cos(a) * 1200, 80, WORLD.x1 - 80), y = clamp(p.y + Math.sin(a) * 900, 180, WORLD.y1 - 60);
+      if (!blocked(x, y, 40)) { const L2 = ELITES[S.map], ty = L2[Math.floor(h1(S.steps + 9) * L2.length)], hp = ETYPES[ty].hp * 6 * hpScale(S) * (S.spor === 'chonk' ? 2 : 1);
+        S.enemies.push(mkEnemy(S, ty, x, y, hp, { elite: 1, r: ETYPES[ty].r * 1.2, shotT: 9e9 }));
+        ev(S, { k: 'elite', x, y, type: ty }); } }
     // ---- players ----
     for (const p of S.players) {
       const inp = p.bot ? botInput(S, p) : (inps[p.id] || {});
       const edge = (k) => { const v = !!inp[k], e = v && !p.prev[k]; p.prev[k] = v; return e; };
       const qE = edge('q'), rE = edge('r'), eE = edge('e');
-      if (p.out) continue;
+      if (p.out || p.inBus) continue;
       if (p.down) { const g = inGas(S, p.x, p.y); p.downT -= DT * (g ? 1.5 : 1); if (g) p.gasDown = t;
         if (S.solo && p.selfRes > 0 && (eE || p.bot)) { p.selfRes--; p.down = 0; p.hp = p.hpMax * 0.5; p.inv = t + 2; ev(S, { k: 'revive', pid: p.id, by: p.id, x: p.x, y: p.y }); }
         const helpers = S.players.filter((q) => q !== p && alive(q) && q.hero !== 'vitya' && dist(q.x, q.y, p.x, p.y) < 85);
@@ -548,16 +698,21 @@
         const vt = S.players.find((q) => q.hero === 'vitya' && alive(q) && dist(q.x, q.y, p.x, p.y) < 85); if (vt && S.t - (p.cantT || -9) > 4) { p.cantT = S.t; say(S, vt, 'cant_revive'); }
         if (p.downT <= 0) { p.out = 1; ev(S, { k: 'out', pid: p.id, x: p.x, y: p.y }); }
         continue; }
+      // «Ночной ларёк»: an energy drink for the whole team — enemies tougher, XP and score up, for the rest of the run
+      if (eE && LV.KIOSK && !S.bus && S.wave >= S.kioskNext && dist(p.x, p.y, LV.KIOSK[0], LV.KIOSK[1] + 50) < 120) {
+        S.drinks++; S.kioskNext = S.wave + 3; ev(S, { k: 'drink', pid: p.id, x: p.x, y: p.y, n: S.drinks }); }
+      if (p.m.leech) { const cap = 4 * lv(p, 'kumys'); p.lsB = Math.min(cap, p.lsB + cap * DT); }
       // move
       const ix = (inp.right ? 1 : 0) - (inp.left ? 1 : 0), iy = (inp.down ? 1 : 0) - (inp.up ? 1 : 0), il = Math.hypot(ix, iy) || 1;
       const slowLeha = p.hero === 'leha' ? 1 - 0.04 * p.tier : 1, fast = t - p.fastT < 2 ? 1.25 : 1;
-      const spd = HEROES[p.hero].spd * p.m.spd * slowLeha * fast * (t - p.qT < 4 && p.hero === 'hasan' ? 1.1 : 1);
+      const spd = HEROES[p.hero].spd * p.m.spd * slowLeha * fast * (t - p.qT < 4 && p.hero === 'hasan' ? 1.1 : 1) * (S.spor === 'turbo' ? 1.3 : 1);
       const tx = ix / il * spd, ty = iy / il * spd, acc = 2600 * DT;
       p.vx += clamp(tx - p.vx, -acc, acc); p.vy += clamp(ty - p.vy, -acc, acc);
       if (ix || iy) { p.fx = ix / il; p.fy = iy / il; p.dir = Math.abs(iy) > Math.abs(ix) * 1.2 ? (iy > 0 ? 0 : 2) : (ix > 0 ? 1 : 3); p.stillT = 0; } else p.stillT += DT;
       p.qCD = Math.max(0, p.qCD - DT);
       const mx = p.vx, my = p.vy;
       p.x += mx * DT; p.y += my * DT; collide(p, 24);
+      if (S.bus && dist(p.x, p.y, S.bus.x + DOOR[0], S.bus.y + DOOR[1]) < 95) { p.inBus = 1; p.vx = p.vy = 0; ev(S, { k: 'board', pid: p.id, x: p.x, y: p.y }); continue; }
       const moved = Math.hypot(mx, my) * DT; if (moved > 0.05) { const b = Math.floor(p.dist / 62); p.dist += moved; if (Math.floor(p.dist / 62) !== b) ev(S, { k: 'step', pid: p.id, x: p.x, y: p.y }); }
       if (qE && p.qCD <= 0) useQ(S, p, t);
       if (rE && p.ult >= 1) useUlt(S, p, t);
@@ -576,6 +731,9 @@
       p.camV[1] += (28 * (tgy - p.cam[1]) - 10.5 * p.camV[1]) * DT; p.cam[1] += p.camV[1] * DT;
     }
     for (const p of S.players) if (p.out || p.down) { p.camV[0] *= 0.9; p.camV[1] *= 0.9; }
+    // everyone left is on the bus: to Meleuz, or home (the run ends, the endless night's score counts)
+    if (S.bus) { const act = S.players.filter((p) => !p.out);
+      if (act.length && act.every((p) => p.inBus)) { if (S.bus.to === 'meleuz') travel(S, 'meleuz'); else { S.over = t; S.won = 1; S.home = 1; finishRun(S); return S; } } }
     if (S.banterV && t > S.banterV) { const v = S.players.find((q) => q.id === S.banterW); S.banterV = 0; if (v) { S.sayT = -9; v.vcd = 0; say(S, v, 'gas_reply'); } }
     // ---- enemies ----
     const targets = S.players.filter(alive);
@@ -583,10 +741,25 @@
       const T = ETYPES[e.type]; let tg = null, td = 1e9;
       for (const p of targets) { const d = dist(p.x, p.y, e.x, e.y); if (d < td) { td = d; tg = p; } }
       const frozen = t < (e.freezeT || 0);
-      let spd = (frozen ? 0 : 1) * T.spd * (t < e.slowT ? 0.45 : 1) * (t < e.poisT ? 0.8 : 1) * (inGas(S, e.x, e.y) ? 0.8 : 1) * (S.clear && S.clearT > 8 ? 1.9 : 1);
+      let spd = (frozen ? 0 : 1) * T.spd * (t < e.slowT ? 0.45 : 1) * (t < e.poisT ? 0.8 : 1) * (inGas(S, e.x, e.y) ? 0.8 : 1) * (S.clear && S.clearT > 8 ? 1.9 : 1) * (S.spor === 'turbo' ? 1.5 : 1);
       let dx = 0, dy = 0; const charmed = t < (e.charmT || -9);
+      // «Яжемать»: stops, revs up the pram, then rams in a straight line
+      if (T.charge && !charmed && !frozen) {
+        if (e.chg === 1) { spd = 0; if (t - e.chgT > 0.7) { e.chg = 2; e.chgT = t; } }
+        else if (e.chg === 2) { if (t - e.chgT > 0.75) { e.chg = 0; e.chgCD = t + 3; } }
+        else if (tg && td < 460 && td > 110 && t > (e.chgCD || 0)) { e.chg = 1; e.chgT = t; e.cdx = (tg.x - e.x) / td; e.cdy = (tg.y - e.y) / td; ev(S, { k: 'rev', x: e.x, y: e.y, id: e.id }); } }
+      // «Батя района» slams the ground (a wind-up ring first); «Вожак стаи» howls the yard dogs in
+      if (e.elite && tg && !charmed && !frozen) {
+        if (e.type === 'starshiy') { if (e.slamT && t >= e.slamT) { e.slamT = 0; ev(S, { k: 'boom', x: e.x, y: e.y, r: 190, kind: 'slam' });
+            for (const q of S.players) if (alive(q) && dist(q.x, q.y, e.x, e.y) < 190) { hurtPlayer(S, q, T.dmg * 1.4 * enemyX(S), e); const d = dist(q.x, q.y, e.x, e.y) || 1; q.vx += (q.x - e.x) / d * 700; q.vy += (q.y - e.y) / d * 700; } }
+          else if (!e.slamT && td < 230 && t > (e.slamCD || 0)) { e.slamT = t + 0.7; e.slamCD = t + 4.5; ev(S, { k: 'warn', x: e.x, y: e.y, r: 190, until: t + 0.7, slam: 1 }); }
+          if (e.slamT) spd = 0; }
+        if (T.howl && t > (e.howlT || e.born + 2)) { e.howlT = t + 7; ev(S, { k: 'howl', x: e.x, y: e.y, id: e.id });
+          for (let j = 0; j < 3; j++) { const a = j * 2.1 + h1(e.id + j), ox = e.x + Math.cos(a) * 90, oy = e.y + Math.sin(a) * 70;
+            if (!blocked(ox, oy, 24)) S.enemies.push(mkEnemy(S, 'dog', ox, oy, ETYPES.dog.hp * hpScale(S))); } } }
       if (charmed) { dx = Math.sin(t * 1.7 + e.id) * 0.35; dy = Math.cos(t * 1.3 + e.id * 2) * 0.35; }
       else if (e.flee) { const p = tg || { x: C[0], y: C[1] }; const d = dist(p.x, p.y, e.x, e.y) || 1; dx = (e.x - p.x) / d; dy = (e.y - p.y) / d; spd *= 1.4; e.hp -= DT * 30; }
+      else if (e.chg === 2) { dx = e.cdx; dy = e.cdy; spd = T.spd * 4.4; }
       else if (tg) { dx = (tg.x - e.x) / (td || 1); dy = (tg.y - e.y) / (td || 1);
         if (T.ranged && td < 520) { dx *= -0.5; dy *= -0.5; if (td < 380) { dx *= 2; dy *= 2; } } }
       // separation from neighbours
@@ -600,9 +773,11 @@
       if (e.hp <= 0) continue;
       if (tg && !e.flee && !charmed && !frozen) {
         if (td < e.r + 30 && t > e.atkT) { e.atkT = t + 0.7; e.biteT = t;
-          if (T.bomb) { e.hp = 0; killEnemy(S, e, null, 'self'); } else hurtPlayer(S, tg, T.dmg * (1 + 0.07 * (S.wave - 1)) * (e.elite ? 1.5 : 1), e); }
+          if (T.bomb) { e.hp = 0; killEnemy(S, e, null, 'self'); } else { hurtPlayer(S, tg, T.dmg * (1 + 0.07 * (S.wave - 1)) * (e.elite ? 1.5 : 1) * enemyX(S), e);
+            if (e.chg === 2) { tg.vx += e.cdx * 650; tg.vy += e.cdy * 650; e.chg = 0; e.chgCD = t + 3; } } }      // the pram knocks you flying
         if (T.ranged && td < 640 && t > e.shotT) { e.shotT = t + 3.6 + h2(e.id, S.steps) * 2; const d = td || 1;
-          S.eproj.push({ x: e.x, y: e.y - 40, vx: (tg.x - e.x) / d * 340, vy: (tg.y - 40 - e.y + 40) / d * 340, ttl: 2.4, dmg: T.dmg }); ev(S, { k: 'spit', x: e.x, y: e.y }); }
+          if (T.lob) { S.eproj.push({ lob: 1, x: e.x, y: e.y - 40, vx: (tg.x - e.x) / 0.9, vy: (tg.y - e.y) / 0.9, ttl: 0.9, ttl0: 0.9, r: 62, dmg: T.dmg * enemyX(S) }); ev(S, { k: 'toss', x: e.x, y: e.y }); }   // Алкаш: a bottle in an arc
+          else { S.eproj.push({ x: e.x, y: e.y - 40, vx: (tg.x - e.x) / d * 340, vy: (tg.y - 40 - e.y + 40) / d * 340, ttl: 2.4, dmg: T.dmg * enemyX(S) }); ev(S, { k: 'spit', x: e.x, y: e.y }); } }
       }
       // gas damage
       const g = inGas(S, e.x, e.y); if (g && Math.floor((t - g.t0) / 0.5) !== Math.floor((t - DT - g.t0) / 0.5)) { const v = S.players.find((q) => q.id === g.owner);
@@ -614,7 +789,8 @@
     // ---- projectiles ----
     for (const b of S.proj) { b.x += b.vx * DT; b.y += b.vy * DT; b.ttl -= DT;
       const p = S.players.find((q) => q.id === b.own);
-      if (b.lob) { if (b.ttl <= 0 && p) explode(S, b.x, b.y + 45, b.r, b.dmg, p, b.kind, b.mods); continue; }     // can / petard / firework land
+      if (b.lob) { if (b.ttl <= 0 && p) { if (b.kind === 'condensed') { S.zones.push({ id: S.nid++, kind: 'goo', owner: p.id, x: b.x, y: b.y + 45, vx: 0, vy: 0, r: b.r, t0: S.t, ttl: 4.5, dmg: b.dmg }); ev(S, { k: 'splat', x: b.x, y: b.y + 45, r: b.r }); }
+        else explode(S, b.x, b.y + 45, b.r, b.dmg, p, b.kind, b.mods); } continue; }     // can / petard / firework land
       if (b.ttl <= 0) continue;
       if (b.kind === 'pigeon') { const e = S.enemies.find((o) => o.id === b.tgt && o.hp > 0) || nearest(S, b.x, b.y + 45, 300, []);   // homing dive
         if (!e) { b.ttl = Math.min(b.ttl, 0.3); continue; } b.tgt = e.id;
@@ -622,6 +798,10 @@
         if (d < 30 && p) { hurtEnemy(S, e, b.dmg, p, 'peck', b.vx * 0.1, b.vy * 0.1); if (e.hp > 0) applyMods(S, e, p, Object.assign({}, b.mods, { boom: 0 }), b.dmg);
           if (b.r) explode(S, e.x, e.y, b.r, b.dmg, p, 'kamikaze', { burn: (b.mods || {}).burn }); else ev(S, { k: 'hit', x: e.x, y: e.y, kind: 'peck' }); b.ttl = 0; }
         continue; }
+      if (b.kind === 'tractor') { if (p) near(b.x, b.y, b.r, (e) => { if (b.hit.includes(e.id)) return; b.hit.push(e.id);
+          const d = Math.hypot(b.vx, b.vy) || 1, nx = -b.vy / d, ny = b.vx / d, sd = (e.x - b.x) * nx + (e.y - b.y) * ny >= 0 ? 1 : -1, k = ETYPES[e.type].sc >= 1.5 || e.elite ? 0.3 : 1;
+          hurtEnemy(S, e, b.dmg, p, 'tractor', (nx * sd * 520 + b.vx * 0.4) * k, (ny * sd * 520 + b.vy * 0.4) * k);
+          if (b.mods && e.hp > 0) applyMods(S, e, p, b.hit.length % 3 === 1 ? b.mods : Object.assign({}, b.mods, { shock: 0 }), b.dmg); }); continue; }
       if (b.home) { const h = nearest(S, b.x, b.y + 45, 320, b.hit); if (h) { const dx = h.x - b.x, dy = h.y - 45 - b.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, 6 * DT); b.vx += (dx / d * 920 - b.vx) * k; b.vy += (dy / d * 920 - b.vy) * k; } }
       if (b.kind === 'tapok' && p) { if (!b.back && t - b.t0 > b.out) { b.back = 1; b.hit = []; }
         if (b.back) { const dx = p.x - b.x, dy = p.y - 50 - b.y, d = Math.hypot(dx, dy) || 1; b.vx = dx / d * b.sp * 1.1; b.vy = dy / d * b.sp * 1.1; if (d < 30) { b.ttl = 0; continue; } } }
@@ -630,10 +810,11 @@
         if (b.kind === 'rocket') { explode(S, b.x, b.y + 45, (S.t - p.ultT < 7 ? 150 : 130) * p.m.area, b.dmg, p, 'rocket', b.mods); b.ttl = 0; continue; }
         hurtEnemy(S, e, b.dmg, p, b.kind, b.vx * 0.15, b.vy * 0.15); ev(S, { k: 'hit', x: b.x, y: b.y + 45, kind: b.kind, tox: b.tox || 0 });
         if (b.mods && e.hp > 0) applyMods(S, e, p, b.mods, b.dmg);
+        if (b.kind === 'sugar' && b.mods && b.mods.boom) explode(S, e.x, e.y, b.mods.boom * p.m.area, b.dmg * 0.6, p, 'caramel', { burn: b.mods.burn });
         if (b.kind === 'scoop') { if (b.mods && b.mods.boom) explode(S, e.x, e.y, b.mods.boom * p.m.area, b.dmg * 0.8, p, 'fried', Object.assign({}, b.mods, { boom: 0 })); b.ttl = 0; continue; }
         if (b.kind === 'card') { p.hitN++; if (p.hitN % 15 === 0 && p.tokens.length < 3) { p.tokens.push(Math.floor(h2(S.steps, p.hitN) * 3)); ev(S, { k: 'token', pid: p.id });
             if (p.tokens.length === 3) { const tk = p.tokens; p.set = tk[0] === tk[1] && tk[1] === tk[2] ? 0 : new Set(tk).size === 3 ? 1 : 2; if (p.set === 1) p.m.crit += 0.1; ev(S, { k: 'set', pid: p.id, set: p.set }); } } }
-        if (b.rico > 0) { const n2 = nearest(S, e.x, e.y, 300, b.hit); if (n2) { const d = dist(n2.x, n2.y, e.x, e.y) || 1; b.vx = (n2.x - e.x) / d * 900; b.vy = (n2.y - e.y) / d * 900; b.x = e.x; b.y = e.y - 45; b.rico--; b.dmg *= 0.65; b.ttl = 0.5; continue; } }
+        if (b.rico > 0) { const n2 = nearest(S, e.x, e.y, 300, b.hit); if (n2) { const d = dist(n2.x, n2.y, e.x, e.y) || 1; b.vx = (n2.x - e.x) / d * 900; b.vy = (n2.y - e.y) / d * 900; b.x = e.x; b.y = e.y - 45; b.rico--; b.dmg *= b.ramp || 0.65; b.ttl = 0.5; continue; } }
         if (b.kind === 'tapok') continue;
         if (b.pierce && b.hit.length <= b.pierce) continue;
         if (b.kind !== 'pellet' || b.hit.length > 1) b.ttl = 0; }
@@ -645,6 +826,7 @@
       const lh = S.players.find((q) => q.hero === 'leha' && alive(q) && t - q.qT < 4 + q.m.shield && dist(q.x, q.y - 40, b.x, b.y) < 150 && (b.x - q.x) * q.fx + (b.y - q.y + 40) * q.fy > 10);
       const hz = S.players.find((q) => q.hero === 'hasan' && alive(q) && t - q.qT < 4 && dist(q.x, q.y - 30, b.x, b.y) < 150 * q.m.area);
       if (lh || hz) { b.ttl = 0; ev(S, { k: 'block', x: b.x, y: b.y, by: lh ? 'leha' : 'hasan' }); continue; }
+      if (b.lob) { if (b.ttl <= 0) { ev(S, { k: 'shatter', x: b.x, y: b.y + 40 }); for (const p of S.players) if (alive(p) && dist(p.x, p.y, b.x, b.y + 40) < b.r) hurtPlayer(S, p, b.dmg, null); } continue; }
       for (const p of S.players) { if (!alive(p)) continue;
         if (dist(p.x, p.y - 40, b.x, b.y) < 30) { hurtPlayer(S, p, b.dmg, null); b.ttl = 0; break; } } }
     S.eproj = S.eproj.filter((b) => b.ttl > 0);
@@ -658,7 +840,7 @@
     for (const g of S.gems) { let best = null, bd = 1e9;
       for (const p of S.players) { if (!alive(p)) continue; const d = dist(p.x, p.y - 30, g.x, g.y); const R = 95 * p.m.pick * (t - p.qT < 4 && p.hero === 'hasan' ? 3 : 1); if (d < R && d < bd) { bd = d; best = p; } }
       if (best) { const sp = 700 + 900 * (1 - bd / 400); g.x += (best.x - g.x) / bd * sp * DT; g.y += (best.y - 30 - g.y) / bd * sp * DT;
-        if (bd < 26) { g.got = 1; S.xp += g.v; best.st.xp += g.v; ev(S, { k: 'gem', x: g.x, y: g.y, pid: best.id, v: g.v }); } } }
+        if (bd < 26) { g.got = 1; S.xp += g.v * (1 + 0.15 * S.drinks); best.st.xp += g.v; ev(S, { k: 'gem', x: g.x, y: g.y, pid: best.id, v: g.v }); } } }
     S.gems = S.gems.filter((g) => !g.got && t - g.t0 < 60);
     for (const c of S.chests) for (const p of S.players) if (alive(p) && !c.got && dist(p.x, p.y, c.x, c.y) < 70) { c.got = 1;
       S.kettleBy = p.id; for (const q of S.players) if (!q.out) { q.kq = (q.kq || 0) + 1; if (!q.pick) openNext(S, q); }
@@ -671,15 +853,29 @@
       for (const p of S.players) { if (p.out) continue; p.queue = (p.queue || 0) + 1; if (!p.pick) openNext(S, p); }
       const p = S.players[Math.floor(h1(S.lvl) * S.players.length)]; say(S, p, 'lvl'); }
     // ---- defeat ----
-    if (S.players.every((p) => p.down || p.out)) { S.over = t; S.won = 0; finishRun(S); }
+    { const outside = S.players.filter((p) => !p.out && !p.inBus);
+      if (outside.length ? outside.every((p) => p.down) : S.players.every((p) => p.out)) { S.over = t; finishRun(S); } }    // S.won stays 1 in the endless night
     if (S.ev.length > 96) S.ev.splice(0, S.ev.length - 96);
     return S;
   }
   const xpNeed = (S, l) => Math.round(1.5 * (4 + 3.5 * l + 0.22 * l * l) * (0.1 + 0.35 * S.players.length));   // solo ~lvl 18, four players ~lvl 24 by the end
   const openNext = (S, p) => { p.pickT = S.rt;
     if (p.kq > 0) { p.kq--; p.pick = kettleCards(S, p); } else if (p.queue > 0) { p.queue--; p.pick = rollPick(S, p); } else p.pick = null; };
-  const checkUnlocks = (S) => { if (!S.unlock.pigeon && S.found.length >= 3) { S.unlock.pigeon = 1; ev(S, { k: 'unlock', id: 'pigeon' }); }
-    if (!S.unlock.icecream && S.wave >= 5) { S.unlock.icecream = 1; ev(S, { k: 'unlock', id: 'icecream' }); } };
+  const hpScale = (S) => { const w1 = S.wave - 1; return (1 + 0.18 * w1 + 0.025 * w1 * w1) * COOP_HP[Math.min(8, S.players.length)] * enemyX(S); };
+  // «Дела» → S.unlock (the page keeps them between runs)
+  const QDONE = { icecream: (S) => S.wave >= 5, pigeon: (S) => S.found.length >= 3, meleuz: (S) => S.map === 'meleuz', condensed: (S) => S.endless, kumys: (S) => S.sporWon };
+  const checkUnlocks = (S) => { for (const q of QUESTS) if (!S.unlock[q.id] && QDONE[q.id](S)) { S.unlock[q.id] = 1; ev(S, { k: 'unlock', id: q.id }); } };
+  const busArrive = (S, to) => { S.bus = { x: LV.BUS[0], y: LV.BUS[1], to, t0: S.t }; S.swarmT = 0; S.waveT = 0;
+    for (const p of S.players) { if (p.down && !p.out) { p.down = 0; p.hp = p.hpMax * 0.5; } p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.3); }
+    ev(S, { k: 'bus', to, x: S.bus.x, y: S.bus.y }); };
+  // the PAZik drives off: a fresh level, everyone at its square, a breather before wave 11
+  function travel(S, to) {
+    useMap(to); S.map = to; S.bus = null; S.swarmT = 0;
+    for (const k of ['enemies', 'proj', 'eproj', 'clouds', 'zones', 'gems', 'chests', 'food', 'marks']) S[k] = [];
+    S.players.forEach((p, i) => { if (p.out) return; const a = i / 4 * Math.PI * 2 + 0.6; p.inBus = 0; p.x = C[0] + Math.cos(a) * 110; p.y = C[1] + Math.sin(a) * 90; p.vx = p.vy = 0;
+      p.cam = [p.x - VIEW.W / 2, p.y - 60 - VIEW.H / 2]; p.camV = [0, 0]; p.trX = undefined; p.lash = null; });
+    S.brk = BREAK; S.kioskNext = S.wave + 2; S.score += Math.round(5000 * scoreX(S)); if (S.spor) S.sporWon = 1;
+    ev(S, { k: 'arrive', map: to }); checkUnlocks(S); }
   function applyPick(S, p, id, t) {
     const tier0 = p.tier, c = (p.pick || []).find((x) => x.id === id) || {};
     if (id === 'reroll') { if (p.rerolls > 0) { p.rerolls--; p.pick = rollPick(S, p); p.pickT = S.rt; } return; }
@@ -687,7 +883,7 @@
     else if (id === 'fission') {                                      // +1 level to up to three random items below their cap
       const up = [...(lv(p, 'sig') < MAXL ? ['sig'] : []), ...(p.sigEvo && lv(p, p.sigEvo) < MAXL ? [p.sigEvo] : []), ...sharedW(p).filter((w) => lv(p, w) < MAXL), ...ownedP(p).filter((q) => lv(p, q) < pmax(q))];
       const got = []; for (let k = 0; k < 3 && up.length; k++) { const w = up.splice(Math.floor(h2(S.steps + k * 5, p.id) * up.length), 1)[0]; p.items[w]++; got.push(w); }
-      if (!got.length) { p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.5); for (let i = 0; i < 8; i++) S.gems.push({ id: S.nid++, x: p.x + 90 * (h2(S.steps, i) - 0.5), y: p.y + 70 * (h2(S.steps, i + 4) - 0.5), v: 3, t0: S.t }); }
+      if (!got.length) { const gl = Object.keys(GIFTS); for (let k = 0; k < 3; k++) { const g = gl[Math.floor(h2(S.steps + k * 7, p.id + 5) * gl.length)]; p.gifts[g] = gift(p, g) + 1; got.push(g); } }   // all maxed: three gifts
       ev(S, { k: 'fission', pid: p.id, x: p.x, y: p.y, ids: got }); }
     else if (id.startsWith('fuse:')) { p.fused.push([c.a, c.b]); ev(S, { k: 'fusion', pid: p.id, x: p.x, y: p.y, a: c.a, b: c.b }); }
     else if (id.startsWith('r:')) { const r = RECIPES.find((x) => x.id === c.rid);
@@ -696,6 +892,7 @@
       const fresh = !S.found.includes(r.id); if (fresh) S.found.push(r.id);
       ev(S, { k: 'upgrade', pid: p.id, id: r.id, x: p.x, y: p.y, evo: 1, fresh: fresh ? 1 : 0 });
       if (fresh) ev(S, { k: 'discover', pid: p.id, id: r.id }); checkUnlocks(S); }
+    else if (GIFTS[id]) { p.gifts[id] = gift(p, id) + 1; if (id === 'g_hp') p.hp += GIFTS.g_hp.k; }
     else { p.items[id] = lv(p, id) + 1; if (id === 'hp') p.hp += 20; }
     recalc(p); if (!id.startsWith('r:')) ev(S, { k: 'upgrade', pid: p.id, id, x: p.x, y: p.y, evo: 0 });
     if (p.hero === 'leha' && p.tier !== tier0) ev(S, { k: 'gunup', pid: p.id, g: p.tier, x: p.x, y: p.y });             // the arsenal grows: shown over his head
@@ -706,13 +903,16 @@
     const cand = [];
     if (!p.sigEvo && lv(p, 'sig') < MAXL) cand.push(['sig', 4]);
     if (p.sigEvo && lv(p, p.sigEvo) < MAXL) cand.push([p.sigEvo, 4]);
-    for (const id of Object.keys(WEAPONS)) { const l = lv(p, id); if (l) { if (l < MAXL && !isFused(p, id)) cand.push([id, 3]); } else if (!WEAPONS[id].from && usedW(p) < MAXW && unlocked(S, id)) cand.push([id, 1.4]); }
+    for (const id of Object.keys(WEAPONS)) { const l = lv(p, id); if (l) { if (l < MAXL && !isFused(p, id)) cand.push([id, 3]); }
+      else if (!WEAPONS[id].from && usedW(p) < MAXW && unlocked(S, id) && S.spor !== 'pacifist') cand.push([id, WEAPONS[id].map === S.map ? 2.2 : 1.4]); }   // the town's own items show up more
     for (const id of Object.keys(PASSIVES)) { const q = PASSIVES[id]; if (q.hero && q.hero !== p.hero) continue; const l = lv(p, id);
-      if (l) { if (l < pmax(id)) cand.push([id, 2.5]); } else if (!q.from && ownedP(p).length < MAXP) cand.push([id, 1.3]); }
+      if (l) { if (l < pmax(id)) cand.push([id, 2.5]); } else if (!q.from && ownedP(p).length < MAXP && unlocked(S, id)) cand.push([id, q.map === S.map ? 2 : 1.3]); }
     const out = [];
     for (let k = 0; out.length < 3 && cand.length && k < 50; k++) { const tot = cand.reduce((a, c) => a + c[1], 0); let r = h2(S.steps + k * 17, p.id * 7 + S.lvl) * tot;
       for (let i = 0; i < cand.length; i++) { r -= cand[i][1]; if (r <= 0) { out.push(cand[i][0]); cand.splice(i, 1); break; } } }
-    while (out.length < 3) out.push('heal');
+    const gl = Object.keys(GIFTS);                                             // nothing left to level: «Бабушкины гостинцы», endless
+    for (let k = 0; out.length < 3 && k < 30; k++) { const g = gl[Math.floor(h2(S.steps + k * 3, p.id + 31) * gl.length)]; if (!out.includes(g)) out.push(g); }
+    if (p.hp < p.hpMax * 0.5 && GIFTS[out[2]]) out[2] = 'heal';
     if (p.rerolls > 0) out.push('reroll');
     return out.map((id) => cardFor(p, id));
   }
@@ -724,7 +924,7 @@
     const r = top((p) => p.st.rev); if (r.st.rev > 0) A.push({ pid: r.id, t: 'Ангел-хранитель', d: `поднял друзей ${r.st.rev} раз` });
     const d = top((p) => p.st.downs); if (d.st.downs > 0) A.push({ pid: d.id, t: 'Профессиональный лежун', d: `падал ${d.st.downs} раз` });
     const x = top((p) => p.st.xp); A.push({ pid: x.id, t: x.hero === 'hasan' ? 'Пылесос усов' : 'Пылесос', d: `собрал ${Math.round(x.st.xp)} опыта` });
-    const k = top((p) => p.st.dmg); A.push({ pid: k.id, t: 'Мясник парка', d: `${Math.round(k.st.dmg)} урона` });
+    const k = top((p) => p.st.dmg); A.push({ pid: k.id, t: S.map === 'meleuz' ? 'Мясник Мелеуза' : 'Мясник парка', d: `${Math.round(k.st.dmg)} урона` });
     S.awards = A; ev(S, { k: S.won ? 'win' : 'lose' });
   }
 
@@ -743,7 +943,8 @@
   const S0check = (f) => { const S = create(); for (const p of S.players) if (blocked(p.x, p.y, 24)) f.push('player spawn blocked ' + p.hero);
     for (const [x, y] of LAMPS) if (onPave(x, y) && dist(x, y, C[0], C[1]) < 200) f.push('lamp in plaza centre'); };
 
-  root.SIM = { DT, L, VIEW, WORLD, HINT, C, PLAZA, PATHS, SUBS, PROPS, SOLIDS, POND, LAMPS, HEROES, ORDER, ETYPES, UPG, QCD, LEHA_GUNS, WAVE_LEN, BREAK, WAVES,
+  root.SIM = { DT, L, VIEW, WORLD, HINT, C, PLAZA, PATHS, SUBS, PROPS, SOLIDS, POND, LAMPS, WALLS, LV, HEROES, ORDER, ETYPES, UPG, QCD, LEHA_GUNS, WAVE_LEN, BREAK, WAVES,
+    MAPS, MAPN, SPORS, QUESTS, DOOR, useMap, scoreX,
     onPave, inGas, collide, cardFor, kettleCards, recalc, lv, create, spawn, respawn, outOfPlay, step, at, scriptInput, demoCheck, selfCheck, botInput };
   if (typeof module !== 'undefined') module.exports = root.SIM;
 })(typeof window !== 'undefined' ? window : globalThis);

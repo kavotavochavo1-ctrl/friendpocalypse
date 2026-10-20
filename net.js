@@ -20,34 +20,38 @@
   const ET = Object.keys(SIM.ETYPES), r1 = (v) => Math.round(v), r2 = (v) => Math.round(v * 100) / 100;
   const HN = ['hasan', 'danil', 'vitya', 'leha'];
   const PF = ['id', 'hero', 'bot', 'x', 'y', 'vx', 'vy', 'fx', 'fy', 'ax', 'ay', 'dir', 'dist', 'hp', 'hpMax', 'down', 'downT', 'revP', 'out', 'inv', 'hurtT',
-    'qa', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo', 'nick', 'petN', 'sigEvo', 'rerolls'];
+    'qa', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo', 'nick', 'petN', 'sigEvo', 'rerolls', 'inBus'];
+  const ES = 19;                                                            // enemy row stride
   const evSince = {};
   function snapshot(S, pid) {
     const p = S.players.find((o) => o.id === pid) || S.players[0], R = 1500, nearP = (x, y, r = R) => Math.abs(x - p.x) < r * 1.4 && Math.abs(y - p.y) < r;
     // players as flat number rows (only what drawing, HUD, audio and prediction read); own row also carries cam + upgrade pick
     const players = S.players.map((o) => { const row = PF.map((k) => { const v = o[k]; return typeof v === 'number' ? (Number.isInteger(v) ? v : r2(v)) : v; });
       row[PF.indexOf('hero')] = HN.indexOf(o.hero); row[PF.indexOf('ack')] = ackOf[o.id] || 0;
-      return [row, [r2(o.m.area), r2(o.m.cd), r2(o.m.shield), r2(o.m.spd)], o.tokens, o.id === pid ? o.pick : 0, o.id === pid ? o.cam.map(r1) : 0, o.id === pid ? o.items : 0, o.id === pid ? o.fused : 0]; });
-    const E = []; for (const e of S.enemies) if (nearP(e.x, e.y)) E.push(e.id, ET.indexOf(e.type) + (e.elite ? 10 : 0), r1(e.x), r1(e.y), r1(e.vx), r1(e.vy), r1(e.hp), r1(e.hpMax), r1(e.dist), r2(e.spawnT), r2(e.hitT), r2(e.biteT || -9), e.face, r2(e.charmT || -9), r2(e.burnT || -9), r2(e.freezeT || -9));
+      return [row, [r2(o.m.area), r2(o.m.cd), r2(o.m.shield), r2(o.m.spd)], o.tokens, o.id === pid ? o.pick : 0, o.id === pid ? o.cam.map(r1) : 0, o.id === pid ? o.items : 0, o.id === pid ? o.fused : 0, o.id === pid ? o.gifts : 0]; });
+    const E = []; for (const e of S.enemies) if (nearP(e.x, e.y)) E.push(e.id, ET.indexOf(e.type) + (e.elite ? 100 : 0), r1(e.x), r1(e.y), r1(e.vx), r1(e.vy), r1(e.hp), r1(e.hpMax), r1(e.dist), r2(e.spawnT), r2(e.hitT), r2(e.biteT || -9), e.face, r2(e.charmT || -9), r2(e.burnT || -9), r2(e.freezeT || -9),
+      e.chg || 0, r2(e.cdx || 0), r2(e.howlT || -99));
     const G = []; for (const g of S.gems) if (nearP(g.x, g.y, 1200)) G.push(g.id, r1(g.x), r1(g.y), g.v);
-    const B = S.proj.filter((b) => nearP(b.x, b.y)).map((b) => [b.id, b.kind, r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), b.c || 0, b.tox || 0, b.kind === 'can' ? r2(b.ttl) : 0]);
-    const EB = S.eproj.filter((b) => nearP(b.x, b.y)).map((b) => [r1(b.x), r1(b.y), r2(b.ttl)]);
+    const B = S.proj.filter((b) => nearP(b.x, b.y)).map((b) => [b.id, b.kind, r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), b.c || 0, b.tox || 0, r2(b.ttl), r2(b.ttl0 || 0), (b.mods && b.mods.burn ? 1 : 0) | (b.mods && b.mods.shock ? 2 : 0)]);
+    const EB = S.eproj.filter((b) => nearP(b.x, b.y)).map((b) => [r1(b.x), r1(b.y), r2(b.ttl), b.lob ? r2(b.ttl0) : 0]);
     const since = evSince[pid] ?? -1;                                       // only events this friend has not been sent yet
     const ev = S.ev.filter((e) => e.t > since && (e.x === undefined || nearP(e.x, e.y, 2000) || e.k === 'say'));
     const enemyDots = S.enemies.length > 0 ? S.enemies.filter((e, i) => i % 3 === 0).map((e) => [r1(e.x / 8), r1(e.y / 8)]) : [];
     return { t: S.t, wave: S.wave, waveT: r2(S.waveT), brk: r2(S.brk), xp: S.xp, lvl: S.lvl, xpNext: S.xpNext, kills: S.kills, over: S.over, won: S.won,
       awards: S.awards, comboT: S.comboT, solo: S.solo, kettleBy: S.kettleBy, players, E, G, B, EB, clouds: S.clouds, zones: S.zones, marks: S.marks, ev, dots: enemyDots,
       pause: S.pause, pend: S.pend, clear: S.clear, clearT: r2(S.clearT), left: S.enemies.length,
+      map: S.map, bus: S.bus, endless: S.endless, home: S.home, score: S.score, drinks: S.drinks, kioskNext: S.kioskNext, spor: S.spor, daily: S.daily,
       chests: S.chests.map((c) => ({ id: c.id, x: r1(c.x), y: r1(c.y) })), food: S.food.filter((f) => nearP(f.x, f.y)).map((f) => ({ id: f.id, x: r1(f.x), y: r1(f.y) })) };
   }
   function restore(n) {
-    const enemies = []; for (let i = 0; i < n.E.length; i += 16) { const a = n.E;
-      enemies.push({ id: a[i], type: ET[a[i + 1] % 10], elite: a[i + 1] >= 10 ? 1 : 0, x: a[i + 2], y: a[i + 3], vx: a[i + 4], vy: a[i + 5], hp: a[i + 6], hpMax: a[i + 7], dist: a[i + 8], spawnT: a[i + 9], hitT: a[i + 10], biteT: a[i + 11], face: a[i + 12], charmT: a[i + 13], burnT: a[i + 14], freezeT: a[i + 15], r: SIM.ETYPES[ET[a[i + 1] % 10]].r }); }
+    const enemies = []; for (let i = 0; i < n.E.length; i += ES) { const a = n.E, ty = ET[a[i + 1] % 100];
+      enemies.push({ id: a[i], type: ty, elite: a[i + 1] >= 100 ? 1 : 0, x: a[i + 2], y: a[i + 3], vx: a[i + 4], vy: a[i + 5], hp: a[i + 6], hpMax: a[i + 7], dist: a[i + 8], spawnT: a[i + 9], hitT: a[i + 10], biteT: a[i + 11], face: a[i + 12], charmT: a[i + 13], burnT: a[i + 14], freezeT: a[i + 15],
+        chg: a[i + 16], cdx: a[i + 17], howlT: a[i + 18], r: SIM.ETYPES[ty].r }); }
     const gems = []; for (let i = 0; i < n.G.length; i += 4) gems.push({ id: n.G[i], x: n.G[i + 1], y: n.G[i + 2], v: n.G[i + 3] });
-    const proj = n.B.map((b) => ({ id: b[0], kind: b[1], x: b[2], y: b[3], vx: b[4], vy: b[5], c: b[6], tox: b[7], ttl: b[8] }));
-    const eproj = n.EB.map((b) => ({ x: b[0], y: b[1], ttl: b[2] }));
-    const players = n.players.map(([row, m, tokens, pick, cam, items, fused]) => { const o = {}; PF.forEach((k, i) => (o[k] = row[i])); o.hero = HN[o.hero];
-      o.m = { area: m[0], cd: m[1], shield: m[2], spd: m[3] }; o.tokens = tokens || []; o.pick = pick || null; o.items = items || { sig: 1 }; o.fused = fused || []; o.cam = cam || [o.x - 960, o.y - 600]; return o; });
+    const proj = n.B.map((b) => ({ id: b[0], kind: b[1], x: b[2], y: b[3], vx: b[4], vy: b[5], c: b[6], tox: b[7], ttl: b[8], ttl0: b[9], mods: b[10] ? { burn: b[10] & 1, shock: b[10] & 2 } : null }));
+    const eproj = n.EB.map((b) => ({ x: b[0], y: b[1], ttl: b[2], lob: b[3] ? 1 : 0, ttl0: b[3] }));
+    const players = n.players.map(([row, m, tokens, pick, cam, items, fused, gifts]) => { const o = {}; PF.forEach((k, i) => (o[k] = row[i])); o.hero = HN[o.hero];
+      o.m = { area: m[0], cd: m[1], shield: m[2], spd: m[3] }; o.tokens = tokens || []; o.pick = pick || null; o.items = items || { sig: 1 }; o.fused = fused || []; o.gifts = gifts || {}; o.cam = cam || [o.x - 960, o.y - 600]; return o; });
     for (const e of n.ev) evBuf.push(e); while (evBuf.length && evBuf[0].t < n.t - 3) evBuf.shift(); if (evBuf.length > 200) evBuf.splice(0, evBuf.length - 200);
     return Object.assign({}, n, { players, enemies, gems, proj, eproj, dots: n.dots, ev: evBuf.slice() });
   }
@@ -136,17 +140,18 @@
       <div class="heroes" id="heroes" style="margin-top:14px"></div>
       ${inRoom ? `<div class="plist" id="plist"></div><div class="status" id="status"></div>
         <div class="row"><button id="rdy" class="big"></button>${isHost ? `<label><input type="checkbox" id="bots" ${NET.bots ? 'checked' : ''} style="min-width:0;flex:0"> Боты на свободных героях</label><button id="go" class="big ok"></button>` : ''}
-          <button id="alm" class="alt">Альманах</button><button id="opts" class="alt">Настройки</button><button id="leave" class="alt">Выйти</button></div>`
-      : `<div class="row"><button id="solo" class="big">Играть (с ботами)</button><button id="soloalone" class="alt">Соло без ботов</button><button id="mk" class="alt">Создать комнату для друзей</button><button id="alm" class="alt">Альманах</button><button id="opts" class="alt">Настройки</button></div>
+          <button id="alm" class="alt">Альманах</button><button id="rec" class="alt">Рекорды</button><button id="opts" class="alt">Настройки</button><button id="leave" class="alt">Выйти</button></div>`
+      : `<div class="row"><button id="solo" class="big">Играть (с ботами)</button><button id="soloalone" class="alt">Соло без ботов</button><button id="mk" class="alt">Создать комнату для друзей</button><button id="alm" class="alt">Альманах</button><button id="rec" class="alt">Рекорды</button><button id="opts" class="alt">Настройки</button></div>
         <div class="row"><input id="code" maxlength="5" placeholder="КОД КОМНАТЫ ОТ ДРУГА" style="text-transform:uppercase;flex:0 1 260px"><button id="join" class="alt">Войти в комнату</button></div>`}
-      <div class="note">WASD — бег · Q — способность · R — ульта · E — встать/поднять · 1/2/3 — улучшение · M — музыка · F3 — пинг и FPS</div></div>`;
+      <div class="row" id="rules"></div>
+      <div class="note">WASD — бег · Q — способность · R — ульта · E — ларёк / встать · 1/2/3 — улучшение · M — музыка · F3 — пинг и FPS</div></div>`;
     const $ = (id) => el.querySelector('#' + id);
     $('nick').oninput = (e) => { NET.nick = cleanNick(e.target.value) || NET.nick; localStorage.setItem('fp_name', NET.nick); if (isHost && me()) { me().nick = NET.nick; sendRoster(); dyn(); } else hello(); };
     $('nick').onkeydown = (e) => e.stopPropagation();
     if ($('solo')) $('solo').onclick = () => startLocal(false);
     if ($('soloalone')) $('soloalone').onclick = () => startLocal(true);
     if ($('mk')) $('mk').onclick = () => host();
-    $('opts').onclick = () => SETTINGS.show(); $('alm').onclick = () => almanac(true);
+    $('opts').onclick = () => SETTINGS.show(); $('alm').onclick = () => almanac(true); $('rec').onclick = () => records(true);
     if ($('join')) { const go = () => { const c = $('code').value.trim().toUpperCase(); if (c.length >= 4) client(c); else say('Код комнаты — 5 символов'); };
       $('join').onclick = go; $('code').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') go(); }; }
     if ($('cp')) $('cp').onclick = () => { navigator.clipboard.writeText(link).then(() => say('Ссылка скопирована — кидай друзьям')); };
@@ -163,7 +168,7 @@
     $('heroes').innerHTML = heroGrid();
     el.querySelectorAll('.h').forEach((d) => (d.onclick = () => { NET.hero = d.dataset.h; localStorage.setItem('fp_hero', NET.hero);
       if (NET.mode === 'host' && me()) { me().hero = NET.hero; sendRoster(); } else hello(); dyn(); }));
-    if (!$('plist')) return;
+    rules(); if (!$('plist')) return;
     const isHost = NET.mode === 'host', connected = NET.mode === 'host' || !!NET.hostPeer;
     $('plist').innerHTML = roster.map((r) => `<div class="pl ${r.ready || r.host ? 'rdy' : ''} ${r.self ? 'me' : ''}"><img src="assets/portrait_${r.hero}.png">
         <div class="nm"><b>${esc(r.nick || 'Игрок')}${r.host ? '<span class="tag">ХОСТ</span>' : ''}${r.self ? '<span class="tag" style="background:#1e3040;color:#9fe0ff">ТЫ</span>' : ''}</b><i>${NAMES[r.hero]}</i></div>
@@ -180,15 +185,33 @@
     if ($('rdy')) { $('rdy').style.display = isHost ? 'none' : ''; $('rdy').textContent = NET.ready ? '✔ Готов (отменить)' : 'Я готов!'; $('rdy').className = 'big ' + (NET.ready ? 'ok' : ''); $('rdy').disabled = !connected; }
     if ($('go')) { const ok = allReady(); $('go').disabled = !ok; $('go').textContent = ok ? `СТАРТ (${roster.length} игр.)` : `Ждём готовности (${roster.filter((r) => r.host || r.ready).length}/${roster.length})`; }
   }
+  // «Спор» (one optional rule, multiplies the score) and «Забег дня» (today's seed + today's spor, same for everyone)
+  NET.spor = localStorage.getItem('fp_spor') || ''; NET.daily = false;
+  const dayKey = () => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+  const daySpor = () => { const k = Object.keys(SIM.SPORS); return k[dayKey() % k.length]; };
+  const runCfg = () => NET.daily ? { spor: daySpor(), seed: dayKey(), daily: 1 } : { spor: NET.spor || null, seed: 0, daily: 0 };
+  function rules() {
+    const box = el.querySelector('#rules'); if (!box) return; const canSet = NET.mode !== 'client', c = runCfg(), sp = c.spor && SIM.SPORS[c.spor];
+    if (!canSet) { box.innerHTML = `<div class="status">${NET.daily ? 'Забег дня · ' : ''}Спор: ${sp ? esc(sp.n) + ' — ' + esc(sp.d) + ' (очки ×' + sp.x + ')' : 'без спора'}</div>`; return; }
+    if (box.dataset.built) { const i = box.querySelector('#sinfo'); if (i) i.textContent = sp ? `${sp.d} · очки ×${sp.x}` : 'обычный забег'; return; }
+    box.dataset.built = 1;
+    box.innerHTML = `<label>Спор: <select id="spor" style="font:inherit;font-size:11px;padding:6px;border-radius:8px;background:#120a0e;color:#f6e7c8;border:2px solid #4a2e22">
+      <option value="">без спора</option>${Object.entries(SIM.SPORS).map(([k, v]) => `<option value="${k}" ${NET.spor === k ? 'selected' : ''}>${esc(v.n)} ×${v.x}</option>`).join('')}</select></label>
+      <label><input type="checkbox" id="daily" ${NET.daily ? 'checked' : ''}> Забег дня</label><span class="note" id="sinfo" style="margin:0"></span>`;
+    const $ = (id) => box.querySelector('#' + id);
+    $('spor').onchange = (e) => { NET.spor = e.target.value; localStorage.setItem('fp_spor', NET.spor); box.dataset.built = ''; rules(); if (NET.mode === 'host') sendRoster(); };
+    $('daily').onchange = (e) => { NET.daily = e.target.checked; $('spor').disabled = NET.daily; rules(); if (NET.mode === 'host') sendRoster(); };
+    $('spor').disabled = NET.daily; rules(); }
   setInterval(() => { if (NET.open && NET.mode !== 'off') dyn(); }, 1000);                 // timers and pings tick in the room
-  const startLocal = (alone) => { NET.open = false; render(); window.GAME.start({ hero: NET.hero, solo: alone }); };
+  const startLocal = (alone) => { NET.open = false; render(); window.GAME.start(Object.assign({ hero: NET.hero, solo: alone }, runCfg())); };
 
   // ---------------- meta between runs: the almanac of recipes found + unlocked weapons (localStorage) ----------------
   NET.meta = () => { try { const m = JSON.parse(localStorage.getItem('fp_meta') || '{}'); return { found: m.found || [], unlock: m.unlock || {} }; } catch (e) { return { found: [], unlock: {} }; } };
   const saveMeta = (m) => { try { localStorage.setItem('fp_meta', JSON.stringify(m)); } catch (e) {} };
   const seenEv = new Set();
   setInterval(() => { const S = window.SCENE && SCENE.state; if (!S || !S.ev) return; let m = null;           // record discoveries the moment they happen
-    for (const e of S.ev) { if (e.k !== 'discover' && e.k !== 'unlock') continue; const key = e.k + e.id + e.t; if (seenEv.has(key)) continue; seenEv.add(key); m = m || NET.meta();
+    for (const e of S.ev) { if ((e.k === 'win' || e.k === 'lose') && !seenEv.has('end' + S.over)) { seenEv.add('end' + S.over); saveRun(S); }
+      if (e.k !== 'discover' && e.k !== 'unlock') continue; const key = e.k + e.id + e.t; if (seenEv.has(key)) continue; seenEv.add(key); m = m || NET.meta();
       if (e.k === 'discover' && !m.found.includes(e.id)) m.found.push(e.id); if (e.k === 'unlock') m.unlock[e.id] = 1; }
     if (m) saveMeta(m); }, 250);
   const almEl = document.createElement('div'); almEl.id = 'almanac'; document.body.appendChild(almEl);
@@ -207,14 +230,61 @@
     const row = (r) => { const on = m.found.includes(r.id); return `<div class="r ${on ? 'on' : 'off'}"><img src="assets/${on ? U.iconOf(r.id, r.hero) : 'ic_unknown'}.png"><div><b>${on ? esc(U.rname(r.id)) : '???'}</b>
       <i>${on ? esc(nm(r.from[0], r.hero)) + ' + ' + esc(nm(r.from[1], r.hero)) + '<br>' + esc(U.rdesc(r.id)) : (r.hero ? NAMES[r.hero] + ' · ' : '') + 'ещё не открыто'}</i></div></div>`; };
     const sec = (t, f) => { const list = R.filter(f); return `<h3>${t} (${list.filter((r) => m.found.includes(r.id)).length}/${list.length})</h3><div class="grid">${list.map(row).join('')}</div>`; };
-    const lock = (id, cond) => `<div class="r ${m.unlock[id] ? 'on' : 'off'}"><img src="assets/${m.unlock[id] ? 'it_' + id : 'ic_lock'}.png"><div><b>${U.WEAPONS[id].n}</b><i>${m.unlock[id] ? 'открыто' : cond}</i></div></div>`;
+    const nmI = (id) => (U.WEAPONS[id] || U.PASSIVES[id]).n;
+    const lock = (q) => `<div class="r ${m.unlock[q.id] ? 'on' : 'off'}"><img src="assets/${m.unlock[q.id] ? 'it_' + q.r[0] : 'ic_lock'}.png"><div><b>${esc(q.n)}</b><i>${m.unlock[q.id] ? '✔ сделано · ' : 'награда: '}${esc(q.d || q.r.map(nmI).join(', '))}</i></div></div>`;
     almEl.innerHTML = `<div class="box"><h2>АЛЬМАНАХ БАБУШКИНОГО КОТЛА</h2><div class="sub">Котёл падает с золотых элиток. В нём: Деление (+уровни), Сплав (два макс. оружия в один слот) или Эволюция — два предмета 3 ур. по рецепту.
       Рецепты открываются, только когда их сваришь. Найдено ${m.found.length} из ${R.length}.</div>
-      <h3>Разблокировки</h3><div class="grid">${lock('icecream', 'дойти до 5-й волны')}${lock('pigeon', 'открыть 3 рецепта')}</div>
+      <h3>Дела (${SIM.QUESTS.filter((q) => m.unlock[q.id]).length}/${SIM.QUESTS.length})</h3><div class="grid">${SIM.QUESTS.map(lock).join('')}</div>
       ${sec('Эволюции оружия', (r) => r.kind === 'w')}${sec('Оружие героев', (r) => r.kind === 'h')}${sec('Пробуждения героев', (r) => r.kind === 'awake')}${sec('Эволюции пассивок', (r) => r.kind === 'p')}
       <button id="almx">Закрыть</button></div>`;
     almEl.style.display = 'flex'; almEl.querySelector('#almx').onclick = () => almanac(false); }
   addEventListener('keydown', (e) => { if (e.code === 'Escape' && almEl.style.display === 'flex') { almanac(false); e.stopImmediatePropagation(); } }, true);
+
+  // ---------------- records: my best runs (localStorage) + the online board (Supabase REST, optional) ----------------
+  // SB: the project URL and its public anon key (safe to ship: the table only allows reading and adding rows, see tools/supabase.sql)
+  const SB = { url: 'https://yamuyazqiflzlxkisyln.supabase.co', key: 'sb_publishable_TqfGJS9yDiMT6qxDcMUD_A_JxPo3wXk' }, VER = 'meleuz-1';
+  const sizeOf = (n) => n <= 1 ? 'соло' : n === 2 ? 'дуо' : '3–4';
+  const loadRec = () => { try { return JSON.parse(localStorage.getItem('fp_rec') || '[]'); } catch (e) { return []; } };
+  function saveRun(S) {
+    const hum = S.players.filter((p) => !p.bot), mine = S.players.find((p) => p.id === (S.me || 0)) || S.players[0];
+    const run = { score: S.score || 0, wave: S.wave, map: S.map || 'park', kills: S.kills, won: S.won ? 1 : 0, home: S.home ? 1 : 0, spor: S.spor || '', daily: S.daily ? dayKey() : 0,
+      size: Math.max(1, hum.length), hero: mine.hero, nicks: hum.map((p) => p.nick || NAMES[p.hero]).join(', '), heroes: S.players.map((p) => p.hero).join(','), date: new Date().toISOString().slice(0, 10) };
+    const list = loadRec(), best = !list.length || run.score > Math.max(...list.map((r) => r.score));
+    list.push(run); list.sort((a, b) => b.score - a.score); try { localStorage.setItem('fp_rec', JSON.stringify(list.slice(0, 50))); } catch (e) {}
+    NET.rec = { over: S.over, best: best && run.score > 0 };
+    if (SB.url && NET.mode !== 'client' && S.t > 60 && run.score > 0)                                   // one row per team run: the host (or the solo player) sends it
+      fetch(SB.url + '/rest/v1/runs', { method: 'POST', headers: { apikey: SB.key, Authorization: 'Bearer ' + SB.key, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ nick: run.nicks.slice(0, 60), heroes: run.heroes.slice(0, 60), size: run.size, map: run.map, wave: run.wave, score: run.score, kills: run.kills,
+          spor: run.spor || null, daily: run.daily || null, won: !!run.won, ver: VER }) }).catch(() => {});
+  }
+  const recEl = document.createElement('div'); recEl.id = 'records'; document.body.appendChild(recEl);
+  const rcss = document.createElement('style'); rcss.textContent = `
+#records{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:8;background:#000a;font-family:"Press Start 2P",monospace;color:#f6e7c8}
+#records .box{background:rgba(18,10,14,.96);border:3px solid #8a5a32;border-radius:14px;padding:18px 22px;width:min(980px,95vw);max-height:92vh;overflow:auto;box-sizing:border-box}
+#records h2{margin:0 0 10px;color:#ffd76a;font-size:20px} #records .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+#records button{font:inherit;font-size:10px;padding:8px 12px;border-radius:8px;border:2px solid #3e6a8a;background:#1e3040;color:#ffe9b0;cursor:pointer} #records button.on{background:#5a2e1a;border-color:#ffd76a}
+#records table{width:100%;border-collapse:collapse;font-size:10px} #records td,#records th{padding:7px 6px;border-bottom:1px solid #3a2830;text-align:left} #records th{color:#9fd0ff;font-weight:normal}
+#records td.s{color:#ffe066;text-align:right} #records .sub{font-size:9px;opacity:.8;line-height:1.7;margin-top:10px}`;
+  document.head.appendChild(rcss);
+  const TABS = [['mine', 'Мои'], ['all', 'Все'], ['solo', 'Соло'], ['duo', 'Дуо'], ['team', '3–4'], ['day', 'Забег дня']];
+  async function records(show, tab = 'mine') {
+    if (!show) { recEl.style.display = 'none'; return; }
+    const row = (r, i) => `<tr><td>${i + 1}</td><td>${esc(r.nick || r.nicks || '')}</td><td>${esc(SIM.MAPN[r.map] || r.map)} · ${r.wave}</td><td>${r.spor && SIM.SPORS[r.spor] ? esc(SIM.SPORS[r.spor].n) : ''}${r.daily ? ' · дня' : ''}</td><td>${sizeOf(r.size)}</td><td class="s">${Number(r.score).toLocaleString('ru-RU')}</td></tr>`;
+    const head = '<tr><th>#</th><th>Кто</th><th>Карта · волна</th><th>Спор</th><th>Отряд</th><th style="text-align:right">Очки</th></tr>';
+    let body = '';
+    if (tab === 'mine') { const L2 = loadRec(); body = L2.length ? `<table>${head}${L2.slice(0, 20).map(row).join('')}</table>` : '<div class="sub">Пока пусто — сыграй забег!</div>'; }
+    else if (!SB.url) body = '<div class="sub">Онлайн-таблица ещё не подключена.</div>';
+    else { recEl.innerHTML = `<div class="box"><h2>РЕКОРДЫ</h2><div class="sub">Загружаю…</div></div>`; recEl.style.display = 'flex';
+      const f = { all: '', solo: '&size=eq.1', duo: '&size=eq.2', team: '&size=gte.3', day: '&daily=eq.' + dayKey() }[tab];
+      try { const r = await fetch(`${SB.url}/rest/v1/runs?select=nick,heroes,size,map,wave,score,spor,daily&order=score.desc&limit=30${f}`, { headers: { apikey: SB.key, Authorization: 'Bearer ' + SB.key } });
+        const L2 = await r.json(); body = Array.isArray(L2) && L2.length ? `<table>${head}${L2.map(row).join('')}</table>` : '<div class="sub">Тут ещё никого — будь первым!</div>'; }
+      catch (e) { body = '<div class="sub">Не удалось загрузить таблицу — проверь интернет.</div>'; } }
+    recEl.innerHTML = `<div class="box"><h2>РЕКОРДЫ</h2><div class="tabs">${TABS.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? 'on' : ''}">${n}</button>`).join('')}</div>${body}
+      <div class="sub">Очки = убийства + бонусы за волны и переезд, умноженные на риск (спор, энергетики из ларька). После 20-й волны можно не садиться в автобус домой и копить очки в бесконечной ночи.
+      Забег дня: у всех один спор и одно зерно на сегодня (${esc(SIM.SPORS[daySpor()].n)}).</div><button id="recx" style="margin-top:12px">Закрыть</button></div>`;
+    recEl.style.display = 'flex'; recEl.querySelector('#recx').onclick = () => records(false);
+    recEl.querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => records(true, b.dataset.t))); }
+  addEventListener('keydown', (e) => { if (e.code === 'Escape' && recEl.style.display === 'flex') { records(false); e.stopImmediatePropagation(); } }, true);
 
   // ---------------- room ----------------
   // STUN to find a direct path; a public TURN relay as the fallback for friends behind strict NATs / mobile networks
@@ -236,7 +306,7 @@
     say('', 1);
   }
   // host → everyone: the roster (with the host's measured ping to each friend)
-  const sendRoster = () => act.roster && act.roster.send({ bots: NET.bots ? 1 : 0, list: roster.map((r) => ({ peer: r.peer, hero: r.hero, nick: r.nick, ready: r.ready ? 1 : 0, host: r.host ? 1 : 0, ping: r.ping })) });
+  const sendRoster = () => act.roster && act.roster.send({ bots: NET.bots ? 1 : 0, spor: NET.spor, daily: NET.daily ? 1 : 0, list: roster.map((r) => ({ peer: r.peer, hero: r.hero, nick: r.nick, ready: r.ready ? 1 : 0, host: r.host ? 1 : 0, ping: r.ping })) });
   async function host() {
     NET.code = Math.random().toString(36).slice(2, 7).toUpperCase(); NET.mode = 'host'; NET.ready = true;
     history.replaceState(null, '', '?room=' + NET.code + '&host=1');
@@ -255,7 +325,7 @@
   function hostStart() {
     const heroes = roster.map((r) => r.hero), humans = roster.map((_, i) => i);
     if (NET.bots) for (const h of HEROES) if (!heroes.includes(h) && heroes.length < 8) heroes.push(h);
-    const S = SIM.create({ heroes, humans, meta: NET.meta() }); S.solo = roster.length === 1 && heroes.length === 1 ? 1 : 0; S.me = 0; S.wt0 = 0;
+    const S = SIM.create(Object.assign({ heroes, humans, meta: NET.meta() }, runCfg())); S.solo = roster.length === 1 && heroes.length === 1 ? 1 : 0; S.me = 0; S.wt0 = 0;
     roster.forEach((r, i) => { peerToPid[r.peer] = i; S.players[i].nick = r.nick; });
     NET.started = true; NET.open = false; render();
     window.GAME.set(S);
@@ -268,7 +338,7 @@
   }
   async function client(code) {
     NET.mode = 'client'; NET.ready = false; await joinRoomCode(code);
-    act.roster.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; hostGone = false; NET.bots = !!d.bots;
+    act.roster.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; hostGone = false; NET.bots = !!d.bots; NET.spor = d.spor || ''; NET.daily = !!d.daily;
       roster = d.list.map((r) => Object.assign(r, { self: r.peer === selfId })); render(); };
     act.start.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; myPid = d.pid; NET.started = true; NET.open = false; render(); snaps = []; document.getElementById('hint').style.opacity = 0; };
     act.back.onMessage = () => { NET.started = false; NET.ready = false; snaps = []; pred = null; SCENE.state = null; NET.open = true; render(); hello(); };   // host went back to the room

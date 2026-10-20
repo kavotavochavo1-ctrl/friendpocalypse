@@ -4,7 +4,7 @@
 // actors take a softer share of light (pitfalls: "one global light multiply").
 (function () {
   const S = (window.SCENE = {}), L = LIB, M = L.M, W = SIM.VIEW.W, H = SIM.VIEW.H, Z = window.SIZES;
-  S.REPEAT = ['paving_tex', 'grass_tex'];
+  S.REPEAT = ['paving_tex', 'grass_tex', 'meleuz_paving_tex'];
   const NIGHT = `
 uniform vec4 u_lights[40]; uniform float u_n; uniform float u_dark; uniform vec3 u_amb;
 void main(){ float l = 0.0;
@@ -108,10 +108,19 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     for (let j = 0; j < m; j++) { const an = (j + 0.4 * L.rnd(id, j + 40)) / m * 6.283 + a * 0.1, rr = r * (0.86 + 0.06 * Math.sin(a * 2 + j));
       L.puff(x + Math.cos(an) * rr, y + Math.sin(an) * rr * 0.75 - 14 - 6 * Math.sin(a * 1.6 + j), r * 0.24 * (0.8 + 0.4 * L.rnd(id, j + 60)) * (0.7 + 0.3 * SS(0, 0.6, a)),
         ally ? [0.85, 0.75, 0.2] : j % 2 ? GAS2 : GAS, 0.34 * life, id * 7 + j); } };
-  const EV_TINT = { ghoul: [1, 1, 1, 0], sprinter: [1.25, 0.6, 0.55, 0.8], brute: [0.8, 0.75, 0.95, 0.6], spitter: [0.85, 0.6, 1.3, 0.8], bomber: [1.4, 0.8, 0.4, 0.8] };
+  const EV_TINT = { ghoul: [1, 1, 1, 0], sprinter: [1.25, 0.6, 0.55, 0.8], brute: [0.8, 0.75, 0.95, 0.6], spitter: [0.85, 0.6, 1.3, 0.8], bomber: [1.4, 0.8, 0.4, 0.8],
+    starshiy: [0.8, 0.75, 0.9, 0.35], alpha: [0.45, 0.4, 0.5, 0.75] };
+  // enemy art: the park's shadow ghouls (one rig, tinted per type); Meleuz's town folk (rigs front/back, sprites side-on), mums and dogs (sprites)
+  const SKIN = { ghoul: 'ghoul', sprinter: 'ghoul', brute: 'ghoul', spitter: 'ghoul', bomber: 'ghoul', gopnik: 'gopnik', starshiy: 'gopnik', alkash: 'alkash', mom: 'mom', dog: 'dog', alpha: 'dog' };
+  const BASEH = { ghoul: 84, gopnik: 120, alkash: 112, mom: 124, dog: 78 };
+  const SPRITE_VIEW = (skin, view, e, GT) => skin !== 'dog' ? skin + '_' + view
+    : view === 'side' ? (e.type === 'alpha' && GT - (e.howlT || -99) > -7 && GT - (e.howlT || -99) < -5.6 ? 'dog_alpha' : 'dog_side' + (Math.floor(e.dist / 26) % 3)) : 'dog_' + view;
+  const BUILD = { admin: 1, mosque: 1, church: 1, glory: 1, lenin: 1, tmonument: 1, kiosk: 1 };
 
   S.render = (t) => {
     const ST = S.state || SIM.at(t), GT = ST.t, rnd = L.rnd;
+    if (SIM.LV.id !== (ST.map || 'park')) SIM.useMap(ST.map || 'park');
+    const mz = ST.map === 'meleuz', PAV = mz ? 'meleuz_paving_tex' : 'paving_tex';
     const me = ST.players[ST.me || 0];
     // ---- shake: trauma from recent hits / booms near me ----
     let tr = 0; for (const e of ST.ev) { const a = GT - e.t; if (a < 0 || a > 0.4) continue;
@@ -127,12 +136,20 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     { const T = 640; L.sprite('grass_tex', 0, 0, { w: W, h: H, src: [cx / T, cy / T, (cx + W) / T, (cy + H) / T], u: { grade: [0.9, 0.95, 0, 1] } }); }
     const PT = 520;
     for (const [px, py, pw, ph, pr] of SIM.PATHS) { if (!vis(px, py, Math.max(pw, ph))) continue;
-      L.sprite('paving_tex', sx(px - pw / 2), sy(py - ph / 2), { w: pw, h: ph, rot: pr, pivot: [pw / 2, ph / 2], src: [0, 0, pw / PT, ph / PT] });
+      L.sprite(PAV, sx(px - pw / 2), sy(py - ph / 2), { w: pw, h: ph, rot: pr, pivot: [pw / 2, ph / 2], src: [0, 0, pw / PT, ph / PT] });
       L.solid(sx(px - pw / 2), sy(py - ph / 2), pw, 10, [0.16, 0.09, 0.07], pr, pw / 2, ph / 2, 0.6);
       L.solid(sx(px - pw / 2), sy(py + ph / 2 - 10), pw, 10, [0.16, 0.09, 0.07], pr, pw / 2, -ph / 2 + 10, 0.6); }
     for (const [x, y, rx, ry, k] of SIM.SUBS) { if (!vis(x, y, rx)) continue;
-      L.sprite('paving_tex', sx(x - rx), sy(y - ry), { w: rx * 2, h: ry * 2, src: [x / PT, y / PT, (x + 2 * rx) / PT, (y + 2 * ry) / PT], u: { disc: 0.02 } }); }
-    { const [x, y] = SIM.C, rx = SIM.PLAZA[0] * 1.06, ry = SIM.PLAZA[1] * 1.06; L.sprite('plaza_center', sx(x - rx), sy(y - ry), { w: rx * 2, h: ry * 2 }); }
+      L.sprite(PAV, sx(x - rx), sy(y - ry), { w: rx * 2, h: ry * 2, src: [x / PT, y / PT, (x + 2 * rx) / PT, (y + 2 * ry) / PT], u: { disc: 0.02 } }); }
+    { const [x, y] = SIM.C, rx = SIM.PLAZA[0] * 1.06, ry = SIM.PLAZA[1] * 1.06; L.sprite(mz ? 'meleuz_plaza_center' : 'plaza_center', sx(x - rx), sy(y - ry), { w: rx * 2, h: ry * 2 }); }
+    // the eternal flame at the Monument of Glory: a dark star in the paving, the fire itself goes in the y-sort
+    if (SIM.LV.FLAME && vis(SIM.LV.FLAME[0], SIM.LV.FLAME[1], 200)) { const fx = sx(SIM.LV.FLAME[0]), fy = sy(SIM.LV.FLAME[1]);
+      L.shadow(fx, fy, 70, 34, 0.5); for (let j = 0; j < 5; j++) { const a = j / 5 * 6.283 - 1.571; L.solid(fx, fy, 64, 12, [0.42, 0.3, 0.24], scrA(a), 0, 6, 0.9); } L.shadow(fx, fy, 26, 13, 0.7); }
+    // Сгущёнка: sticky cream puddles on the ground
+    for (const z of ST.zones || []) { if (z.kind !== 'goo' || !vis(z.x, z.y, z.r)) continue; const a = GT - z.t0, life = SS(0, 0.2, a) * SS(z.ttl, z.ttl - 0.6, a), x = sx(z.x), y = sy(z.y);
+      L.shadow(x, y, z.r * 1.02, z.r * 0.72, 0.3 * life);
+      for (let j = 0; j < 9; j++) { const an = rnd(z.id, j) * 6.28, rr = z.r * 0.62 * Math.sqrt(rnd(z.id, j + 4)); L.puff(x + Math.cos(an) * rr, y + Math.sin(an) * rr * 0.7, z.r * (0.36 + 0.12 * rnd(z.id, j + 8)), [0.96, 0.9, 0.72], 0.55 * life, z.id + j); }
+      for (let j = 0; j < 4; j++) L.star(x + (rnd(z.id, j + 20) - 0.5) * z.r, y + (rnd(z.id, j + 30) - 0.5) * z.r * 0.6, 7, [1, 1, 0.9], 0.5 * life * (0.5 + 0.5 * Math.sin(GT * 5 + j))); }
     // pond
     { const [x, y, rx, ry] = SIM.POND; if (vis(x, y, rx)) { const lam = new Float32Array(24); let k = 0;
         for (const [lx, ly] of SIM.LAMPS) if (k < 6 && Math.hypot(lx - x, ly - y) < 600) { lam.set([(lx - (x - rx)) * 1, (ly - (y - ry)) + 90, 0, 0.5], k * 4); k++; }
@@ -141,7 +158,9 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     for (const c of ST.clouds) { const a = GT - c.t0, life = SS(0, 0.25, a) * SS(c.ttl, c.ttl - 0.6, a); if (!vis(c.x, c.y, c.r)) continue;
       L.shadow(sx(c.x), sy(c.y), c.r * 0.9, c.r * 0.66, 0.22 * life); }
     // ultimate warning: the patch darkens and gas boils up along its rim before it goes off
-    for (const e of ST.ev) if (e.k === 'warn' && GT < e.until && GT >= e.t) { const q = (GT - e.t) / (e.until - e.t), x = sx(e.x), y = sy(e.y);
+    for (const e of ST.ev) if (e.k === 'warn' && e.slam && GT < e.until && GT >= e.t) { const q = (GT - e.t) / (e.until - e.t);
+      L.shadow(sx(e.x), sy(e.y), e.r * 0.95, e.r * 0.7, 0.3 * q); L.ring(sx(e.x), sy(e.y), e.r * q, e.r * 0.72 * q, [1, 0.3, 0.2], 0.8, 0.05); L.cracks(sx(e.x), sy(e.y), e.r * 0.6 * q, q, e.t, 0, 0.5 * q); }
+    for (const e of ST.ev) if (e.k === 'warn' && !e.slam && GT < e.until && GT >= e.t) { const q = (GT - e.t) / (e.until - e.t), x = sx(e.x), y = sy(e.y);
       L.shadow(x, y, e.r * 0.95, e.r * 0.7, 0.35 * q); G.blend('add'); G.draw(L.P.glow, { u_col: [0.5, 0.9, 0.1], u_k: 1.4, u_amt: (0.2 + 0.15 * Math.sin(GT * 24)) * q }, G.xf(x - e.r, y - e.r * 0.75, 2 * e.r, 1.5 * e.r)); G.blend();
       for (let j = 0; j < 18; j++) { const an = j / 18 * 6.283, ph = (q * 2 + L.rnd(e.t, j)) % 1;
         L.puff(x + Math.cos(an) * e.r * 0.85, y + Math.sin(an) * e.r * 0.64 - 20 - ph * 30, 22 + 18 * q, j % 2 ? GAS2 : GAS, 0.4 * q * SS(1, 0.6, ph), e.t + j); } }
@@ -164,7 +183,9 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     for (const e of ST.ev) { const a = GT - e.t; if (a < 0) continue;
       if (e.k === 'boom' && a < 0.4) lights.push([sx(e.x), sy(e.y), e.r * 2, 0.7 * (1 - a / 0.4)]);
       if (e.k === 'shot' && a < 0.05) lights.push([sx(e.x), sy(e.y) - 50, 120, 0.35]); }
-    for (const p of ST.players) if (!p.out) lights.push([sx(p.x), sy(p.y) - 30, 300, p.id === me.id ? 0.55 : 0.3]);
+    for (const p of ST.players) if (!p.out && !p.inBus) lights.push([sx(p.x), sy(p.y) - 30, 300, p.id === me.id ? 0.55 : 0.3]);
+    if (SIM.LV.FLAME && vis(SIM.LV.FLAME[0], SIM.LV.FLAME[1], 400)) lights.push([sx(SIM.LV.FLAME[0]), sy(SIM.LV.FLAME[1]) - 30, 380, 1.1 + 0.08 * Math.sin(t * 9)]);
+    if (ST.bus && vis(ST.bus.x, ST.bus.y, 500)) lights.push([sx(ST.bus.x), sy(ST.bus.y) - 60, 420, 0.9]);
     lights.length = Math.min(40, lights.length);
     const lightAt = (x, y) => { let l = 0; for (const q of lights) { const dx = (x - q[0]) / q[2], dy = (y - q[1]) / (q[2] * 0.62); l += q[3] * Math.exp(-(dx * dx + dy * dy) * 2.4); } return Math.min(1.3, l); };
     { const arr = new Float32Array(160); lights.forEach((q, i) => arr.set(q, i * 4));
@@ -175,30 +196,51 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     // ===== y-sorted world =====
     const Y = [];
     const shade = (x, y) => { const l = lightAt(x, y); return { grade: [0.85 + 0.15 * Math.min(1, l), 0.5 + 0.55 * Math.min(1, l), 0, 1], tint: [1.0, 0.82, 0.62, 0.35 * Math.min(1, l)] }; };
-    for (const [k, x, y, s, f] of SIM.PROPS) { if (!vis(x, y, 420)) continue; const [w, h] = sz(k), ww = w * s, hh = h * s;
-      Y.push([y, () => { const sxx = sx(x), syy = sy(y), u = shade(sxx, syy - hh * 0.5);
-        if (k !== 'flowers') L.shadow(sxx + 10, syy - 4, ww * 0.42, Math.min(30, hh * 0.12), 0.5);
-        const sway = (k === 'tree' || k === 'autumn' || k === 'cypress') ? [0.004, 3, t * 0.8 + x * 0.01, 1] : 0;
+    for (const [k, x, y, s, f] of SIM.PROPS) { const [w, h] = sz(k), ww = w * s, hh = h * s; if (!vis(x, y, Math.max(420, ww * 0.6, hh))) continue;
+      Y.push([y, () => { const sxx = sx(x), syy = sy(y), u = shade(sxx, syy - Math.min(hh * 0.5, 200));
+        if (BUILD[k]) { u.grade[0] = Math.max(0.8, u.grade[0]); u.grade[1] = Math.max(0.62, u.grade[1]); }             // landmarks stay readable at night
+        if (k !== 'flowers') L.shadow(sxx + 10, syy - 4, ww * 0.42, Math.min(BUILD[k] ? 60 : 30, hh * 0.12), 0.5);
+        const sway = (k === 'tree' || k === 'autumn' || k === 'cypress' || k === 'spruce' || k === 'thuja') ? [0.004, 3, t * 0.8 + x * 0.01, 1] : 0;
         L.sprite(k, sxx - ww / 2, syy - hh + (k === 'flowers' ? hh * 0.4 : 0), { w: ww, h: hh, flip: !!f, pad: sway ? 0.03 : 0, u: Object.assign(u, sway ? { sway } : {}) });
-        if (k === 'lamp') { const lx = sxx, ly = syy - hh * 0.86; L.glow(lx, ly, 60, [1, 0.72, 0.35], 0.55, 2.5); L.glow(lx, ly, 18, [1, 0.92, 0.7], 0.6, 2); } }]); }
+        if (k === 'lamp') { const lx = sxx, ly = syy - hh * 0.86; L.glow(lx, ly, 60, [1, 0.72, 0.35], 0.55, 2.5); L.glow(lx, ly, 18, [1, 0.92, 0.7], 0.6, 2); }
+        if (k === 'mlamp') for (const [ox, oy] of [[0, 0.91], [-0.3, 0.76], [0.3, 0.76]]) { L.glow(sxx + ox * ww, syy - hh * oy, 46, [1, 0.88, 0.62], 0.5, 2.5); L.glow(sxx + ox * ww, syy - hh * oy, 14, [1, 0.97, 0.88], 0.6, 2); }
+        if (k === 'admin' || k === 'mosque' || k === 'church') L.glow(sxx, syy - hh * 0.35, ww * 0.45, [1, 0.75, 0.4], 0.12, 1.6);
+        if (k === 'kiosk') { const on = ST.wave >= (ST.kioskNext ?? 3) && !ST.bus; L.glow(sxx - ww * 0.05, syy - hh * 0.45, 70, on ? [0.4, 1, 0.75] : [1, 0.7, 0.35], on ? 0.5 + 0.2 * Math.sin(GT * 5) : 0.25, 2);
+          if (on) { const ny = syy - hh - 30 + 5 * Math.sin(GT * 4); spr('it_can', sxx, ny, 40, 40); if (Math.hypot(me.x - x, me.y - y - 50) < 200 && hudFree(sxx, ny - 40)) lab('kio', 'E — энергетик', sxx, ny - 44, { size: 20, al: 0.5, col: '#9fffd0', font: FONT }); } } }]); }
+    // the eternal flame (Effector flame flipbook on a warm glow)
+    if (SIM.LV.FLAME && vis(SIM.LV.FLAME[0], SIM.LV.FLAME[1], 200)) { const [fx0, fy0] = SIM.LV.FLAME;
+      Y.push([fy0, () => { const fx = sx(fx0), fy = sy(fy0); L.glow(fx, fy - 30, 90, [1, 0.55, 0.15], 0.6 + 0.1 * Math.sin(GT * 11), 2);
+        book('fxa_flame', loopQ(GT * 1.1), fx, fy - 40, 70, 100, { add: 1 }); book('fxa_flame', loopQ(GT * 1.3, 0.5), fx + 8, fy - 34, 44, 70, { add: 1, a: 0.7 }); }]); }
+    // the PAZik: parked with its door open, a glow and the head count over it
+    if (ST.bus && vis(ST.bus.x, ST.bus.y, 600)) { const b = ST.bus;
+      Y.push([b.y, () => { const [bw, bh] = sz('bus_paz'), x = sx(b.x), y = sy(b.y) + 1.5 * Math.sin(GT * 30) * SS(1.2, 0, GT - b.t0), dx = x + SIM.DOOR[0], dy = y + SIM.DOOR[1];
+        const arr = SS(0, 1.2, GT - b.t0), ox = (1 - arr) * 900;                        // it rolls in from the edge
+        L.shadow(x + ox, y - 6, bw * 0.46, 26, 0.55); L.sprite('bus_paz', x - bw / 2 + ox, y - bh, { w: bw, h: bh, u: { grade: [1, 1, 0, 1] } });
+        L.glow(dx + ox, dy - 50, 90, [1, 0.85, 0.45], 0.45 + 0.2 * Math.sin(GT * 6), 2);
+        if (arr >= 1) { for (let j = 0; j < 3; j++) { const ph = (GT * 1.4 + j / 3) % 1; L.ring(dx, dy, 40 + 70 * ph, 28 + 50 * ph, [1, 0.85, 0.4], 0.6 * (1 - ph), 0.08); }
+          const act = ST.players.filter((p) => !p.out), n = act.filter((p) => p.inBus).length, s2 = (b.to === 'home' ? 'ДОМОЙ ' : 'В МЕЛЕУЗ ') + n + '/' + act.length;
+          if (hudFree(x, y - bh - 30)) lab('busn', s2, x, y - bh - 30 + 4 * Math.sin(GT * 3), { size: 28, al: 0.5, col: '#ffe066', font: FONT }); } }]); }
     // enemies
-    for (const e of ST.enemies) { if (!vis(e.x, e.y, 120)) continue; const T = SIM.ETYPES[e.type];
-      Y.push([e.y, () => { const sp = Math.hypot(e.vx, e.vy), ph = e.dist / 34 * Math.PI, born = SS(0, 0.35, GT - e.spawnT);
-        const view = Math.abs(e.vy) > Math.abs(e.vx) * 1.3 ? (e.vy > 0 ? 'ghoul_front' : 'ghoul_back') : 'ghoul_side';
-        const h = 84 * T.sc * born * (e.elite ? 1.25 : 1), w = L.hsz(view, h), x = sx(e.x), y = sy(e.y), bob = Math.abs(Math.sin(ph)) * 4 * Math.min(1, sp / 60);
+    for (const e of ST.enemies) { if (!vis(e.x, e.y, 120)) continue; const T = SIM.ETYPES[e.type], skin = SKIN[e.type] || 'ghoul';
+      Y.push([e.y, () => { const sp = Math.hypot(e.vx, e.vy), ph = e.dist / 34 * Math.PI, born = SS(0, 0.35, GT - e.spawnT); if (born < 0.03) return;      // a zero-scale rig blows up
+        const dv = Math.abs(e.vy) > Math.abs(e.vx) * 1.3 ? (e.vy > 0 ? 'front' : 'back') : 'side', view = SPRITE_VIEW(skin, dv, e, GT);
+        const h = BASEH[skin] * T.sc * born * (e.elite ? 1.25 : 1) * (ST.spor === 'chonk' ? 1.4 : 1), w = L.hsz(view, h), x = sx(e.x) + (e.chg === 1 ? 3 * Math.sin(GT * 60) : 0), y = sy(e.y), bob = Math.abs(Math.sin(ph)) * 4 * Math.min(1, sp / 60);
         const hit = SS(0.12, 0, GT - e.hitT), u = shade(x, y - h / 2), tn = EV_TINT[e.type]; u.grade[1] = Math.max(0.78, u.grade[1]); u.rim = [0.55, e.face > 0 ? 0.004 : -0.004, -0.005, 1]; u.rimCol = [1, 0.45, 0.6];
         if (hit > 0) { u.grade = [1, 1, hit * 0.85, 1]; u.haze = [1, 0.95, 0.95]; }
         const charm = GT < (e.charmT || -9);
         const burning = GT < (e.burnT || -9), frozen = GT < (e.freezeT || -9);
-        u.tint = e.elite ? [1.5, 1.15, 0.45, 0.85] : frozen ? [0.7, 1.0, 1.6, 0.8] : charm ? [1.4, 0.6, 1.2, 0.65] : burning ? [1.5, 0.8, 0.45, 0.5] : [tn[0], tn[1], tn[2], tn[3]];
+        u.tint = e.elite ? (e.type === 'alpha' ? [0.75, 0.55, 0.3, 0.6] : [1.5, 1.15, 0.45, 0.85]) : frozen ? [0.7, 1.0, 1.6, 0.8] : charm ? [1.4, 0.6, 1.2, 0.65] : burning ? [1.5, 0.8, 0.45, 0.5] : tn ? [tn[0], tn[1], tn[2], tn[3]] : [1, 1, 1, 0];
+        if (e.chg === 2) for (let j = 1; j <= 3; j++) L.puff(x - e.cdx * 26 * j, y - 8 - 4 * j, 10 + 6 * j, [0.55, 0.45, 0.4], 0.4 / j, GT * 10 + j);     // the pram's dust trail
         if (e.elite) L.glow(x, y - h * 0.5, h * 0.9, [1, 0.75, 0.25], 0.22 + 0.08 * Math.sin(GT * 5), 2);
         L.shadow(x, y, w * 0.32, 9 * T.sc, 0.5);
         const sq = 1 + 0.06 * Math.sin(2 * ph) * Math.min(1, sp / 60), lean = (e.vx / 300) * 0.12 + (GT - e.biteT < 0.2 ? 0.25 * e.face * Math.sin((GT - e.biteT) / 0.2 * Math.PI) : 0);
         if (RIG.has(view)) { const k = h / RIGS[view].h, ba = GT - (e.biteT || -9);
-          RIG.draw({ name: view, view: view.slice(6), x, y, k, fl: view === 'ghoul_side' ? e.face : 1, ph: RIG.phase(view, e.dist, k, view.slice(6)) + e.id, amt: Math.min(1, sp / 60), t, id: 'e' + e.id, u,
+          RIG.draw({ name: view, view: dv, x, y, k, fl: dv === 'side' ? e.face : 1, ph: RIG.phase(view, e.dist, k, dv) + e.id, amt: Math.min(1, sp / 60), t, id: 'e' + e.id, u,
             aim: Math.atan2(e.vy, e.vx || 0.001), act: ba < 0.35 ? { kind: 'bite', a: ba / 0.35 } : null, lean: (e.vx / 300) * 0.1 });
-        } else L.sprite(view, 0, 0, { m: M.of(M.t(x, y - bob), M.r(lean), M.s((view === 'ghoul_side' ? -e.face : 1) / Math.sqrt(sq), sq)), w, h, pivot: [w / 2, h], u });
-        { const ex = view === 'ghoul_side' ? [0.17 * e.face] : view === 'ghoul_front' ? [-0.12, 0.12] : []; for (const o of ex) L.glow(x + o * w, y - h * 0.68 - bob, 7 * T.sc, [1, 0.3, 0.6], 0.9, 2); }
+        } else { const fx = dv === 'side' ? (skin === 'ghoul' ? -e.face : e.face) : 1, wob = skin === 'alkash' ? 0.07 * Math.sin(GT * 2.3 + e.id) : 0;     // the town folk's art faces right; drunks sway
+          L.sprite(view, 0, 0, { m: M.of(M.t(x, y - bob), M.r(lean + wob), M.s(fx / Math.sqrt(sq), sq)), w, h, pivot: [w / 2, h], u }); }
+        if (skin === 'ghoul') { const ex = dv === 'side' ? [0.17 * e.face] : dv === 'front' ? [-0.12, 0.12] : []; for (const o of ex) L.glow(x + o * w, y - h * 0.68 - bob, 7 * T.sc, [1, 0.3, 0.6], 0.9, 2); }
+        else if (dv !== 'back') L.glow(x + (dv === 'side' ? 0.12 * e.face * w : 0), y - h * (skin === 'dog' ? 0.62 : 0.84) - bob, 10 * T.sc, [1, 0.3, 0.7], 0.5, 2);
         if (e.type === 'bomber') L.glow(x, y - h * 0.5, 50, [1, 0.5, 0.1], 0.4 + 0.3 * Math.sin(GT * 14), 2.4);
         if (frozen) spr('fx_ice', x, y - 24 * T.sc, 44 * T.sc, 52 * T.sc, 0, { a: 0.85 });
         if (burning) book('fxa_flame', loopQ(GT * 1.2, e.id * 0.17), x, y - h * 0.55, 40 * T.sc, 60 * T.sc, { add: 1, a: 0.8 });
@@ -206,7 +248,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         if (e.hp < e.hpMax) { const bw = 44 * Math.max(1, T.sc * 0.8); L.solid(x - bw / 2 - 2, y - h - 10, bw + 4, 8, [0.08, 0.03, 0.04]); L.solid(x - bw / 2, y - h - 8, bw * Math.max(0, e.hp / e.hpMax), 4, [0.95, 0.22, 0.32]); }
       }]); }
     // players
-    for (const p of ST.players) { if (p.out || !vis(p.x, p.y, 160)) continue;
+    for (const p of ST.players) { if (p.out || p.inBus || !vis(p.x, p.y, 160)) continue;
       Y.push([p.y, () => drawHero(p, sx(p.x), sy(p.y), GT, t, p.id === me.id, shade, ST)]);
       // «Прикрыл!»: a riot shield held in front — behind him when he walks up, an edge-on slab when he walks sideways
       if (p.hero === 'leha' && !p.down && GT - p.qT < 4 + ((p.m && p.m.shield) || 0)) { const qa = GT - p.qT, dur = 4 + ((p.m && p.m.shield) || 0), up = SS(0, 0.15, qa) * SS(dur, dur - 0.3, qa);
@@ -255,13 +297,23 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       else if (b.kind === 'scoop') { for (let j = 1; j < 4; j++) L.puff(x - b.vx * 0.02 * j, y - b.vy * 0.02 * j, 7 + 2 * j, [0.85, 0.95, 1], 0.35 / j, b.id + j);
         L.glow(x, y, 20, [0.7, 0.9, 1], 0.4, 2.5); spr('fx_scoop', x, y, 22, 22, GT * 6 + b.id); }
       else if (b.kind === 'pigeon') { pigeon(x, y, 46, Math.floor(GT * 12 + b.id) % 2, b.vx < 0); if (b.r) L.glow(x, y, 18, [1, 0.5, 0.2], 0.6 + 0.3 * Math.sin(GT * 20), 2); }
+      else if (b.kind === 'sugar') { for (let j = 1; j <= 3; j++) L.star(x - b.vx * 0.012 * j, y - b.vy * 0.012 * j, 9 - 2 * j, b.mods && b.mods.burn ? [1, 0.6, 0.2] : [1, 1, 0.95], 0.6 / j);
+        L.glow(x, y, 20, b.mods && b.mods.burn ? [1, 0.5, 0.15] : [1, 0.95, 0.85], 0.4, 2.5); spr('fx_sugar', x, y, 24, 26, GT * 9 + b.id, { tint: b.mods && b.mods.burn ? [1.2, 0.6, 0.3, 0.6] : undefined });
+        if (b.mods && b.mods.burn) book('fxa_flame', loopQ(GT * 2, b.id * 0.1), x, y - 10, 30, 40, { add: 1, a: 0.7 }); }
+      else if (b.kind === 'tractor') { const [tw, th] = [150, 116], yy = y, life = SS(0, 0.15, 2 - b.ttl) * SS(0, 0.25, b.ttl), sh = b.mods && b.mods.shock;
+        L.shadow(x, yy, 64, 14, 0.5 * life); for (let j = 1; j <= 4; j++) L.puff(x - b.vx * 0.06 * j, yy - 6 - 3 * j, 12 + 7 * j, [0.55, 0.45, 0.35], 0.35 * life / j, b.id + j + Math.floor(GT * 8));
+        spr('fx_tractor', x, yy - th / 2 + 2 * Math.sin(GT * 40), tw, th, 0, { flip: b.vx < 0, a: life }); if (sh) { L.glow(x, yy - 50, 70, [0.4, 0.7, 1], 0.4, 2); if (Math.floor(GT * 20) % 2) bolt(x - 40, yy - 90, x + 40, yy - 20, GT * 50 + b.id, 0.8 * life); } }
+      else if (b.kind === 'condensed') { const q = 1 - Math.max(0, b.ttl) / 0.6, hgt = 120 * 4 * q * (1 - q); L.shadow(x, y + 46, 10, 4, 0.4); spr('fx_condensed', x, y - hgt, 22, 28, GT * 8 + b.id); }
       else if (b.kind === 'can') { const q = 1 - Math.max(0, b.ttl) / 0.6, hgt = 120 * 4 * q * (1 - q);
         L.shadow(x, y + 46, 10, 4, 0.4); L.rrect(x - 7, y - 11 - hgt, 14, 22, 3, [0.3, 0.95, 0.9], [0.1, 0.55, 0.5]); L.solid(x - 7, y - 4 - hgt, 14, 5, [0.95, 0.3, 0.5], GT * 9, 7, 2.5); }
       else if (b.kind === 'rocket') { for (let j = 1; j < 7; j++) L.puff(x - Math.cos(an) * 20 * j, y - Math.sin(an) * 20 * j - 3 * j, 7 + 4 * j, [0.55, 0.5, 0.48], 0.4 / Math.sqrt(j), b.id + j);
         L.glow(x - Math.cos(an) * 22, y - Math.sin(an) * 22, 34, [1, 0.6, 0.2], 0.95, 2.5); spr('fx_rocket', x, y, 44, 16, an); }
       else if (b.kind === 'pellet') { L.glow(x, y, 12, [1, 0.7, 0.3], 0.5, 2.5); streak(x - Math.cos(an) * 22, y - Math.sin(an) * 22, an, 26, 6, [1, 0.75, 0.3], 1.2); }
       else { L.glow(x, y, 16, [1, 0.8, 0.4], 0.5, 2.5); streak(x - Math.cos(an) * 40, y - Math.sin(an) * 40, an, 46, 7, [1, 0.85, 0.45], 1.4); L.solid(x - 9, y - 1, 18, 2, [1, 0.97, 0.8], an, 9, 1); } }
-    for (const b of ST.eproj) { const x = sx(b.x), y = sy(b.y); L.glow(x, y, 26, [0.75, 0.3, 1], 0.7, 2.2); L.puff(x, y, 10, [0.6, 0.2, 0.8], 0.9, b.ttl * 10); }
+    for (const b of ST.eproj) { const x = sx(b.x), y = sy(b.y);
+      if (b.lob) { const q = 1 - Math.max(0, b.ttl) / (b.ttl0 || 0.9), hgt = 150 * 4 * q * (1 - q); L.shadow(x, y + 40, 9, 4, 0.45);             // an empty bottle, spinning in an arc
+        L.rrect(x - 5, y - 14 - hgt, 10, 24, 3, [0.25, 0.6, 0.25], [0.12, 0.35, 0.15], 0.95); L.solid(x - 2, y - 22 - hgt, 4, 9, [0.2, 0.5, 0.2], GT * 14, 2, 13); continue; }
+      L.glow(x, y, 26, [0.75, 0.3, 1], 0.7, 2.2); L.puff(x, y, 10, [0.6, 0.2, 0.8], 0.9, b.ttl * 10); }
 
     // ===== event FX =====
     let critN = 0;                                                                   // stacked crit labels never overlap
@@ -329,6 +381,14 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         L.ring(ex, ey, 40 + 60 * q, 30 + 45 * q, [0.6, 1, 0.6], 1 - q, 0.1); }
       if (e.k === 'lvl' && a < 1.2) for (const p of ST.players) if (!p.out) { const q = a / 1.2; L.ring(sx(p.x), sy(p.y), 30 + 70 * q, 22 + 50 * q, [0.45, 0.7, 1], 1 - q, 0.08); L.glow(sx(p.x), sy(p.y) - 60, 90, [0.5, 0.7, 1], 0.5 * (1 - q), 2); }
       if (e.k === 'spit' && a < 0.2) L.glow(ex, ey - 40, 30, [0.8, 0.3, 1], 1 - a / 0.2, 2);
+      if (e.k === 'splat' && a < 0.4) { const q = a / 0.4; for (let j = 0; j < 8; j++) { const an = j * 0.785, d = e.r * 0.8 * q; L.puff(ex + Math.cos(an) * d, ey + Math.sin(an) * d * 0.7 - 20 * (1 - q), 14, [1, 0.95, 0.8], 0.7 * (1 - q), e.t + j); } }
+      if (e.k === 'shatter' && a < 0.45) { const q = a / 0.45; for (let j = 0; j < 7; j++) { const an = rnd(e.t, j) * 6.28, d = 60 * q; L.solid(ex + Math.cos(an) * d, ey - 10 + Math.sin(an) * d * 0.6 - 40 * q * (1 - q), 7, 4, [0.4, 0.85, 0.4], an + q * 8, 3.5, 2, 1 - q); }
+        L.ring(ex, ey, 62 * (0.5 + q), 44 * (0.5 + q), [0.6, 1, 0.6], 0.5 * (1 - q), 0.06); }
+      if (e.k === 'rev' && a < 0.7) { lab('rev' + e.id % 9, '!', ex, ey - 150 - 10 * Math.sin(a * 20), { size: 46, al: 0.5, col: '#ff7060', a: 1 - a / 0.7, font: FONT }); }
+      if (e.k === 'howl' && a < 1.0) { const q = a / 1; for (let j = 0; j < 3; j++) L.ring(ex, ey - 60, 40 + 140 * ((q + j * 0.25) % 1), 30 + 100 * ((q + j * 0.25) % 1), [1, 0.4, 0.3], 0.5 * (1 - q), 0.05);
+        if (hudFree(ex, ey - 170)) lab('howl' + e.id % 5, 'АУУУУ!', ex, ey - 170, { size: 30, al: 0.5, col: '#ff9070', a: 1 - q, font: FONT }); }
+      if (e.k === 'board' && a < 0.6) { const q = a / 0.6; for (let j = 0; j < 6; j++) L.star(ex + Math.cos(j * 1.05) * 50 * q, ey - 60 - 40 * q, 12, [1, 0.9, 0.5], 1 - q); }
+      if (e.k === 'drink' && a < 1.2) { const q = a / 1.2; book('fxa_shock', a / 0.6, ex, ey - 50, 260, 260, { add: 1, tint: [0.5, 1.3, 0.9, 0.8] }); L.glow(ex, ey - 60, 160, [0.4, 1, 0.7], 0.5 * (1 - q), 2); }
       if (e.k === 'zap' && a < 0.14) bolt(ex, ey, sx(e.x2), sy(e.y2), e.t * 100 + Math.floor(GT * 30), 1 - a / 0.14);
       if (e.k === 'freeze' && a < 0.6) book('fxa_ice', a / 0.6, ex, ey - 34, 96, 96);
       if (e.k === 'coo' && a < 0.5) { book('fxa_shock', a / 0.5, ex, ey - 30, e.r * 2.6, e.r * 2.6, { add: 1, tint: [1.0, 0.95, 1.4, 0.7] }); for (let j = 0; j < 5; j++) L.star(ex + Math.cos(j * 1.26 + a * 4) * 60 * (a / 0.5), ey - 110 - 40 * (a / 0.5), 9, [0.9, 0.9, 1], 1 - a / 0.5); }
@@ -376,7 +436,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
 
   // ---------------- hero (whole sprite per view for now; cut-out rigs replace this) ----------------
   function drawHero(p, x, y, GT, t, mine, shade, ST) {
-    const view = p.hero + '_' + DIRN[p.dir], [w0, h] = sz(view), w = w0, flip = p.dir === 3;
+    const view = p.hero + '_' + DIRN[p.dir], sm = ST.spor === 'smol' ? 0.8 : 1, w = sz(view)[0] * sm, h = sz(view)[1] * sm, flip = p.dir === 3;
     const sp = Math.hypot(p.vx, p.vy), run = Math.min(1, sp / 150), ph = p.dist / 62 * Math.PI;
     const col = hcol(p.hero);
     L.ring(x, y, 34, 13, col, mine ? 0.9 : 0.55, 0.16);
@@ -450,27 +510,48 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       lab('aln' + p.id, p.bot ? SIM.HEROES[p.hero].name + ' (бот)' : pname(p), 100, ay + 20, Object.assign({ size: 16 }, F));
       bar(100, ay + 38, 124, 16, p.out ? 0 : p.hp / p.hpMax, [0.9, 0.2, 0.25], [0.6, 0.1, 0.15]);
       if (p.down) lab('ald' + p.id, p.out ? 'выбыл' : 'УПАЛ ' + Math.ceil(p.downT), 100, ay + 62, Object.assign({ size: 14, col: '#ff6060' }, F));
+      else if (p.inBus) lab('ald' + p.id, 'в автобусе', 100, ay + 62, Object.assign({ size: 14, col: '#ffe066' }, F));
       ay += 84; }
     // ---- wave + timer (top centre) ----
-    panel('wave', W / 2 - 130, 16, 260, 96);
-    const wl = ST.brk > 0 ? `Перерыв ${Math.ceil(ST.brk)}` : ST.clear ? 'Добей волну!' : `Волна ${ST.wave}`;
-    lab('wavel', wl, W / 2, 44, Object.assign({ size: ST.clear ? 26 : 30, al: 0.5, col: ST.clear ? '#ff9a6a' : '#ffd76a' }, F));
-    if (ST.clear) lab('timer', `Осталось ${ST.left ?? ST.enemies.length}`, W / 2, 86, Object.assign({ size: 24, al: 0.5 }, F));
-    else lab('timer', mmss(ST.brk > 0 ? ST.brk : SIM.WAVE_LEN - ST.waveT), W / 2, 86, Object.assign({ size: 32, al: 0.5 }, F));
+    if (!ST.over) {
+    panel('wave', W / 2 - 150, 16, 300, 112);
+    const act = ST.players.filter((p) => !p.out), onBus = act.filter((p) => p.inBus).length, bus = ST.bus && !ST.endless;
+    const wl = bus ? 'ВСЕ В АВТОБУС!' : ST.brk > 0 ? `Перерыв ${Math.ceil(ST.brk)}` : ST.clear ? 'Добей волну!' : `Волна ${ST.wave}`;
+    lab('wavel', wl, W / 2, 44, Object.assign({ size: ST.clear || bus ? 26 : 30, al: 0.5, col: bus ? '#ffe066' : ST.clear ? '#ff9a6a' : '#ffd76a' }, F));
+    if (bus) lab('timer', `В автобусе ${onBus}/${act.length}`, W / 2, 84, Object.assign({ size: 24, al: 0.5 }, F));
+    else if (ST.clear) lab('timer', `Осталось ${ST.left ?? ST.enemies.length}`, W / 2, 84, Object.assign({ size: 24, al: 0.5 }, F));
+    else lab('timer', mmss(ST.brk > 0 ? ST.brk : SIM.WAVE_LEN - ST.waveT), W / 2, 84, Object.assign({ size: 32, al: 0.5 }, F));
+    lab('mapn', ST.endless ? `Бесконечная ночь · домой ${onBus}/${act.length}` : (SIM.MAPN[ST.map] || 'Парк') + (ST.map === 'meleuz' ? ' · волны 11–20' : ' · волны 1–10'), W / 2, 112, Object.assign({ size: 15, al: 0.5, col: ST.endless ? '#d6a0ff' : '#c8b8a0' }, F));
+    // the spor and the energy drinks (risk taken → score multiplier)
+    { const sp = ST.spor && SIM.SPORS[ST.spor], tags = [];
+      if (sp) tags.push(['Спор: ' + sp.n, '#ff9a6a']); if (ST.drinks) tags.push(['Энергетики ×' + ST.drinks, '#9fffd0']); if (ST.daily) tags.push(['Забег дня', '#9fd0ff']);
+      tags.forEach(([s2, c], i) => { const tw = labW('tag' + i, s2, Object.assign({ size: 15 }, F)); L.rrect(W / 2 - tw / 2 - 12, 136 + i * 30, tw + 24, 26, 8, [0.12, 0.08, 0.1], [0.07, 0.05, 0.07], 0.8);
+        lab('tag' + i, s2, W / 2, 149 + i * 30, Object.assign({ size: 15, al: 0.5, col: c }, F)); }); } }
     // ---- kills / level (top-right) ----
     panel('res', W - 400, 20, 376, 56);
-    L.glow(W - 368, 48, 22, [1, 0.75, 0.2], 0.6, 2); lab('kills', `${ST.kills}`, W - 340, 48, Object.assign({ size: 26 }, F));
-    L.solid(W - 200, 38, 18, 18, [0.75, 0.4, 1], Math.PI / 4, 9, 9); lab('lvlc', `${ST.lvl}`, W - 170, 48, Object.assign({ size: 26 }, F));
+    L.glow(W - 380, 48, 18, [1, 0.3, 0.35], 0.6, 2); lab('kills', `${ST.kills}`, W - 360, 48, Object.assign({ size: 20 }, F));
+    L.star(W - 240, 48, 16, [1, 0.85, 0.3], 1); lab('score', (ST.score || 0).toLocaleString('ru-RU'), W - 222, 48, Object.assign({ size: 22, col: '#ffe066' }, F));
+    { const x = SIM.scoreX(ST); if (x > 1.001) lab('scx', '×' + x.toFixed(1), W - 34, 48, Object.assign({ size: 16, al: 1, col: '#ff9a6a' }, F)); }
     // ---- minimap ----
     const MX = W - 320, MY = 92, MW = 296, MH = 216, ks = MW / SIM.WORLD.x1;
     panel('map', MX, MY, MW, MH, 0.85);
     L.rrect(MX + (SIM.C[0] - SIM.PLAZA[0]) * ks, MY + (SIM.C[1] - SIM.PLAZA[1]) * ks, SIM.PLAZA[0] * 2 * ks, SIM.PLAZA[1] * 2 * ks, SIM.PLAZA[1] * ks, [0.35, 0.25, 0.22], [0.3, 0.2, 0.18]);
     for (const [px, py, pw, ph, pr] of SIM.PATHS) L.solid(MX + (px - pw / 2) * ks, MY + (py - ph / 2) * ks, pw * ks, ph * ks, [0.3, 0.22, 0.2], pr, pw * ks / 2, ph * ks / 2, 0.8);
     for (const [x, y, rx, ry] of SIM.SUBS) L.rrect(MX + (x - rx) * ks, MY + (y - ry) * ks, rx * 2 * ks, ry * 2 * ks, ry * ks, [0.3, 0.22, 0.2], [0.3, 0.22, 0.2]);
+    for (const [x0, y0, x1, y1] of SIM.WALLS || []) L.rrect(MX + x0 * ks, MY + y0 * ks, (x1 - x0) * ks, (y1 - y0) * ks, 2, [0.55, 0.5, 0.45], [0.4, 0.35, 0.3]);
+    { const [px, py, rx, ry] = SIM.POND; L.rrect(MX + (px - rx) * ks, MY + (py - ry) * ks, rx * 2 * ks, ry * 2 * ks, ry * ks, [0.15, 0.3, 0.35], [0.1, 0.22, 0.28]); }
+    if (SIM.LV.KIOSK && ST.wave >= (ST.kioskNext ?? 3) && !ST.bus) L.solid(MX + SIM.LV.KIOSK[0] * ks - 4, MY + SIM.LV.KIOSK[1] * ks - 4, 8, 8, [0.4, 1, 0.75]);
+    if (ST.bus) L.rrect(MX + ST.bus.x * ks - 9, MY + ST.bus.y * ks - 6, 18, 10, 3, [1, 0.85, 0.3], [0.9, 0.5, 0.2], 0.6 + 0.4 * Math.sin(GT * 6));
     if (ST.dots) for (const d of ST.dots) L.solid(MX + d[0] * 8 * ks - 1.5, MY + d[1] * 8 * ks - 1.5, 3, 3, [0.95, 0.25, 0.3]);
     else for (const e of ST.enemies) L.solid(MX + e.x * ks - 1.5, MY + e.y * ks - 1.5, 3, 3, [0.95, 0.25, 0.3]);
-    for (const p of ST.players) if (!p.out) { const c = p.id === me.id ? [0.4, 1, 0.4] : hcol(p.hero); L.solid(MX + p.x * ks - 4, MY + p.y * ks - 4, 8, 8, p.down && Math.floor(GT * 4) % 2 ? [1, 0.2, 0.2] : c, Math.PI / 4, 4, 4); }
+    for (const p of ST.players) if (!p.out && !p.inBus) { const c = p.id === me.id ? [0.4, 1, 0.4] : hcol(p.hero); L.solid(MX + p.x * ks - 4, MY + p.y * ks - 4, 8, 8, p.down && Math.floor(GT * 4) % 2 ? [1, 0.2, 0.2] : c, Math.PI / 4, 4, 4); }
     L.rrect(MX + me.cam[0] * ks, MY + me.cam[1] * ks, W * ks, H * ks, 2, [1, 1, 1], [1, 1, 1], 0.08);
+    // ---- the bus is off-screen: an arrow at the edge points to it ----
+    if (ST.bus && !me.inBus && !me.out && !ST.over) { const bx = sx(ST.bus.x), by = sy(ST.bus.y) - 80;
+      if (bx < 40 || bx > W - 40 || by < 40 || by > H - 40) { const a = Math.atan2(by - H / 2, bx - W / 2), r = Math.min((W / 2 - 70) / Math.abs(Math.cos(a) || 1e-3), (H / 2 - 70) / Math.abs(Math.sin(a) || 1e-3));
+        const ax = W / 2 + Math.cos(a) * r, ay2 = H / 2 + Math.sin(a) * r, pu = 0.7 + 0.3 * Math.sin(GT * 6);
+        L.glow(ax, ay2, 50, [1, 0.8, 0.3], 0.5 * pu, 2); L.solid(ax - 24, ay2 - 8, 48, 16, [1, 0.85, 0.35], a, 24, 8, pu); L.solid(ax + Math.cos(a) * 18 - 14, ay2 + Math.sin(a) * 18 - 14, 28, 28, [1, 0.85, 0.35], a + Math.PI / 4, 14, 14, pu);
+        lab('busar', 'АВТОБУС', ax - Math.cos(a) * 60, ay2 - Math.sin(a) * 40, Object.assign({ size: 16, al: 0.5, col: '#ffe066' }, F)); } }
     // ---- abilities (bottom centre): auto attack, Q, R ult — each with its painted icon ----
     if (!ST.over) { const gun = SIM.LEHA_GUNS[GT - me.ultT < 7 ? 3 : me.tier || 0];
       const slots = [['АВТО', me.sigEvo ? SIM.UPG.HEVO[me.sigEvo].n : me.hero === 'leha' ? gun : BN[me.hero], 0, 0, me.sigEvo ? icon(me.hero, me.sigEvo) : me.evo ? icon(me.hero, 'evo') : icon(me.hero, 'sig')],
@@ -491,12 +572,15 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       lab('combo', COMBO[e.key], W / 2, 222, Object.assign({ size: s, al: 0.5, col: '#ffe066', a: k }, F)); } }
     // ---- a new recipe or an unlocked weapon ----
     { const dv = [...ST.ev].reverse().find((v) => (v.k === 'discover' || v.k === 'unlock') && GT - v.t < 3);
-      if (dv) { const a = GT - dv.t, k = SS(0, 0.2, a) * SS(3, 2.4, a), s2 = dv.k === 'unlock' ? 'ОТКРЫТО ОРУЖИЕ: ' + SIM.UPG.WEAPONS[dv.id].n : 'НОВЫЙ РЕЦЕПТ: ' + SIM.UPG.rname(dv.id);
-        const tw = labW('dvb', s2, Object.assign({ size: 34 }, F)); L.rrect(W / 2 - tw / 2 - 30, 136, tw + 60, 64, 14, [0.12, 0.25, 0.12], [0.06, 0.14, 0.06], 0.85 * k); L.uiBox('dvb', W / 2 - tw / 2 - 30, 136, tw + 60, 64);
-        lab('dvb', s2, W / 2, 168, Object.assign({ size: 34, al: 0.5, col: '#9fffa0', a: k }, F)); } }
+      if (dv) { const a = GT - dv.t, k = SS(0, 0.2, a) * SS(3, 2.4, a), q = SIM.QUESTS.find((o) => o.id === dv.id), U = SIM.UPG;
+        const s2 = dv.k === 'unlock' ? 'ДЕЛО СДЕЛАНО! Открыто: ' + (q ? q.r.map((id) => (U.WEAPONS[id] || U.PASSIVES[id]).n).join(', ') : dv.id) : 'НОВЫЙ РЕЦЕПТ: ' + SIM.UPG.rname(dv.id);
+        const fs = dv.k === 'unlock' ? 26 : 34, tw = labW('dvb', s2, Object.assign({ size: fs }, F)); L.rrect(W / 2 - tw / 2 - 30, 200, tw + 60, 64, 14, [0.12, 0.25, 0.12], [0.06, 0.14, 0.06], 0.85 * k); L.uiBox('dvb', W / 2 - tw / 2 - 30, 200, tw + 60, 64);
+        lab('dvb', s2, W / 2, 232, Object.assign({ size: fs, al: 0.5, col: '#9fffa0', a: k }, F)); } }
     // ---- wave start / break banner ----
-    const wv = [...ST.ev].reverse().find((v) => (v.k === 'wave' || v.k === 'break' || v.k === 'clear') && GT - v.t < 2.5);
-    if (wv) { const a = GT - wv.t, k = SS(0, 0.2, a) * SS(2.5, 2.0, a), s = wv.k === 'wave' ? `ВОЛНА ${wv.n}` : wv.k === 'clear' ? 'ДОБЕЙ ОСТАВШИХСЯ!' : `ВОЛНА ${wv.n} ПРОЙДЕНА!`;
+    const wv = [...ST.ev].reverse().find((v) => (v.k === 'wave' || v.k === 'break' || v.k === 'clear' || v.k === 'bus' || v.k === 'arrive' || v.k === 'drink' || v.k === 'timeout') && GT - v.t < 2.5);
+    if (wv) { const a = GT - wv.t, k = SS(0, 0.2, a) * SS(2.5, 2.0, a), dp = wv.pid !== undefined && ST.players.find((q) => q.id === wv.pid);
+      const s = wv.k === 'bus' ? (wv.to === 'home' ? 'АВТОБУС ДОМОЙ! ИЛИ ЕЩЁ ПОВОЮЕМ?' : 'ПАЗИК ДО МЕЛЕУЗА! ВСЕ В АВТОБУС!') : wv.k === 'arrive' ? 'МЕЛЕУЗ' : wv.k === 'timeout' ? 'НЕ УСПЕЛИ!'
+        : wv.k === 'drink' ? `${dp ? pname(dp) : ''} выпил энергетик! ×${(1 + 0.1 * wv.n).toFixed(1)}` : wv.k === 'wave' ? `ВОЛНА ${wv.n}` : wv.k === 'clear' ? 'ДОБЕЙ ОСТАВШИХСЯ!' : `ВОЛНА ${wv.n} ПРОЙДЕНА!`;
       const tw = labW('wbn', s, Object.assign({ size: 64 }, F)); L.rrect(W / 2 - tw / 2 - 40, H * 0.36 - 50, tw + 80, 100, 18, [0.15, 0.08, 0.1], [0.08, 0.04, 0.06], 0.75 * k); L.uiBox('wbn', W / 2 - tw / 2 - 40, H * 0.36 - 50, tw + 80, 100);
       lab('wbn', s, W / 2, H * 0.36, Object.assign({ size: 64, al: 0.5, col: '#ffd76a', a: k }, F)); }
     // ---- upgrade cards ----
@@ -512,7 +596,8 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         else L.sprite(evo ? (c.found ? icon(me.hero, c.rid) : 'ic_unknown') : icon(me.hero, c.id), x + 14, y0 + 14, { w: 76, h: 76 });
         L.rrect(x + 6, y0 + 6, 30, 30, 8, [0.35, 0.2, 0.08], [0.2, 0.1, 0.05]); lab('ck' + i, String(i + 1), x + 21, y0 + 22, Object.assign({ size: 22, al: 0.5, col: '#ffd76a' }, F));
         const nsz = Math.min(22, Math.floor((cw - 112) / (c.n.length * 0.62)));
-        lab('cn' + i, c.n, x + 102, y0 + 38, Object.assign({ size: nsz, col: evo ? '#ffd76a' : c.kind === 'fusion' ? '#d6a0ff' : own ? '#ffb0e0' : c.kind === 'w' ? '#9fe0ff' : '#f6e7c8' }, F));
+        if (c.kind === 'gift') L.glow(x + 50, y0 + 50, 110, [1, 0.6, 0.8], 0.3, 2);
+        lab('cn' + i, c.n, x + 102, y0 + 38, Object.assign({ size: nsz, col: evo ? '#ffd76a' : c.kind === 'fusion' ? '#d6a0ff' : c.kind === 'gift' ? '#ffb0c8' : own ? '#ffb0e0' : c.kind === 'w' ? '#9fe0ff' : '#f6e7c8' }, F));
         if (c.tag) lab('ct' + i, c.tag, x + 102, y0 + 72, Object.assign({ size: 16, col: c.tag === 'НОВОЕ' ? '#8fff8f' : alc ? '#ffd76a' : '#c8b8a0' }, F));
         if (evo) { L.sprite(icon(me.hero, c.a), x + cw - 82, y0 + 92, { w: 30, h: 30 }); L.sprite(icon(me.hero, c.b), x + cw - 42, y0 + 92, { w: 30, h: 30 }); }
         wrap(c.d, Math.floor((cw - (evo ? 120 : 44)) / 11.8)).slice(0, 3).forEach((ln, j) => lab('cd' + i + '_' + j, ln, x + 22, y0 + 104 + j * 28, Object.assign({ size: 19, col: '#d8c8b0' }, F))); }); }
@@ -523,18 +608,24 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       L.rrect(W / 2 - tw / 2 - 26, 124, tw + 52, s2 ? 92 : 56, 12, [0.12, 0.08, 0.16], [0.07, 0.04, 0.1], 0.88); L.uiBox('pz', W / 2 - tw / 2 - 26, 124, tw + 52, s2 ? 92 : 56);
       lab('pz1', s1, W / 2, 152, Object.assign({ size: 26, al: 0.5, col: '#9fd0ff' }, F)); if (s2) lab('pz2', s2, W / 2, 190, Object.assign({ size: 20, al: 0.5, col: '#f6e7c8' }, F)); }
     // ---- downed / out ----
+    if (me.inBus && !ST.over) { const s = ST.bus && ST.bus.to === 'home' ? 'Ты в автобусе домой. Ждём остальных…' : 'Ты в автобусе! Ждём остальных…';
+      const tw = labW('inb', s, Object.assign({ size: 30 }, F)); L.rrect(W / 2 - tw / 2 - 30, H * 0.62 - 36, tw + 60, 72, 14, [0.25, 0.18, 0.05], [0.12, 0.08, 0.02], 0.8); L.uiBox('inb', W / 2 - tw / 2 - 30, H * 0.62 - 36, tw + 60, 72);
+      lab('inb', s, W / 2, H * 0.62, Object.assign({ size: 30, al: 0.5, col: '#ffe066' }, F)); }
     if (me.down && !me.out && !ST.over && !ST.pause) { const s = ST.solo && me.selfRes > 0 ? 'Тебя вырубило! E — встать' : 'Тебя вырубило! Ждём, пока поднимут…';
       const tw = labW('dn', s, Object.assign({ size: 34 }, F)); L.rrect(W / 2 - tw / 2 - 30, H * 0.62 - 40, tw + 60, 110, 14, [0.3, 0.05, 0.05], [0.15, 0.02, 0.02], 0.8); L.uiBox('dn', W / 2 - tw / 2 - 30, H * 0.62 - 40, tw + 60, 110);
       lab('dn', s, W / 2, H * 0.62, Object.assign({ size: 34, al: 0.5, col: '#ffb0a0' }, F)); bar(W / 2 - 200, H * 0.62 + 30, 400, 20, me.downT / 30, [1, 0.3, 0.3], [0.7, 0.1, 0.1]); }
     // ---- results ----
     if (ST.over && ST.awards) { L.solid(0, 0, W, H, [0, 0, 0], 0, 0, 0, 0.55);
-      const ttl = ST.won ? 'ПАРК ЗАЧИЩЕН!' : 'ВСЕ ЛЕГЛИ…'; panel('res2', W / 2 - 520, 110, 1040, 170 + ST.awards.length * 100);
-      lab('rt', ttl, W / 2, 160, Object.assign({ size: 54, al: 0.5, col: ST.won ? '#ffe066' : '#ff8080' }, F));
+      const ttl = ST.home ? 'УЕХАЛИ ГЕРОЯМИ!' : ST.endless ? `НОЧЬ ВЗЯЛА ВЕРХ НА ВОЛНЕ ${ST.wave}` : ST.won ? 'МЕЛЕУЗ ЗАЧИЩЕН!' : ST.map === 'meleuz' ? 'МЕЛЕУЗ НЕ УСТОЯЛ…' : 'ВСЕ ЛЕГЛИ…';
+      panel('res2', W / 2 - 520, 70, 1040, 210 + ST.awards.length * 100);
+      lab('rt', ttl, W / 2, 120, Object.assign({ size: 48, al: 0.5, col: ST.won ? '#ffe066' : '#ff8080' }, F));
+      lab('rsc', `Очки: ${(ST.score || 0).toLocaleString('ru-RU')} · волна ${ST.wave} · убито ${ST.kills}` + (ST.record ? '  НОВЫЙ РЕКОРД!' : ''), W / 2, 176, Object.assign({ size: 24, al: 0.5, col: ST.record ? '#9fffa0' : '#f6e7c8' }, F));
       ST.awards.forEach((a, i) => { const p = ST.players.find((q) => q.id === a.pid), y = 230 + i * 100;
         L.sprite('portrait_' + p.hero, W / 2 - 490, y, { w: 84, h: 84 });
         lab('aw' + i, a.t, W / 2 - 390, y + 26, Object.assign({ size: 32, col: '#ffd76a' }, F));
         lab('ad' + i, `${pname(p)}: ${a.d}`, W / 2 - 390, y + 64, Object.assign({ size: 22 }, F)); });
       lab('rr', ST.net ? 'Ждём, пока хост вернёт всех в комнату…' : window.NET && NET.mode === 'host' ? 'Backspace — в комнату' : 'Backspace — ещё раз', W / 2, 250 + ST.awards.length * 100, Object.assign({ size: 26, al: 0.5, col: '#9fd0ff' }, F)); }
+    { const ar = [...ST.ev].reverse().find((v) => v.k === 'arrive' && GT - v.t < 1.4); if (ar) L.solid(0, 0, W, H, [0, 0, 0], 0, 0, 0, SS(1.4, 0.2, GT - ar.t)); }
     // demo caption
   }
 
@@ -579,7 +670,25 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     ['alchemy_hud', abil('leha', null, 1.2, (s, p) => { p.items = { sig: 3, leha_rail: 2, salute: 1, tapok: 3, speaker: 3, pigeon: 2, fury: 1, armor: 3, hp: 2 }; p.sigEvo = 'leha_rail';
       p.fused = [['tapok', 'speaker']]; SIM.recalc(p); })],
     ['status', abil('hasan', null, 0.4, (s, p) => { s.enemies.forEach((e, i) => { if (i % 3 === 0) e.burnT = s.t + 3; else if (i % 3 === 1) e.freezeT = s.t + 3; }); p.items.pigeon = 3; SIM.recalc(p); })],
-    ['leha_q', abil('leha', 'q', 0.4)], ['leha_r', abil('leha', 'r', 1.0)]];
+    ['leha_q', abil('leha', 'q', 0.4)], ['leha_r', abil('leha', 'r', 1.0)], ...melQA()];
+  // Мелеуз: the town, its folk, its items, the bus and the endless night's HUD
+  const melQA = () => {
+    const mel = (secs, f, at) => { const s = SIM.create({ heroes: ['hasan', 'danil', 'vitya', 'leha'], humans: [0], map: 'meleuz' }); s.wave = 14; s.brk = 0;
+      const god = () => { s.xpNext = 1e9; for (const p of s.players) { p.hp = p.hpMax = 9999; p.pick = null; p.queue = 0; p.kq = 0; } };
+      if (f) f(s, s.players[0]); for (let i = 0; i < 120 * secs; i++) { SIM.step(s, {}); god(); }
+      if (at) { const p = s.players[0]; p.x = at[0]; p.y = at[1]; p.cam = [at[0] - W / 2, at[1] - 60 - H / 2]; }
+      s.me = 0; return s; };
+    const items = (s, p) => { p.items = { sig: 3, sugar: 3, tractor: 3, condensed: 2, kumys: 2, dmg: 2 }; SIM.recalc(p); };
+    return [['mel_square', mel(10)], ['mel_admin', mel(0.2, null, [3900, 1250])], ['mel_glory', mel(0.2, null, [1450, 1300])], ['mel_mosque', mel(0.2, null, [1500, 3000])],
+      ['mel_river', mel(0.2, null, [3800, 2900])], ['mel_church', mel(0.2, null, [2600, 1000])],
+      ['mel_mobs', mel(16, (s) => { s.wave = 16; })], ['mel_items', mel(6, items)],
+      ['mel_elites', mel(3, (s, p) => { s.eliteT = 0; s.wave = 15; for (let i = 0; i < 2; i++) { s.eliteT = 0; } })],
+      ['bus_park', (() => { const s = SIM.spawn(0, { hero: 'vitya' }); s.wave = 10; for (let i = 0; i < 120 * 3; i++) SIM.step(s, {});
+        s.enemies = []; s.bus = { x: SIM.LV.BUS[0], y: SIM.LV.BUS[1], to: 'meleuz', t0: s.t - 2 }; s.players[1].inBus = 1; const p = s.players[0]; p.x = s.bus.x - 500; p.y = s.bus.y + 40;
+        p.cam = [p.x - W / 2 + 250, p.y - 60 - H / 2]; s.ev.push({ k: 'bus', to: 'meleuz', t: s.t - 0.5, x: s.bus.x, y: s.bus.y }); return s; })()],
+      ['endless_hud', mel(2, (s) => { s.wave = 23; s.endless = 1; s.won = 1; s.spor = 'oh2'; s.drinks = 2; s.score = 1234567; s.bus = { x: SIM.LV.BUS[0], y: SIM.LV.BUS[1], to: 'home', t0: -9 }; })],
+      ['gift_pick', (() => { const s = mel(0.5), p = s.players[0]; p.gifts = { g_dmg: 4 }; p.pick = ['g_dmg', 'g_crit', 'g_hp'].map((id) => SIM.cardFor(p, id)); s.pause = 1; s.pend = [0]; return s; })()],
+      ['results_home', mel(0.2, (s) => { s.over = 1; s.won = 1; s.home = 1; s.endless = 1; s.wave = 27; s.score = 987654; s.awards = [{ pid: 0, t: 'Мясник Мелеуза', d: '999999 урона' }, { pid: 1, t: 'Ангел-хранитель', d: 'поднял друзей 9 раз' }]; })]]; };
   // walk cycles per actor and view (engine.md §7, animation.md §14): one stride, the actor really travelling, camera following
   const walkQA = () => {
     const cycles = {}, sprites = {}, subject = {}, cycleT = {}, rest = {}, actors = [], SP = 200, N = 12;

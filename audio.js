@@ -128,6 +128,9 @@
       if (e.k === 'lvl') { FX.lvl(now, out(0, 0.7)); continue; }
       if (e.k === 'upgrade' && e.evo) { FX.evo(now, out(0, 0.8)); continue; }
       if (e.k === 'elite') { FX.elite(now, out(pan, 0.7)); continue; }
+      if (e.k === 'bus' || e.k === 'arrive') { FX.wave(now, out(0, 0.8)); continue; }
+      if (e.k === 'drink' || (e.k === 'board' && e.pid === me.id)) { FX.chest(now, out(0, 0.7)); continue; }
+      if (e.k === 'howl') { FX.elite(now, out(pan, 0.5)); continue; }
       if (e.k === 'chest' && e.pid === me.id) { FX.chest(now, out(0, 0.8)); continue; }
       if (e.k === 'food' && e.pid === me.id) { FX.food(now, out(0, 0.7)); continue; }
       // a crowd fight is a texture, not 200 sounds: my own actions at full volume, allies' quieter, each kind rate-limited
@@ -150,7 +153,7 @@
       else if (e.k === 'down') FX.down(now, d);
       else if (e.k === 'revive') FX.revive(now, d);
       else if (e.k === 'fart') fartSample(now, d, r, e.big) || FX.fart(now, d, r, e.big);
-      else if (e.k === 'spit') FX.spit(now, d);
+      else if (e.k === 'spit' || e.k === 'shatter' || e.k === 'splat') FX.spit(now, d);
       else if (e.k === 'bass') FX.bass(now, d);
       else if (e.k === 'block') FX.block(now, d);
     }
