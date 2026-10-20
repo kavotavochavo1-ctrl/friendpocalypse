@@ -40,7 +40,7 @@ const load = (src) => new Promise((res, rej) => { const s = document.createEleme
   const keys = {}, hint = document.getElementById('hint'), dev = document.getElementById('dev'), flash = document.getElementById('flash');
   const SPEEDS = [0.1, 0.25, 0.5, 1];
   let CFG = { hero: q.get('hero') || 'hasan', solo: q.has('solo') };
-  const start = () => { const s = SIM.spawn(simT, CFG); s.me = 0; return s; };
+  const start = () => { const s = SIM.spawn(simT, Object.assign({ meta: window.NET && NET.meta ? NET.meta() : null }, CFG)); s.me = 0; return s; };
   window.GAME = { start: (cfg) => { CFG = cfg; play = start(); hint.style.opacity = 0; }, set: (S) => { play = S; hint.style.opacity = 0; }, state: () => play,
     toMenu: () => { if (NET.mode !== 'client') play = null; SCENE.state = null; NET.openLobby(); } };
   let play = null, acc = 0, simT = 0, speed = 1, paused = false, stepOnce = false, fps = 60;
