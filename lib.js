@@ -338,12 +338,15 @@ void main(){ vec2 p = (v_uv - 0.5) * u_sz; vec2 q = abs(p) - (u_sz * 0.5 - u_r);
     W = L.W = w; H = L.H = h; P = L.P = {}; L.PIXEL = Math.max(1, pixel);
     for (const k in SH) P[k.toLowerCase()] = G.program(k.toLowerCase(), SH[k]);
     for (const k in extra) P[k] = G.program(k, extra[k]);
-    const px = L.PIXEL, lo = { view: [w, h], nearest: px > 1 };
-    T.bg = G.target(Math.round(w / px), Math.round(h / px), true, lo); T.comp = G.target(Math.round(w / px), Math.round(h / px), true, lo);
+    worldTargets();
     T.mask = G.target(w / 2, h / 2, true); T.rays = G.target(w / 2, h / 2, true);
     T.b1 = G.target(w / 4, h / 4); T.b2 = G.target(w / 4, h / 4); T.c1 = G.target(w / 8, h / 8); T.c2 = G.target(w / 8, h / 8);
     L.T = T; L.SUN = [w * 0.31, h * 0.25];
   };
+  // bg / comp hold the world at the canvas's real resolution (÷ pixel); rebuilt when the render scale changes
+  const worldTargets = () => { const k = (G.R || 1) / L.PIXEL, lo = { view: [W, H], nearest: L.PIXEL > 1 };
+    G.free(T.bg); G.free(T.comp); T.bg = G.target(Math.round(W * k), Math.round(H * k), true, lo); T.comp = G.target(Math.round(W * k), Math.round(H * k), true, lo); };
+  L.resize = (R) => { G.size(R); worldTargets(); };
 
   // ---------------- math ----------------
   // affine 2x3 [a, b, c, d, e, f]: x' = a x + c y + e, y' = b x + d y + f  (y down, angles clockwise on screen)
@@ -463,7 +466,8 @@ void main(){ vec2 p = (v_uv - 0.5) * u_sz; vec2 q = abs(p) - (u_sz * 0.5 - u_r);
   // labelW(...) measures without drawing (size panels to their content — never hard-code a panel width for variable text).
   const LBL = {};
   const lblTex = (slot, str, { size = 30, col = '#f6e7c8', out = '#2d1315', font = '"Trebuchet MS", "Segoe UI", Verdana, sans-serif', weight = 'bold' } = {}) => {
-    let r = LBL[slot]; const key = [str, size, col, out, font, weight].join('|'); if (r && r.key === key) return r;
+    const R = G.R || 1; let r = LBL[slot]; const key = [str, size, col, out, font, weight, R].join('|'); if (r && r.key === key) return r;
+    size = size * R;                                          // rasterised at the real pixel size, drawn at the view size
     const cv = document.createElement('canvas'), g = cv.getContext('2d'), f = `${weight} ${size}px ${font}`, pad = Math.ceil(size * 0.3);
     g.font = f; const tw = g.measureText(str).width, w = Math.ceil(tw) + 2 * pad, h = Math.ceil(size * 1.3) + 2 * pad;
     cv.width = Math.max(1, w); cv.height = h; g.font = f; g.textBaseline = 'middle'; g.lineJoin = 'round';
@@ -473,10 +477,10 @@ void main(){ vec2 p = (v_uv - 0.5) * u_sz; vec2 q = abs(p) - (u_sz * 0.5 - u_r);
     if (!r) r = LBL[slot] = { rec: G.canvasTex('lbl_' + slot, cv) };
     else { const gl = G.gl; gl.bindTexture(gl.TEXTURE_2D, r.rec.t); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv); gl.generateMipmap(gl.TEXTURE_2D); r.rec.w = w; r.rec.h = h; }
-    Object.assign(r, { key, pad, tw }); return r; };
+    Object.assign(r, { key, pad: pad / R, tw: tw / R, lw: w / R, lh: h / R }); return r; };
   L.labelW = (slot, str, o = {}) => lblTex(slot, str, o).tw;
   L.label = (slot, str, x, y, o = {}) => { const r = lblTex(slot, str, o), size = o.size || 30, a = o.a === undefined ? 1 : o.a, x0 = Math.round(x - r.tw * (o.al || 0));
-    L.sprite('lbl_' + slot, x0 - r.pad, Math.round(y - r.rec.h / 2), { w: r.rec.w, h: r.rec.h, u: { alpha: a } });
+    L.sprite('lbl_' + slot, x0 - r.pad, Math.round(y - r.lh / 2), { w: r.lw, h: r.lh, u: { alpha: a } });
     if (a > 0.05) L.uiText(slot, str, x0, y - size * 0.62, r.tw, size * 1.24); return r.tw; };
 
   // ---------------- HUD text: canvas glyph atlas → texture ----------------

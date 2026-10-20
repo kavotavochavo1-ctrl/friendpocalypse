@@ -32,7 +32,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
   vec3 stone = mix(vec3(0.25, 0.17, 0.13), vec3(0.42, 0.30, 0.22), step(0.5, fract(atan(d.y, d.x) * 9.0)));
   c = mix(c, stone, rim); c += pad;
   o = vec4(c, 1.0); }`;
-  S.programs = () => { L.init(W, H, { night: NIGHT, slash: SLASH, pond: POND }, { pixel: 2 }); L.glyphs('0123456789×+/:-'); };
+  S.programs = () => { L.init(W, H, { night: NIGHT, slash: SLASH, pond: POND }, { pixel: 1 }); L.glyphs('0123456789×+/:-'); };
 
   const SS = L.SS;
   const INK = [0.12, 0.06, 0.05], GAS = [0.55, 0.78, 0.18], GAS2 = [0.78, 0.86, 0.3], GAS0 = GAS, GAS20 = GAS2, WARM = [1.0, 0.62, 0.26];
@@ -208,7 +208,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         const sway = (k === 'tree' || k === 'autumn' || k === 'cypress' || k === 'spruce' || k === 'thuja') ? [0.004, 3, t * 0.8 + x * 0.01, 1] : 0;
         L.sprite(k, sxx - ww / 2, syy - hh + (k === 'flowers' ? hh * 0.4 : 0), { w: ww, h: hh, flip: !!f, pad: sway ? 0.03 : 0, u: Object.assign(u, sway ? { sway } : {}) });
         if (k === 'lamp') { const lx = sxx, ly = syy - hh * 0.86; L.glow(lx, ly, 60, [1, 0.72, 0.35], 0.55, 2.5); L.glow(lx, ly, 18, [1, 0.92, 0.7], 0.6, 2); }
-        if (k === 'mlamp') for (const [ox, oy] of [[0, 0.91], [-0.3, 0.76], [0.3, 0.76]]) { L.glow(sxx + ox * ww, syy - hh * oy, 46, [1, 0.88, 0.62], 0.5, 2.5); L.glow(sxx + ox * ww, syy - hh * oy, 14, [1, 0.97, 0.88], 0.6, 2); }
+        if (k === 'mlamp') for (const [ox, oy] of [[0, 0.91], [-0.3, 0.76], [0.3, 0.76]]) L.glow(sxx + ox * ww, syy - hh * oy, 40, [1, 0.92, 0.72], 0.6, 2.2);
         if (k === 'admin' || k === 'mosque' || k === 'church') L.glow(sxx, syy - hh * 0.35, ww * 0.45, [1, 0.75, 0.4], 0.12, 1.6);
         if (k === 'kiosk') { const on = ST.wave >= (ST.kioskNext ?? 3) && !ST.bus; L.glow(sxx - ww * 0.05, syy - hh * 0.45, 70, on ? [0.4, 1, 0.75] : [1, 0.7, 0.35], on ? 0.5 + 0.2 * Math.sin(GT * 5) : 0.25, 2);
           if (on) { const ny = syy - hh - 30 + 5 * Math.sin(GT * 4); spr('it_can', sxx, ny, 40, 40); if (Math.hypot(me.x - x, me.y - y - 50) < 200 && hudFree(sxx, ny - 40)) lab('kio', 'E — энергетик', sxx, ny - 44, { size: 20, al: 0.5, col: '#9fffd0', font: FONT }); } } }]); }
@@ -250,7 +250,8 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         if (frozen) spr('fx_ice', x, y - 24 * T.sc, 44 * T.sc, 52 * T.sc, 0, { a: 0.85 });
         if (burning) book('fxa_flame', loopQ(GT * 1.2, e.id * 0.17), x, y - h * 0.55, 40 * T.sc, 60 * T.sc, { add: 1, a: 0.8 });
         if (charm || ST.marks.some((m) => m.id === e.id)) { const hb = 4 * Math.sin(GT * 6 + e.id); L.glow(x, y - h - 20 + hb, 22, [1, 0.4, 0.8], 0.5, 2); spr('fx_heart', x, y - h - 20 + hb, 24, 22, 0.15 * Math.sin(GT * 3 + e.id)); }
-        if (e.hp < e.hpMax) { const bw = 44 * Math.max(1, T.sc * 0.8); L.solid(x - bw / 2 - 2, y - h - 10, bw + 4, 8, [0.08, 0.03, 0.04]); L.solid(x - bw / 2, y - h - 8, bw * Math.max(0, e.hp / e.hpMax), 4, [0.95, 0.22, 0.32]); }
+        // small fry: a health bar only right after a hit (less noise); elites and big ones always
+        if (e.hp < e.hpMax && (e.elite || T.sc >= 1.5 || GT - e.hitT < 1.5)) { const bw = 44 * Math.max(1, T.sc * 0.8); L.solid(x - bw / 2 - 2, y - h - 10, bw + 4, 8, [0.08, 0.03, 0.04]); L.solid(x - bw / 2, y - h - 8, bw * Math.max(0, e.hp / e.hpMax), 4, [0.95, 0.22, 0.32]); }
       }]); }
     // players
     for (const p of ST.players) { if (p.out || p.inBus || !vis(p.x, p.y, 160)) continue;

@@ -1,7 +1,7 @@
 // live/settings.js — player settings (per browser, localStorage): volumes, voice-line rate, screen shake, flashes,
 // ally name tags, FPS/network overlay, fullscreen. Opened from the lobby or with Esc in a run (solo pauses meanwhile).
 (function () {
-  const DEF = { master: 90, music: 35, sfx: 40, vo: 100, voices: 0.7, shake: 100, flash: 1, names: 1, netinfo: 0 };
+  const DEF = { master: 90, music: 35, sfx: 40, vo: 100, voices: 0.7, shake: 100, flash: 1, names: 1, netinfo: 0, quality: 0 };
   let V = Object.assign({}, DEF);
   try { Object.assign(V, JSON.parse(localStorage.getItem('fp_settings') || '{}')); } catch (e) {}
   const subs = [];
@@ -33,6 +33,7 @@
       ${slider('master', 'Общая громкость')}${slider('music', 'Музыка')}${slider('sfx', 'Эффекты')}${slider('vo', 'Голоса')}
       ${choice('voices', 'Реплики героев', [[1, 'Часто'], [0.7, 'Обычно'], [0.35, 'Редко'], [0, 'Выкл']])}
       ${slider('shake', 'Тряска экрана')}
+      ${choice('quality', 'Качество графики', [[0, 'Авто (чётко)'], [1, '1080p'], [0.75, 'Среднее'], [0.5, 'Низкое']])}
       ${choice('flash', 'Вспышки и свечение', [[1, 'Полные'], [0.5, 'Меньше']])}
       ${choice('names', 'Имена над друзьями', [[1, 'Вкл'], [0, 'Выкл']])}
       ${choice('netinfo', 'FPS и сеть (F3)', [[1, 'Показывать'], [0, 'Скрыть']])}

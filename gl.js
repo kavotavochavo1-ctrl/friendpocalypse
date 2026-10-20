@@ -5,15 +5,16 @@
   let gl, quadBuf, cur = null;
   const progs = {}, texs = {};
 
-  G.init = (canvas, W, H) => {
-    canvas.width = W; canvas.height = H;
-    gl = G.gl = canvas.getContext('webgl2', { premultipliedAlpha: true, alpha: false, antialias: false, preserveDrawingBuffer: true });
+  G.init = (canvas, W, H, R = 1, keep = true) => {
+    G.canvas = canvas; G.W = W; G.H = H; G.size(R);
+    gl = G.gl = canvas.getContext('webgl2', { premultipliedAlpha: true, alpha: false, antialias: false, preserveDrawingBuffer: keep });   // keep: only for screenshots
     if (!gl) throw new Error('WebGL2 not available');
     gl.getExtension('EXT_color_buffer_float'); gl.getExtension('EXT_color_buffer_half_float'); gl.getExtension('OES_texture_float_linear');
     quadBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
-    G.W = W; G.H = H;
   };
+  // render scale: the canvas holds W·R × H·R real pixels; draws stay in W×H view px (u_res), so only sharpness changes
+  G.size = (R) => { G.R = R; G.PW = G.canvas.width = Math.round(G.W * R); G.PH = G.canvas.height = Math.round(G.H * R); };
 
   // nearest: NEAREST min/mag, no mipmaps (pixel art: crisp texels; lod bias has no effect)
   G.load = (name, url, { repeat = false, nearest = false } = {}) => new Promise((res, rej) => {
@@ -81,9 +82,10 @@ vec2 scr(vec2 px){ return vec2(px.x / u_res.x, 1.0 - px.y / u_res.y); }   // scr
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
     return { fb, t, w, h, vw: view[0], vh: view[1] };
   };
+  G.free = (tg) => { if (!tg) return; gl.deleteFramebuffer(tg.fb); gl.deleteTexture(tg.t); };
   G.bind = (tg, clear) => {
     cur = tg; gl.bindFramebuffer(gl.FRAMEBUFFER, tg ? tg.fb : null);
-    gl.viewport(0, 0, tg ? tg.w : G.W, tg ? tg.h : G.H);
+    gl.viewport(0, 0, tg ? tg.w : G.PW, tg ? tg.h : G.PH);
     if (clear) { gl.clearColor(clear[0], clear[1], clear[2], clear[3]); gl.clear(gl.COLOR_BUFFER_BIT); }
   };
   G.blend = (mode) => {
