@@ -501,7 +501,8 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       lab('wbn', s, W / 2, H * 0.36, Object.assign({ size: 64, al: 0.5, col: '#ffd76a', a: k }, F)); }
     // ---- upgrade cards ----
     if (me.pick && !ST.over) { const n = me.pick.length, cw = n >= 4 ? 340 : 420, ch = 190, x0 = W / 2 - (cw * n + 20 * (n - 1)) / 2, y0 = H - 470;
-      const kettle = me.pick[0].kind === 'fission', title = kettle ? `Бабушкин котёл! Что сварим? (1–${n})` : `Новый уровень! Выбери улучшение (1–${n})`;
+      const kb = ST.players.find((q) => q.id === ST.kettleBy), kettle = me.pick[0].kind === 'fission';
+      const title = kettle ? (kb && kb.id !== me.id && ST.players.length > 1 ? `${pname(kb)} открыл котёл! Что сварим? (1–${n})` : `Бабушкин котёл! Что сварим? (1–${n})`) : `Новый уровень! Выбери улучшение (1–${n})`;
       lab('pickt', title, W / 2, y0 - 34, Object.assign({ size: 28, al: 0.5, col: kettle ? '#9fffa0' : '#9fd0ff' }, F));
       L.uiBox('pickt', W / 2 - labW('pickt', title, Object.assign({ size: 28 }, F)) / 2 - 10, y0 - 60, labW('pickt', title, Object.assign({ size: 28 }, F)) + 20, 52);
       me.pick.forEach((c, i) => { const x = x0 + i * (cw + 20), evo = c.kind === 'recipe', own = c.kind === 'sig' || evo, alc = evo || c.kind === 'fusion' || c.kind === 'fission';

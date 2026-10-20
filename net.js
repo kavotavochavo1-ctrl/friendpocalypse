@@ -36,7 +36,7 @@
     const ev = S.ev.filter((e) => e.t > since && (e.x === undefined || nearP(e.x, e.y, 2000) || e.k === 'say'));
     const enemyDots = S.enemies.length > 0 ? S.enemies.filter((e, i) => i % 3 === 0).map((e) => [r1(e.x / 8), r1(e.y / 8)]) : [];
     return { t: S.t, wave: S.wave, waveT: r2(S.waveT), brk: r2(S.brk), xp: S.xp, lvl: S.lvl, xpNext: S.xpNext, kills: S.kills, over: S.over, won: S.won,
-      awards: S.awards, comboT: S.comboT, solo: S.solo, players, E, G, B, EB, clouds: S.clouds, zones: S.zones, marks: S.marks, ev, dots: enemyDots,
+      awards: S.awards, comboT: S.comboT, solo: S.solo, kettleBy: S.kettleBy, players, E, G, B, EB, clouds: S.clouds, zones: S.zones, marks: S.marks, ev, dots: enemyDots,
       pause: S.pause, pend: S.pend, clear: S.clear, clearT: r2(S.clearT), left: S.enemies.length,
       chests: S.chests.map((c) => ({ id: c.id, x: r1(c.x), y: r1(c.y) })), food: S.food.filter((f) => nearP(f.x, f.y)).map((f) => ({ id: f.id, x: r1(f.x), y: r1(f.y) })) };
   }

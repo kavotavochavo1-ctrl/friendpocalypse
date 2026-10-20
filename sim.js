@@ -280,7 +280,8 @@
     S.gems.push({ id: S.nid++, x: e.x, y: e.y - 4, v: T.xp, t0: S.t });
     if (e.elite || h2(e.id, S.steps) < 0.015) S.food.push({ id: S.nid++, x: e.x + 20, y: e.y + 10, t0: S.t });
     if (e.type === 'bomber') explode(S, e.x, e.y, 100, 0, null, 'bomb');
-    if (e.elite) { S.chests.push({ id: S.nid++, x: e.x, y: e.y, t0: S.t }); for (let i = 0; i < 6; i++) S.gems.push({ id: S.nid++, x: e.x + 80 * (h2(S.steps, i) - 0.5), y: e.y + 60 * (h2(S.steps, i + 3) - 0.5), v: 3, t0: S.t }); }
+    if (e.elite && S.kettleW !== S.wave) { S.kettleW = S.wave; S.chests.push({ id: S.nid++, x: e.x, y: e.y, t0: S.t }); }
+    if (e.elite) { for (let i = 0; i < 6; i++) S.gems.push({ id: S.nid++, x: e.x + 80 * (h2(S.steps, i) - 0.5), y: e.y + 60 * (h2(S.steps, i + 3) - 0.5), v: 3, t0: S.t }); }
   };
   const explode = (S, x, y, r, dmg, p, kind, M) => {
     ev(S, { k: 'boom', x, y, r, kind }); let first = null; const M0 = M ? Object.assign({}, M, { shock: 0 }) : null;
@@ -660,7 +661,8 @@
         if (bd < 26) { g.got = 1; S.xp += g.v; best.st.xp += g.v; ev(S, { k: 'gem', x: g.x, y: g.y, pid: best.id, v: g.v }); } } }
     S.gems = S.gems.filter((g) => !g.got && t - g.t0 < 60);
     for (const c of S.chests) for (const p of S.players) if (alive(p) && !c.got && dist(p.x, p.y, c.x, c.y) < 70) { c.got = 1;
-      p.kq = (p.kq || 0) + 1; if (!p.pick) openNext(S, p); ev(S, { k: 'chest', pid: p.id, x: c.x, y: c.y }); say(S, p, 'lvl'); }
+      S.kettleBy = p.id; for (const q of S.players) if (!q.out) { q.kq = (q.kq || 0) + 1; if (!q.pick) openNext(S, q); }
+      ev(S, { k: 'chest', pid: p.id, x: c.x, y: c.y }); say(S, p, 'lvl'); }
     S.chests = S.chests.filter((c) => !c.got);
     for (const f of S.food) for (const p of S.players) if (alive(p) && !f.got && p.hp < p.hpMax && dist(p.x, p.y, f.x, f.y) < 55) { f.got = 1; p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.25); ev(S, { k: 'food', pid: p.id, x: f.x, y: f.y }); }
     S.food = S.food.filter((f) => !f.got && t - f.t0 < 40);
