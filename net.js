@@ -3,7 +3,7 @@
 // Client: sends its input (30 Hz, presses latched so quick taps are never lost) and renders snapshots interpolated by id.
 // Rooms are links: ?room=CODE. Whoever creates the room hosts; up to 8 players; free hero slots can be bots.
 (function () {
-  const APP = 'friendpocalypse-v1', SNAP_HZ = 30, IN_HZ = 30, TRYSTERO = 'https://cdn.jsdelivr.net/npm/trystero@0.26.0/+esm';
+  const APP = 'friendpocalypse-v1', SNAP_HZ = 20, IN_HZ = 30, TRYSTERO = 'https://cdn.jsdelivr.net/npm/trystero@0.26.0/+esm';
   const HEROES = ['hasan', 'danil', 'vitya', 'leha'], NAMES = { hasan: 'Хасан', danil: 'Данил', vitya: 'Витя', leha: 'Лёха' };
   const DESC = { hasan: 'Усы-хлысты связывают врагов, усатое торнадо. Ближний бой, хрупкий.', danil: 'Карточки, фан-чант (очаровывает), сцена-барьер. Поддержка.',
     vitya: 'Ядовитые облака. Бьёт и своих. Не поднимает друзей.', leha: 'Танк. Пистолет → ПП → дробовик → РПГ. Щит.' };
@@ -21,16 +21,25 @@
   const HN = ['hasan', 'danil', 'vitya', 'leha'];
   const PF = ['id', 'hero', 'bot', 'x', 'y', 'vx', 'vy', 'fx', 'fy', 'ax', 'ay', 'dir', 'dist', 'hp', 'hpMax', 'down', 'downT', 'revP', 'out', 'inv', 'hurtT',
     'qa', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo', 'nick', 'petN', 'sigEvo', 'rerolls', 'inBus', 'nat', 'rootT', 'slowT', 'crisisT'];
-  const ES = 20;                                                            // enemy row stride
+  // enemies go as two kinds of rows: FAST (every snapshot: id, x, y, vx, vy, hp, dist, hitT, face) and SLOW (type, hpMax and the effect timers —
+  // sent only when they change for this friend, or every SLOW_EVERY snapshots as a resync). A crowd costs ~7 numbers per enemy, not 20.
+  const EF = 9, SLOW_EVERY = 40, SF = 11;
+  const slowRow = (e) => [ET.indexOf(e.type) + (e.elite ? 100 : 0), r1(e.hpMax), r2(e.spawnT), r2(e.biteT || -9), r2(e.charmT || -9), r2(e.burnT || -9),
+    r2(e.freezeT || -9), e.chg || 0, r2(e.cdx || 0), r2(e.howlT || -99), r2(e.rootT || -9)];
+  const slowSent = {};                                                      // host: per friend, the slow row last sent for each enemy id (per run)
   const evSince = {};
   function snapshot(S, pid) {
-    const p = S.players.find((o) => o.id === pid) || S.players[0], R = 1500, nearP = (x, y, r = R) => Math.abs(x - p.x) < r * 1.4 && Math.abs(y - p.y) < r;
+    // only what this friend's screen can show (view 1920×1080 around his camera centre, plus a margin for things walking in)
+    const p = S.players.find((o) => o.id === pid) || S.players[0], R = 880, nearP = (x, y, r = R) => Math.abs(x - p.x) < r * 1.55 && Math.abs(y - p.y - 60) < r;
     // players as flat number rows (only what drawing, HUD, audio and prediction read); own row also carries cam + upgrade pick
     const players = S.players.map((o) => { const row = PF.map((k) => { const v = o[k]; return typeof v === 'number' ? (Number.isInteger(v) ? v : r2(v)) : v; });
       row[PF.indexOf('hero')] = HN.indexOf(o.hero); row[PF.indexOf('ack')] = ackOf[o.id] || 0;
       return [row, [r2(o.m.area), r2(o.m.cd), r2(o.m.shield), r2(o.m.spd)], o.tokens, o.id === pid ? o.pick : 0, o.id === pid ? o.cam.map(r1) : 0, o.id === pid ? o.items : 0, o.id === pid ? o.fused : 0, o.id === pid ? o.gifts : 0]; });
-    const E = []; for (const e of S.enemies) if (nearP(e.x, e.y)) E.push(e.id, ET.indexOf(e.type) + (e.elite ? 100 : 0), r1(e.x), r1(e.y), r1(e.vx), r1(e.vy), r1(e.hp), r1(e.hpMax), r1(e.dist), r2(e.spawnT), r2(e.hitT), r2(e.biteT || -9), e.face, r2(e.charmT || -9), r2(e.burnT || -9), r2(e.freezeT || -9),
-      e.chg || 0, r2(e.cdx || 0), r2(e.howlT || -99), r2(e.rootT || -9));
+    let cache = slowSent[pid]; if (!cache || cache.S !== S) cache = slowSent[pid] = { S, m: new Map(), n: 0 };
+    const full = cache.n++ % SLOW_EVERY === 0, E = [], ES2 = [];
+    for (const e of S.enemies) { if (!nearP(e.x, e.y)) continue; E.push(e.id, r1(e.x), r1(e.y), r1(e.vx), r1(e.vy), r1(e.hp), r1(e.dist % 10000), r2(e.hitT), e.face);
+      const sr = slowRow(e), key = sr.join(','); if (full || cache.m.get(e.id) !== key) { cache.m.set(e.id, key); ES2.push(e.id, ...sr); } }
+    if (cache.m.size > 600) for (const id of cache.m.keys()) { if (!S.enemies.some((e) => e.id === id)) cache.m.delete(id); }
     const G = []; for (const g of S.gems) if (nearP(g.x, g.y, 1200)) G.push(g.id, r1(g.x), r1(g.y), g.v);
     const B = S.proj.filter((b) => nearP(b.x, b.y)).map((b) => [b.id, b.kind, r1(b.x), r1(b.y), r1(b.vx), r1(b.vy), b.c || 0, b.tox || 0, r2(b.ttl), r2(b.ttl0 || 0), (b.mods && b.mods.burn ? 1 : 0) | (b.mods && b.mods.shock ? 2 : 0), b.own]);
     const EB = S.eproj.filter((b) => nearP(b.x, b.y)).map((b) => [r1(b.x), r1(b.y), r2(b.ttl), b.lob ? r2(b.ttl0) : 0, b.kind || 0, r1(b.vx), r1(b.vy)]);
@@ -38,16 +47,20 @@
     const ev = S.ev.filter((e) => e.t > since && (e.x === undefined || nearP(e.x, e.y, 2000) || e.k === 'say' || e.k === 'bark'));
     const enemyDots = S.enemies.length > 0 ? S.enemies.filter((e, i) => i % 3 === 0).map((e) => [r1(e.x / 8), r1(e.y / 8)]) : [];
     return { t: S.t, wave: S.wave, waveT: r2(S.waveT), brk: r2(S.brk), xp: S.xp, lvl: S.lvl, xpNext: S.xpNext, kills: S.kills, over: S.over, won: S.won,
-      awards: S.awards, comboT: S.comboT, solo: S.solo, kettleBy: S.kettleBy, players, E, G, B, EB, clouds: S.clouds, zones: S.zones, marks: S.marks, ev, dots: enemyDots,
+      awards: S.awards, comboT: S.comboT, solo: S.solo, kettleBy: S.kettleBy, players, E, ES: ES2, G, B, EB, clouds: S.clouds, zones: S.zones, marks: S.marks, ev, dots: enemyDots,
       pause: S.pause, pend: S.pend, clear: S.clear, clearT: r2(S.clearT), left: S.enemies.length,
       boss: S.boss && Object.assign({}, S.boss, { hits: 0, said: 0 }), cut: S.cut, traps: S.traps, bossWave: S.bossWave,
       map: S.map, bus: S.bus, endless: S.endless, home: S.home, score: S.score, drinks: S.drinks, kioskNext: S.kioskNext, spor: S.spor, daily: S.daily,
       chests: S.chests.map((c) => ({ id: c.id, x: r1(c.x), y: r1(c.y) })), food: S.food.filter((f) => nearP(f.x, f.y)).map((f) => ({ id: f.id, x: r1(f.x), y: r1(f.y) })) };
   }
+  // client: slow enemy rows live here between snapshots (a new run — the clock went back — starts it over)
+  let slowGot = new Map(), slowT = -1;
   function restore(n) {
-    const enemies = []; for (let i = 0; i < n.E.length; i += ES) { const a = n.E, ty = ET[a[i + 1] % 100];
-      enemies.push({ id: a[i], type: ty, elite: a[i + 1] >= 100 ? 1 : 0, x: a[i + 2], y: a[i + 3], vx: a[i + 4], vy: a[i + 5], hp: a[i + 6], hpMax: a[i + 7], dist: a[i + 8], spawnT: a[i + 9], hitT: a[i + 10], biteT: a[i + 11], face: a[i + 12], charmT: a[i + 13], burnT: a[i + 14], freezeT: a[i + 15],
-        chg: a[i + 16], cdx: a[i + 17], howlT: a[i + 18], rootT: a[i + 19], r: SIM.ETYPES[ty].r }); }
+    if (n.t < slowT - 1) slowGot = new Map(); slowT = n.t;
+    for (let i = 0; i < n.ES.length; i += SF + 1) { const a = n.ES, old = slowGot.get(a[i]); if (!old || old.sq <= n.sq) slowGot.set(a[i], { sq: n.sq, a: a.slice(i + 1, i + SF + 1) }); }
+    const enemies = []; for (let i = 0; i < n.E.length; i += EF) { const a = n.E, sw = slowGot.get(a[i]); if (!sw) continue; const b = sw.a, ty = ET[b[0] % 100];
+      enemies.push({ id: a[i], type: ty, elite: b[0] >= 100 ? 1 : 0, x: a[i + 1], y: a[i + 2], vx: a[i + 3], vy: a[i + 4], hp: a[i + 5], hpMax: b[1], dist: a[i + 6], spawnT: b[2], hitT: a[i + 7], biteT: b[3], face: a[i + 8],
+        charmT: b[4], burnT: b[5], freezeT: b[6], chg: b[7], cdx: b[8], howlT: b[9], rootT: b[10], r: SIM.ETYPES[ty].r }); }
     const gems = []; for (let i = 0; i < n.G.length; i += 4) gems.push({ id: n.G[i], x: n.G[i + 1], y: n.G[i + 2], v: n.G[i + 3] });
     const proj = n.B.map((b) => ({ id: b[0], kind: b[1], x: b[2], y: b[3], vx: b[4], vy: b[5], c: b[6], tox: b[7], ttl: b[8], ttl0: b[9], mods: b[10] ? { burn: b[10] & 1, shock: b[10] & 2 } : null, own: b[11] }));
     const eproj = n.EB.map((b) => ({ x: b[0], y: b[1], ttl: b[2], lob: b[3] ? 1 : 0, ttl0: b[3], kind: b[4] || null, vx: b[5], vy: b[6] }));
@@ -353,8 +366,8 @@
   const inflight = {}, snapSq = {}, ackSnap = {};
   NET.hostTick = async (S) => { const now = performance.now(); if (now - lastSnap < 1000 / SNAP_HZ) return; lastSnap = now;
     for (const peer in peerToPid) { if (peer === selfId) continue; const pid = peerToPid[peer];
-      // backpressure: at most ~5 snapshots (~170 ms) on the wire per friend (acked through his input messages) — drop, never queue
-      if (inflight[peer] || (snapSq[peer] || 0) - (ackSnap[pid] || 0) > 5) { NET.dbg.skipped = (NET.dbg.skipped || 0) + 1; continue; }
+      // backpressure: at most ~3 snapshots (~150 ms) on the wire per friend (acked through his input messages) — drop, never queue
+      if (inflight[peer] || (snapSq[peer] || 0) - (ackSnap[pid] || 0) > 3) { NET.dbg.skipped = (NET.dbg.skipped || 0) + 1; continue; }
       inflight[peer] = 1;
       try { const snap = snapshot(S, pid); snap.sq = snapSq[peer] = (snapSq[peer] || 0) + 1; evSince[pid] = S.t; const u8 = await pack(snap); NET.dbg.bytes = u8.length; NET.dbg.sent++;
         Promise.resolve(act.snap.send(u8, { target: peer })).catch(() => {}).finally(() => (inflight[peer] = 0)); } catch (e) { NET.dbg.err = String(e); inflight[peer] = 0; } } };
@@ -393,6 +406,13 @@
     if (Math.hypot(ex, ey) > 260) { pred.x += ex; pred.y += ey; corr = [0, 0]; } else { corr[0] += ex; corr[1] += ey; }
   }
   NET.view = view;
+  // round trip check: host snapshot → wire → client restore must give back every visible enemy with the same fields
+  NET.debugRoundTrip = async (S, pid) => { const o = snapshot(S, pid); o.sq = 1e9; evSince[pid] = S.t; const r = restore(await unpack(await pack(o))), bad = [];
+    for (const c of r.enemies) { const e = S.enemies.find((q) => q.id === c.id);
+      for (const k of ['type', 'x', 'y', 'hp', 'hpMax', 'face', 'elite']) if (k === 'x' || k === 'y' || k === 'hp' || k === 'hpMax' ? Math.abs(c[k] - e[k]) > 1 : c[k] !== (e[k] || 0)) bad.push([c.id, k, c[k], e[k]]); }
+    return { sent: o.E.length / EF, restored: r.enemies.length, bad: bad.slice(0, 5) }; };
+  NET.debugSnap = async (S, pid) => { const o = snapshot(S, pid), j = JSON.stringify(o), u8 = await pack(o); evSince[pid] = S.t;           // size check (devtools / QA): the same as one real send
+    const part = {}; for (const k in o) part[k] = JSON.stringify(o[k] ?? 0).length; return { json: j.length, packed: u8.length, part }; };
   // ---- F3: network / performance overlay (what a laggy friend should screenshot) ----
   const ov = document.createElement('div'); ov.style.cssText = 'position:absolute;right:8px;top:8px;z-index:7;font:11px monospace;color:#cfe;background:#000b;padding:6px 9px;border-radius:6px;white-space:pre;display:none';
   document.body.appendChild(ov); let fN = 0, fT = performance.now(), fps = 0, gotPrev = 0, sentPrev = 0, snapHz = 0;

@@ -17,7 +17,9 @@
   G.size = (R) => { G.R = R; G.PW = G.canvas.width = Math.round(G.W * R); G.PH = G.canvas.height = Math.round(G.H * R); };
 
   // nearest: NEAREST min/mag, no mipmaps (pixel art: crisp texels; lod bias has no effect)
-  G.load = (name, url, { repeat = false, nearest = false } = {}) => new Promise((res, rej) => {
+  // a flaky host drops the odd image: try again (3 attempts, growing pause) before giving up
+  G.load = (name, url, opts = {}, tries = 3) => G.load1(name, url, opts).catch((e) => tries > 1 ? new Promise((r) => setTimeout(r, 400 * (4 - tries))).then(() => G.load(name, url + '&r=' + tries, opts, tries - 1)) : Promise.reject(e));
+  G.load1 = (name, url, { repeat = false, nearest = false } = {}) => new Promise((res, rej) => {
     const im = new Image();
     im.onload = () => {
       const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);

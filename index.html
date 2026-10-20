@@ -13,13 +13,13 @@ canvas{display:block;width:min(100vw,calc(100vh*var(--ar)));height:auto;aspect-r
 </head><body><canvas id="c"></canvas>
 <div id="hint"></div>
 <div id="dev"></div><div id="flash">reloaded</div>
-<script>window.__STATIC__ = 1;</script>
+<script>window.__STATIC__ = 1; window.__BUILD__ = '1792524065';</script>
 <script>
 // LIVE PREVIEW. Scripts and images load with a cache-buster; the page polls its sources and reloads itself when any of
 // them changes, keeping the play state (sessionStorage). Attract demo until a key or click, then play (keyboard + pointer).
 // Dev keys: P pause, [ ] speed (0.1 / 0.25 / 0.5 / 1), . single step, Esc back to the demo, R restart.
 // ?render=1 exposes window.__renderAt(t) for render.mjs (no loop, no polling).
-const V = Date.now(), STATIC = !!window.__STATIC__;          // STATIC: packed build (no polling, no dev overlay)
+const STATIC = !!window.__STATIC__, V = STATIC ? (window.__BUILD__ || 1) : Date.now();   // STATIC: packed build (no polling, no dev overlay); one version per build, so the browser caches it
 const load = (src) => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src + '?v=' + V; s.onload = res; s.onerror = () => rej(new Error('failed ' + src)); document.head.appendChild(s); });
 (async () => {
   // sizes.js: window.SIZES (display size per sprite in view px, engine.md §7); audio.js: sound from the event bus (stub until used)
@@ -33,7 +33,8 @@ const load = (src) => new Promise((res, rej) => { const s = document.createEleme
     const r = cvEl.getBoundingClientRect(); return Math.max(0.5, Math.min(2, Math.round(r.width * (devicePixelRatio || 1) / VW * 20) / 20)); };
   G.init(cvEl, VW, VH, pickR(), render);
   const rep = new Set(SCENE.REPEAT || []), near = (n) => SCENE.NEAREST === true || (SCENE.NEAREST || []).includes(n);   // NEAREST: true = all
-  await Promise.all(Object.keys(ASSETS).map((n) => G.load(n, 'assets/' + n + '.png?v=' + V, { repeat: rep.has(n), nearest: near(n) })));
+  { const names = Object.keys(ASSETS); let next = 0;                                    // 12 downloads at a time, not 400 at once
+    await Promise.all(Array.from({ length: 12 }, async () => { while (next < names.length) { const n = names[next++]; await G.load(n, 'assets/' + n + '.png?v=' + V, { repeat: rep.has(n), nearest: near(n) }); } })); }
   SCENE.programs();
   const reScale = () => { const R = pickR(); if (Math.abs(R - G.R) > 0.01) LIB.resize(R); };
   addEventListener('resize', reScale); if (window.SETTINGS) SETTINGS.onChange(reScale);
