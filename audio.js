@@ -54,9 +54,9 @@
   };
 
   // boss lines: a cut-scene line cuts off whatever was speaking; a bark waits its turn
-  let cutK = '', cur = null;
+  let cutK = '', cur = null; const bossPre = {};
   const line = (id, cut) => { if (!ctx || (!cut && ctx.currentTime < voUntil - 0.2)) return; if (cut && cur) { try { cur.stop(); } catch (e) {} }
-    load('audio/vo/' + id + '.ogg').then((b) => { if (!b) return; const s = ctx.createBufferSource(); s.buffer = b; s.connect(voBus); s.start(); cur = s; voUntil = ctx.currentTime + b.duration;
+    const k0 = cutK; load('audio/vo/' + id + '.ogg').then((b) => { if (!b || (cut && cutK !== k0)) return; const s = ctx.createBufferSource(); s.buffer = b; s.connect(voBus); s.start(); cur = s; voUntil = ctx.currentTime + b.duration;
       if (music.gain) { const g = musicBus.gain; g.cancelScheduledValues(ctx.currentTime); g.setValueAtTime(g.value, ctx.currentTime); g.linearRampToValueAtTime(vol.music * 0.3, ctx.currentTime + 0.1); g.linearRampToValueAtTime(vol.music, ctx.currentTime + b.duration + 0.3); } }); };
 
   // ---------------- procedural SFX ----------------
@@ -123,7 +123,9 @@
     const me = S.players[S.me || 0], cam = me.cam, now = ctx.currentTime;
     playMusic(S.over ? (S.won ? 'victory' : 'calm') : S.brk > 0 ? 'calm' : S.wave >= 8 ? 'intense' : 'battle');
     const present = new Set(S.players.filter((p) => !p.out).map((p) => p.hero));
-    { const c = S.cut, k = c ? c.key + c.i : ''; if (k !== cutK) { cutK = k; if (c) line(c.ids[c.i], 1); } }
+    { const pre = S.map === 'meleuz' ? (S.wave >= 19 ? 'ln_' : '') : S.wave >= 9 ? 'rk_' : '';       // the boss's voice is fetched a wave early
+      if (pre && !bossPre[pre] && window.BLINES) { bossPre[pre] = 1; Object.keys(BLINES).filter((id) => id.startsWith(pre) || (pre === 'ln_' && id.startsWith('km_'))).forEach((id) => load('audio/vo/' + id + '.ogg')); } }
+    { const c = S.cut, k = c ? c.key + c.i : ''; if (k !== cutK) { cutK = k; if (c) { c.ids.forEach((id) => load('audio/vo/' + id + '.ogg')); line(c.ids[c.i], 1); } } }   // the whole scene preloads
     let n = 0, maxT = lastT;
     for (const e of S.ev) { if (e.t <= lastT) continue; if (e.t > maxT) maxT = e.t; if (S.t - e.t > 0.6) continue;   // stale (joined late / tab was hidden)
       const ex = (e.x || 0) - cam[0] - 960, ey = (e.y || 0) - cam[1] - 540, dd = Math.hypot(ex, ey), pan = Math.max(-1, Math.min(1, ex / 1100));

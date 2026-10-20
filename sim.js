@@ -43,7 +43,7 @@
     // bosses (BOSSES.md): hp is the wave-1 base, scaled by hpScale like everyone else
     vlad: { hp: 3600, spd: 0, r: 46, dmg: 14, xp: 60, sc: 1, from: 999, w: 0, map: 'park', boss: 1 },
     lenin: { hp: 4000, spd: 0, r: 95, dmg: 16, xp: 120, sc: 1, from: 999, w: 0, map: 'meleuz', boss: 1 },
-    komissar: { hp: 450, spd: 0, r: 26, dmg: 0, xp: 0, sc: 1, from: 999, w: 0, map: 'meleuz', mini: 1 },
+    komissar: { hp: 900, spd: 0, r: 26, dmg: 0, xp: 0, sc: 1, from: 999, w: 0, map: 'meleuz', mini: 1 },
   };
   const ELITES = { park: ['brute'], meleuz: ['starshiy', 'alpha'] };      // «Батя района» (a starshiy elite) and «Вожак стаи»
   const WAVE_LEN = 60, BREAK = 9, WAVES = 10, LASH_HIT = 0.21;
@@ -132,7 +132,7 @@
     armor: { n: 'Толстокожий', d: '-7% входящего урона' }, regen: { n: 'Чай с мёдом', d: '+0.4 HP в секунду' }, crit: { n: 'Везунчик', d: '+6% шанс крита' },
     cd: { n: 'Без перерыва', d: '-9% перезарядки Q и ульты' },
     kumys: { n: 'Кумыс', d: 'Вампиризм: лечит 2% от урона', lock: 'kumys', map: 'meleuz' },
-    deo: { n: 'Дезодорант', d: 'Витя: на 40% меньше урона друзьям', hero: 'vitya' }, plate: { n: 'Бронеплита', d: 'Лёха: щит +1.6 с, -5% урона', hero: 'leha' },
+    deo: { n: 'Дезодорант', d: 'Витя: на 15% меньше урона друзьям', hero: 'vitya' }, plate: { n: 'Бронеплита', d: 'Лёха: щит +1.6 с, -5% урона', hero: 'leha' },
     // passive evolutions (two level-3 passives → one; single level)
     fury: { n: 'Ярость везунчика', from: ['dmg', 'crit'], max: 1, d: '+45% урона, крит 25%, криты ×2.5' },
     scooter: { n: 'Самокат', from: ['spd', 'pick'], max: 1, d: '+25% к бегу, сбор опыта ×3' },
@@ -172,7 +172,7 @@
       spd: (1 + 0.07 * L('spd') + 0.25 * sc) * smol, leech: 0.02 * L('kumys'),
       pick: H.pick * (1 + 0.35 * L('pick') + gf('g_pick')) * (sc ? 3 : 1), armor: (1 - 0.07 * L('armor')) * (1 - 0.05 * L('plate')), regen: 0.4 * L('regen') + 2 * lu,
       crit: 0.04 + 0.06 * L('crit') + (fury ? 0.21 : 0) + gf('g_crit'), critX: fury ? 2.5 : 2, cd: (1 - 0.09 * L('cd')) * (es ? 0.7 : 1),
-      deo: Math.pow(0.6, L('deo')), shield: 1.6 * L('plate'), extra: 0, rico: 1, pullN: 3, ttl: 1, sdmg: 1, sarea: 1, srate: 1, pierce: 0, double: 0, smods: null });
+      deo: Math.pow(0.85, L('deo')), shield: 1.6 * L('plate'), extra: 0, rico: 1, pullN: 3, ttl: 1, sdmg: 1, sarea: 1, srate: 1, pierce: 0, double: 0, smods: null });
     const g = L('sig');
     if (p.hero === 'hasan') { if (g >= 2) { m.sdmg = 1.25; m.extra = 1; } if (g >= 3) { m.sarea = 1.25; m.pullN = 2; } }
     if (p.hero === 'danil') { if (g >= 2) { m.extra = 1; m.rico = 2; } if (g >= 3) { m.sdmg = 1.3; m.extra = 2; m.pierce = 1; } }
@@ -493,7 +493,8 @@
       p.zone = 1 + 0.3 * Math.max(0, 1 - solo / 2);
       if (p.evo) { const moved = Math.hypot(p.x - (p.trX ?? 1e9), p.y - (p.trY ?? 1e9));
         if (moved > 46 || t - (p.trT || -9) > 0.6) { p.trX = p.x; p.trY = p.y; p.trT = t; p.lastAtk = t;
-          addCloud(S, p, p.x - p.fx * 20, p.y - 10 - p.fy * 14, 98 * area * p.m.sarea, 1.4, 0, 1); } }
+          addCloud(S, p, p.x - p.fx * 20, p.y - 10 - p.fy * 14, 98 * area * p.m.sarea, 2.8, 0, 1);
+          const tr = S.clouds.filter((c) => c.trail && c.owner === p.id); if (tr.length > 7) S.clouds = S.clouds.filter((c) => !tr.slice(0, tr.length - 7).includes(c)); } }     // the trail: 7 puffs at most
       else if (p.atkT <= 0) { p.atkT = 3.4 * p.m.srate / as; p.lastAtk = t; addCloud(S, p, p.x - p.fx * 30, p.y - 10 - p.fy * 20, 85 * area * p.m.sarea, 4.2);
         if (p.m.double) addCloud(S, p, p.x + p.fy * 110, p.y - 10 - p.fx * 80, 75 * area * p.m.sarea, 4.2); }
       if (t - p.ultT > 0.95 && t - p.ultT - DT <= 0.95) addCloud(S, p, p.ux, p.uy, ULT_GAS * area, 6, 1);
@@ -653,7 +654,9 @@
   // A boss is an enemy (ETYPES boss: 1) driven by bossStep; everything the scene must see lives in S.boss (synced whole).
   // Cut-scenes (S.cut) freeze the world like a level-up pick; lines are ids into root.BLINES (live/blines.js, voiced files).
   const BL = root.BLINES || {}, TAU = Math.PI * 2;
-  const lineDur = (id) => clamp(1.4 + ((BL[id] || ['', ''])[1].length) * 0.06, 2.2, 6.5);
+  // a line holds for its voice file plus a beat (text-length guess only if it has no voice); E skips only once the voice has finished
+  const voiceLen = (id) => (BL[id] && BL[id][2]) || clamp(1.4 + ((BL[id] || ['', ''])[1].length) * 0.06, 2.2, 6.5);
+  const lineDur = (id) => voiceLen(id) + 0.6;
   const CUTS = {
     rk_in: ['rk_in_0', 'rk_in_1', 'rk_in_2', 'rk_in_3', 'rk_in_4'], rk_p2: ['rk_p2_0', 'rk_p2_1'], rk_p3: ['rk_p3_0', 'rk_p3_1', 'rk_p3_2'], rk_end: ['rk_end_0', 'rk_end_1'],
     ln_in: ['ln_in_0', 'ln_in_1', 'ln_in_2', 'ln_in_3', 'ln_in_4'], ln_b: ['ln_b_0', 'ln_b_1', 'ln_b_2', 'ln_b_3', 'ln_b_4'], ln_f: ['ln_f_0', 'ln_f_1', 'ln_f_2'],
@@ -667,7 +670,7 @@
   function cutStep(S, inps) {
     const c = S.cut; let skip = false;
     for (const p of S.players) { if (p.bot || p.out) continue; const inp = inps[p.id] || {}, v = !!(inp.e || inp.act); if (v && !p.prevCut) skip = true; p.prevCut = v; }
-    if (S.rt - c.t0 < lineDur(c.ids[c.i]) && !(skip && S.rt - c.t0 > 0.6)) return;
+    if (S.rt - c.t0 < lineDur(c.ids[c.i]) && !(skip && S.rt - c.t0 > voiceLen(c.ids[c.i]))) return;
     c.i++; c.t0 = S.rt; if (c.i < c.ids.length) return;
     S.cut = null; const then = c.then;
     if (then === 'go') { const e = bossE(S); if (e) e.inv = 0; S.boss.go = 1; S.boss.next = S.t + 1.5; }
@@ -778,6 +781,8 @@
   }
 
   // ---- Владимир Ильич ----
+  // a shock ring's safe gaps: a fixed walkable width (ground px) whatever the ring's size — narrow, but a hero fits
+  const RING_GAP = 58, inGap = (R, a, r) => { const h = Math.min(0.7, RING_GAP / Math.max(1, r)); return R.gaps.some((g) => Math.abs(Math.atan2(Math.sin(a - g), Math.cos(a - g))) < h); };
   const LAS_W = 30, LAS_GROUND = 280;                    // the beams leave his eyes and hit the paving LAS_GROUND px out from the pedestal
   // where things leave the boss sprites (measured on the art): Ilyich's fist lands in front of the pedestal; Vlad throws from the plunger tip
   const FIST = (e) => [e.x - 27, e.y + 15];
@@ -797,7 +802,7 @@
     // shock rings from the fist: they roll outward; the gaps are where you stand
     for (const R of B.rings) { const r = (t - R.t0) * R.sp; if (r < 0) continue; for (const p of S.players) { if (!alive(p) || R.hit.includes(p.id)) continue;
         const dx = p.x - (R.x ?? e.x), dy = (p.y - (R.y ?? e.y)) / 0.75, d = Math.hypot(dx, dy); if (Math.abs(d - r) > 30) continue; const a = Math.atan2(dy, dx);
-        if (R.gaps.some((g) => Math.abs(Math.atan2(Math.sin(a - g), Math.cos(a - g))) < 0.32)) continue; R.hit.push(p.id); hurtPlayer(S, p, 16 * enemyX(S), e); } }
+        if (inGap(R, a, d)) continue; R.hit.push(p.id); hurtPlayer(S, p, 16 * enemyX(S), e); } }
     B.rings = B.rings.filter((R) => (t - R.t0) * R.sp < 1600);
     // «Красный октябрь»: the paving goes red cell by cell; burning cells hurt, the safe ones move every cycle
     if (B.tiles) { const Tl = B.tiles, a = t - Tl.t0;
@@ -876,7 +881,7 @@
       if (k === 'speech') { e.shieldT = t + 2.5; bark(S, 'km_2', e.x, e.y); } else if (h1(S.steps + 2) < 0.4) bark(S, k === 'burst' ? 'km_0' : 'km_1', e.x, e.y); }
     const N = K.atk; if (!N) return;
     if (N.k === 'burst') { const want = Math.atan2(uy, ux), da = Math.atan2(Math.sin(want - K.aim), Math.cos(want - K.aim)); K.aim += clamp(da, -1.3 * DT, 1.3 * DT);
-      if (Math.floor((t - N.t0) / 0.09) !== Math.floor((t - N.t0 - DT) / 0.09)) S.eproj.push({ kind: 'kbul', x: e.x + Math.cos(K.aim) * 40, y: e.y - 52, vx: Math.cos(K.aim) * 620, vy: Math.sin(K.aim) * 620, ttl: 1.3, dmg: 5 * enemyX(S) });
+      if (Math.floor((t - N.t0) / 0.09) !== Math.floor((t - N.t0 - DT) / 0.09)) S.eproj.push({ kind: 'kbul', x: e.x + Math.cos(K.aim) * 70, y: e.y - 58, vx: Math.cos(K.aim) * 620, vy: Math.sin(K.aim) * 620, ttl: 1.3, dmg: 5 * enemyX(S) });
       if (t - N.t0 > 1.5) { K.atk = null; K.next = t + 1.6; } }
     else if (N.k === 'nades') { if (N.i < 3 && t >= N.t0 + N.i * 0.35) { const up = S.players.filter(alive), p = up[N.i % up.length];
         lobAt(S, e.x, e.y - 60, p.x + (h1(S.steps) - 0.5) * 160, p.y + (h1(S.steps + 4) - 0.5) * 120, 1.0, 'nade', 90, 16 * enemyX(S)); N.i++; }
@@ -992,7 +997,7 @@
       // in Vitya's gas: allies take small damage (never lethal) and complain
       if (p.hero !== 'vitya') { const g = inGas(S, p.x, p.y);
         if (g) { const v = S.players.find((q) => q.id === g.owner); if (Math.floor((t - g.t0)) !== Math.floor((t - DT - g.t0)) || t - p.gasT > 1.0) {
-            if (t - p.gasT > 0.95) { p.gasT = t; const d = (g.big ? 4 : 3) * (v ? v.m.deo : 1); hurtPlayer(S, p, d, v, true); p.st.gasIn++; if (v) { v.st.ally += d; v.st.allyHit++; }
+            if (t - p.gasT > 0.95) { p.gasT = t; const d = (g.big ? 9 : 6) * (v ? v.m.deo : 1); hurtPlayer(S, p, d, v, true); p.st.gasIn++; if (v) { v.st.ally += d; v.st.allyHit++; }
               if (!p.inGas) { say(S, p, 'gas'); if (v && S.sayT === t && h2(S.steps, 11) < 0.5) { S.banterV = t + 2.2; S.banterW = v.id; } } } } }
         p.inGas = g ? 1 : 0; }
       camStep(p);
@@ -1215,7 +1220,7 @@
     for (const [x, y] of LAMPS) if (onPave(x, y) && dist(x, y, C[0], C[1]) < 200) f.push('lamp in plaza centre'); };
 
   root.SIM = { DT, L, VIEW, WORLD, HINT, C, PLAZA, PATHS, SUBS, PROPS, SOLIDS, POND, LAMPS, WALLS, LV, HEROES, ORDER, ETYPES, UPG, QCD, LEHA_GUNS, WAVE_LEN, BREAK, WAVES,
-    MAPS, MAPN, SPORS, QUESTS, DOOR, useMap, scoreX, CUTS, lineDur, startBoss, HOLE_R, hotCell, LAS_W, LAS_GROUND,
+    MAPS, MAPN, SPORS, QUESTS, DOOR, useMap, scoreX, CUTS, lineDur, startBoss, HOLE_R, hotCell, LAS_W, LAS_GROUND, RING_GAP,
     onPave, inGas, collide, cardFor, kettleCards, recalc, lv, create, spawn, respawn, outOfPlay, step, at, scriptInput, demoCheck, selfCheck, botInput };
   if (typeof module !== 'undefined') module.exports = root.SIM;
 })(typeof window !== 'undefined' ? window : globalThis);

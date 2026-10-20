@@ -117,8 +117,11 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
   const EV_TINT = { ghoul: [1, 1, 1, 0], sprinter: [1.25, 0.6, 0.55, 0.8], brute: [0.8, 0.75, 0.95, 0.6], spitter: [0.85, 0.6, 1.3, 0.8], bomber: [1.4, 0.8, 0.4, 0.8],
     starshiy: [0.8, 0.75, 0.9, 0.35], alpha: [0.45, 0.4, 0.5, 0.75] };
   // enemy art: the park's shadow ghouls (one rig, tinted per type); Meleuz's town folk (rigs front/back, sprites side-on), mums and dogs (sprites)
-  const SKIN = { ghoul: 'rat', sprinter: 'rat', brute: 'fatrat', spitter: 'toxrat', bomber: 'bombrat', komissar: 'leha', gopnik: 'gopnik', starshiy: 'gopnik', alkash: 'alkash', mom: 'mom', dog: 'dog', alpha: 'dog' };
-  const BASEH = { ghoul: 84, gopnik: 120, alkash: 112, mom: 124, dog: 78, rat: 58, fatrat: 70, toxrat: 56, bombrat: 62, leha: 128 };
+  const SKIN = { ghoul: 'rat', sprinter: 'rat', brute: 'fatrat', spitter: 'toxrat', bomber: 'bombrat', komissar: 'km', gopnik: 'gopnik', starshiy: 'gopnik', alkash: 'alkash', mom: 'mom', dog: 'dog', alpha: 'dog' };
+  const BASEH = { ghoul: 84, gopnik: 120, alkash: 112, mom: 124, dog: 78, rat: 58, fatrat: 70, toxrat: 56, bombrat: 62, km: 140 };
+  // the red commissar: a painted frame per action (fire from the hip, grenade, speech), a two-frame walk otherwise
+  const kmView = (e, dv, ST) => { const K = ST.boss && ST.boss.km, A = K && K.atk, a = A ? ST.t - A.t0 : 9;
+    return A && A.k === 'burst' ? 'km_fire' : A && A.k === 'nades' && a < 1.2 ? 'km_throw' : A && A.k === 'speech' ? 'km_speech' : dv === 'side' ? 'km_side' + (Math.floor(e.dist / 40) % 2) : 'km_' + dv; };
   // four-legged runners are frame sprites (3-frame side run + front/back); the toxic and kamikaze rats are one side sprite
   const SPRITE_VIEW = (skin, view, e, GT) => skin === 'toxrat' || skin === 'bombrat' ? skin : skin !== 'dog' && skin !== 'rat' && skin !== 'fatrat' ? skin + '_' + view
     : view === 'side' ? (e.type === 'alpha' && GT - (e.howlT || -99) > -7 && GT - (e.howlT || -99) < -5.6 ? 'dog_alpha' : skin + '_side' + runFrame(skin, e)) : skin + '_' + view;
@@ -241,7 +244,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     for (const e of ST.enemies) { if (!vis(e.x, e.y, e.boss || SIM.ETYPES[e.type].boss ? 500 : 120)) continue; const T = SIM.ETYPES[e.type], skin = SKIN[e.type] || 'ghoul';
       if (T.boss) { if (ST.boss) Y.push([e.y, () => drawBoss(e, ST.boss, sx(e.x), sy(e.y), GT, shade)]); continue; }
       Y.push([e.y, () => { const sp = Math.hypot(e.vx, e.vy), ph = e.dist / 34 * Math.PI, born = SS(0, 0.35, GT - e.spawnT); if (born < 0.03) return;      // a zero-scale rig blows up
-        const dv = RATS[skin] ? 'side' : Math.abs(e.vy) > Math.abs(e.vx) * 1.3 ? (e.vy > 0 ? 'front' : 'back') : 'side', view = SPRITE_VIEW(skin, dv, e, GT);     // rats always run side-on
+        const dv = RATS[skin] ? 'side' : Math.abs(e.vy) > Math.abs(e.vx) * 1.3 ? (e.vy > 0 ? 'front' : 'back') : 'side', view = skin === 'km' ? kmView(e, dv, ST) : SPRITE_VIEW(skin, dv, e, GT);     // rats always run side-on
         const h = BASEH[skin] * T.sc * born * (e.elite ? 1.25 : 1) * (ST.spor === 'chonk' ? 1.4 : 1), w = L.hsz(view, h), x = sx(e.x) + (e.chg === 1 ? 3 * Math.sin(GT * 60) : 0), y = sy(e.y), bob = Math.abs(Math.sin(ph)) * 4 * Math.min(1, sp / 60);
         const hit = SS(0.12, 0, GT - e.hitT), u = shade(x, y - h / 2), tn = EV_TINT[e.type]; u.grade[1] = Math.max(0.78, u.grade[1]); u.rim = [0.55, e.face > 0 ? 0.004 : -0.004, -0.005, 1]; u.rimCol = [1, 0.45, 0.6];
         if (hit > 0) { u.grade = [1, 1, hit * 0.85, 1]; u.haze = [1, 0.95, 0.95]; }
@@ -254,16 +257,12 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         const sq = 1 + 0.06 * Math.sin(2 * ph) * Math.min(1, sp / 60), lean = (e.vx / 300) * 0.12 + (GT - e.biteT < 0.2 ? 0.25 * e.face * Math.sin((GT - e.biteT) / 0.2 * Math.PI) : 0);
         if (RIG.has(view)) { const k = h / RIGS[view].h, ba = GT - (e.biteT || -9);
           RIG.draw({ name: view, view: dv, x, y, k, fl: dv === 'side' ? e.face : 1, ph: RIG.phase(view, e.dist, k, dv) + e.id, amt: Math.min(1, sp / 60), t, id: 'e' + e.id, u,
-            aim: e.type === 'komissar' && ST.boss && ST.boss.km ? ST.boss.km.aim : Math.atan2(e.vy, e.vx || 0.001),
-            act: e.type === 'komissar' ? { kind: 'aim', a: 1 } : ba < 0.35 ? { kind: 'bite', a: ba / 0.35 } : null, lean: (e.vx / 300) * 0.1,
-            gun: e.type === 'komissar' ? GUNS[1] : null, gunLen: 50 });
-          if (e.type === 'komissar') { const sd = dv === 'side'; L.glow(x, y - h * 0.5, 70, [1, 0.2, 0.15], 0.25, 2);
-            spr(sd ? 'cap_side' : 'cap_front', x + (sd ? 6 * e.face : 0), y - h * 0.97, 54, 38, 0, { flip: sd && e.face < 0 });
-            if (ST.boss && ST.boss.km && ST.boss.km.atk && ST.boss.km.atk.k === 'speech') { L.ring(x, y - h * 0.5, 80, 90, [1, 0.4, 0.3], 0.6, 0.05); L.glow(x, y - h * 0.5, 90, [1, 0.3, 0.2], 0.25, 2); } }
-        } else { const fx = dv === 'side' || SIDE_ONLY[skin] ? (skin === 'ghoul' ? -e.face : e.face) : 1, wob = skin === 'alkash' ? 0.07 * Math.sin(GT * 2.3 + e.id) : 0;     // the town folk's art faces right; drunks sway
+            aim: Math.atan2(e.vy, e.vx || 0.001), act: ba < 0.35 ? { kind: 'bite', a: ba / 0.35 } : null, lean: (e.vx / 300) * 0.1 });
+        } else { const fx = dv === 'side' || SIDE_ONLY[skin] || view === 'km_fire' ? (skin === 'ghoul' ? -e.face : e.face) : 1, wob = skin === 'alkash' ? 0.07 * Math.sin(GT * 2.3 + e.id) : 0;     // the town folk's art faces right; drunks sway
           L.sprite(view, 0, 0, { m: M.of(M.t(x, y - bob), M.r(lean + wob), M.s(fx / Math.sqrt(sq), sq)), w, h, pivot: [w / 2, h], u }); }
         if (skin === 'ghoul') { const ex = dv === 'side' ? [0.17 * e.face] : dv === 'front' ? [-0.12, 0.12] : []; for (const o of ex) L.glow(x + o * w, y - h * 0.68 - bob, 7 * T.sc, [1, 0.3, 0.6], 0.9, 2); }
-        else if (dv !== 'back' && !RATS[skin] && skin !== 'leha') L.glow(x + (dv === 'side' ? 0.12 * e.face * w : 0), y - h * (skin === 'dog' ? 0.62 : 0.84) - bob, 10 * T.sc, [1, 0.3, 0.7], 0.5, 2);
+        else if (dv !== 'back' && !RATS[skin] && skin !== 'km') L.glow(x + (dv === 'side' ? 0.12 * e.face * w : 0), y - h * (skin === 'dog' ? 0.62 : 0.84) - bob, 10 * T.sc, [1, 0.3, 0.7], 0.5, 2);
+        if (skin === 'km') { L.glow(x, y - h * 0.5, 70, [1, 0.2, 0.15], 0.2, 2); if (view === 'km_speech') { L.ring(x, y - h * 0.5, 80, 90, [1, 0.4, 0.3], 0.6, 0.05); L.glow(x, y - h * 0.5, 90, [1, 0.3, 0.2], 0.25, 2); } }
         if (skin === 'toxrat') L.glow(x + 0.4 * w * e.face, y - h * 0.45, 22, [0.5, 1, 0.2], 0.4, 2);
         if (skin === 'bombrat') { L.glow(x - 0.05 * w * e.face, y - h * 1.0, 16, [1, 0.8, 0.3], 0.6 + 0.4 * Math.sin(GT * 30 + e.id), 2); }
         if (e.type === 'bomber') L.glow(x, y - h * 0.5, 50, [1, 0.5, 0.1], 0.4 + 0.3 * Math.sin(GT * 14), 2.4);
@@ -613,22 +612,25 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         const oa = burn ? SS(2.6, 2.3, a) : 0.6 + 0.3 * Math.sin(GT * 14);
         seg(X, Y, 0, S2, oa); seg(X, Y + S2, 0, S2, oa); seg(X, Y, Math.PI / 2, S2, oa); seg(X + S2, Y, Math.PI / 2, S2, oa); } }
     // shock rings from the fist: chunks of Effector fire along the ring (the gaps stay empty), its two edges outlined
-    for (const R of B.rings || []) { const r = (GT - R.t0) * R.sp; if (r < 0) continue; const rx = R.x ?? ox, ry = R.y ?? oy;
-      const n = Math.max(14, Math.min(64, Math.round(2 * Math.PI * r / 85)));
-      for (let k = 0; k < n; k++) { const a = (k + 0.5) / n * Math.PI * 2; if (R.gaps.some((g) => Math.abs(Math.atan2(Math.sin(a - g), Math.cos(a - g))) < 0.32)) continue;
-        const wx = rx + Math.cos(a) * r, wy = ry + Math.sin(a) * r * 0.75; if (!vis(wx, wy, 60)) continue;
-        const X = sx(wx), Y = sy(wy), ta = Math.atan2(Math.cos(a) * 0.75, -Math.sin(a));                 // the ring's tangent on screen
-        bookR('fxa_wave', loopQ(GT * 1.3, k * 0.137), X, Y - 10, 2 * Math.PI * r / n * 1.25, 60, ta, null, { a: 0.95 });
-        for (const dr of [-30, 30]) { const r2 = r + dr, a2 = a + Math.PI / n, a1 = a - Math.PI / n;
-          const x1 = sx(rx + Math.cos(a1) * r2), y1 = sy(ry + Math.sin(a1) * r2 * 0.75), x2 = sx(rx + Math.cos(a2) * r2), y2 = sy(ry + Math.sin(a2) * r2 * 0.75);
-          seg(x1, y1, Math.atan2(y2 - y1, x2 - x1), Math.hypot(x2 - x1, y2 - y1) + 1, 0.8, 2); } } }
-    // eye lasers: the damage band outlined while it aims, then the Effector beam along the ground, fed from his eyes
+    // shock rings: Effector fire filling each arc between the safe gaps exactly; the gaps' ends get bright posts so the way out reads
+    const P2 = (rx, ry, a, r) => [sx(rx + Math.cos(a) * r), sy(ry + Math.sin(a) * r * 0.75)];
+    for (const R of B.rings || []) { const r = (GT - R.t0) * R.sp; if (r < 0) continue; const rx = R.x ?? ox, ry = R.y ?? oy, h = Math.min(0.7, SIM.RING_GAP / Math.max(1, r));
+      const gs = R.gaps.map((g) => ((g % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)).sort((p, q) => p - q);
+      gs.forEach((g, gi) => { const a0 = g + h, a1 = (gi + 1 < gs.length ? gs[gi + 1] : gs[0] + 2 * Math.PI) - h; if (a1 <= a0) return;
+        const n = Math.max(1, Math.ceil((a1 - a0) * r / 85)), da = (a1 - a0) / n;
+        for (let k = 0; k < n; k++) { const a = a0 + (k + 0.5) * da, [X, Y] = P2(rx, ry, a, r); if (X < -120 || X > W + 120 || Y < -120 || Y > H + 120) continue;
+          const ta = Math.atan2(Math.cos(a) * 0.75, -Math.sin(a));
+          bookR('fxa_wave', loopQ(GT * 1.3, (gi * 7 + k) * 0.137), X, Y - 10, da * r * 1.15, 60, ta, null, { a: 0.95 });
+          for (const dr of [-30, 30]) { const [x1, y1] = P2(rx, ry, a - da / 2, r + dr), [x2, y2] = P2(rx, ry, a + da / 2, r + dr); seg(x1, y1, Math.atan2(y2 - y1, x2 - x1), Math.hypot(x2 - x1, y2 - y1) + 1, 0.8, 2); } }
+        for (const ae of [a0, a1]) { const [xa, ya] = P2(rx, ry, ae, r - 30), [xb, yb] = P2(rx, ry, ae, r + 30); seg(xa, ya, Math.atan2(yb - ya, xb - xa), Math.hypot(xb - xa, yb - ya), 1, 4);
+          L.glow((xa + xb) / 2, (ya + yb) / 2 - 10, 30, [1, 0.9, 0.6], 0.5, 2); } }); }
+    // eye lasers: a thin aiming line first (no outline — the beam itself is the warning), then the Effector beam along the ground, fed from his eyes
     const eyes = B.kind === 'lenin' && !B.dead ? leninEyes(B, GT, sx(ox), sy(oy)) : null;
     // each beam leaves one eye, comes down onto the paving LAS_GROUND out, and runs along the ground (only that part hurts — it is outlined)
     B.lasers.forEach((Ls, k) => { const G0 = SIM.LAS_GROUND, ca = Math.cos(Ls.a), sa = Math.sin(Ls.a) * 0.75, as = Math.atan2(sa, ca), x0 = sx(ox + ca * G0), y0 = sy(oy + sa * G0), hw = SIM.LAS_W + 16, len = 1700 - G0;
       const ex = eyes ? eyes[0] + (k % 2 ? 0.022 : -0.022) * eyes[2] : x0, ey = eyes ? eyes[1] : y0, ed = Math.hypot(x0 - ex, y0 - ey), ea = Math.atan2(y0 - ey, x0 - ex);
-      if (GT < Ls.on || (Ls.hold && GT < Ls.hold)) { band(x0, y0, as, len, hw, 0.5 + 0.4 * Math.sin(GT * 20)); L.solid(x0, y0 - 1.5, len, 3, DR, as, 0, 1.5, 0.6); L.solid(ex, ey - 1, ed, 2, DR, ea, 0, 1, 0.6); return; }
-      bookR('fxa_beam', loopQ(GT * 1.4, k * 0.31), x0, y0, len, hw * 3.2, as, [0, hw * 1.6]); band(x0, y0, as, len, hw, 0.55);
+      if (GT < Ls.on || (Ls.hold && GT < Ls.hold)) { L.solid(x0, y0 - 1.5, len, 3, DR, as, 0, 1.5, 0.45 + 0.35 * Math.sin(GT * 20)); L.solid(ex, ey - 1, ed, 2, DR, ea, 0, 1, 0.6); return; }
+      bookR('fxa_beam', loopQ(GT * 1.4, k * 0.31), x0, y0, len, hw * 3.2, as, [0, hw * 1.6]);
       bookR('fxa_beam', loopQ(GT * 1.4, k * 0.31 + 0.5), ex, ey, ed + 20, hw * 2.2, ea, [0, hw * 1.1]);
       book('fxa_slam', loopQ(GT * 3, k * 0.4) * 0.35, x0, y0 - 10, 120, 120, { add: 1, a: 0.8 }); });       // where it burns into the paving
     // the commissar's machine-gun cone while he sprays
