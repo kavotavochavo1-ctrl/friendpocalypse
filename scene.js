@@ -290,7 +290,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     for (const c of ST.clouds) { if (!vis(c.x, c.y, c.r)) continue; const a = GT - c.t0, life = SS(0, 0.3, a) * SS(c.ttl, c.ttl - 0.8, a);
       const ally = ST.players.some((p) => p.hero !== 'vitya' && !p.out && ((p.x - c.x) / c.r) ** 2 + ((p.y - c.y) / (c.r * 0.75)) ** 2 < 1);
       const se = sigOf(ST, c.owner), mode = se === 'vitya_frost' ? 'frost' : se === 'vitya_boom' ? 'boom' : null;
-      drawCloud(c.id, sx(c.x), sy(c.y), c.r, life, a, ally, c.big, mode);
+      drawCloud(c.id, sx(c.x), sy(c.y), c.r, life * (c.trail ? 0.55 : 1), a, ally, c.big, mode);     // the evolution's trail is fainter: you can see through it
       if (mode === 'frost') for (let j = 0; j < 6; j++) { const an = rnd(c.id, j + 70) * 6.28 + GT * 0.4, rr = c.r * 0.7 * Math.sqrt(rnd(c.id, j + 80)), tw = 0.5 + 0.5 * Math.sin(GT * 3 + j * 1.7);   // snowflakes in the fog
         L.star(sx(c.x) + Math.cos(an) * rr, sy(c.y) + Math.sin(an) * rr * 0.7 - 40 - 20 * ((GT * 0.3 + rnd(c.id, j)) % 1), 9, [0.9, 0.97, 1], 0.7 * life * tw); }
       if (mode === 'boom') { const fuse = c.ign ? SS(c.ign - 0.9, c.ign, GT) : 0;                                   // sparks crackle inside; a lit fuse glows before it goes off

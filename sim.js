@@ -443,7 +443,7 @@
       say(S, p, 'down', true); const helper = S.players.find((q) => q !== p && alive(q) && q.hero !== 'vitya'); if (helper) S.allyDownSay = [S.t + 2.2, helper.id]; }
     else if (p.hp < p.hpMax * 0.25 && !ally) say(S, p, 'low');
   };
-  const addCloud = (S, p, x, y, r, ttl, big, quiet) => { S.clouds.push({ id: S.nid++, owner: p.id, x, y, r, ttl: ttl * p.m.ttl, t0: S.t, big: big ? 1 : 0, tick: 0, atick: 0,
+  const addCloud = (S, p, x, y, r, ttl, big, quiet) => { S.clouds.push({ id: S.nid++, owner: p.id, x, y, r, ttl: ttl * p.m.ttl, t0: S.t, big: big ? 1 : 0, trail: quiet ? 1 : 0, tick: 0, atick: 0,
       ign: p.m.smods && p.m.smods.ignite && (!quiet || (p.trN = (p.trN || 0) + 1) % 5 === 0) ? S.t + 0.9 : 0 });   // a trail flares every 3rd puff                  // «Газовая петарда»: the cloud flares up a moment later
     if (S.clouds.length > 48) S.clouds.shift(); if (!quiet) ev(S, { k: 'fart', x, y, pid: p.id, big: big ? 1 : 0 }); };
 
@@ -493,7 +493,7 @@
       p.zone = 1 + 0.3 * Math.max(0, 1 - solo / 2);
       if (p.evo) { const moved = Math.hypot(p.x - (p.trX ?? 1e9), p.y - (p.trY ?? 1e9));
         if (moved > 46 || t - (p.trT || -9) > 0.6) { p.trX = p.x; p.trY = p.y; p.trT = t; p.lastAtk = t;
-          addCloud(S, p, p.x - p.fx * 20, p.y - 10 - p.fy * 14, 98 * area * p.m.sarea, 2.8, 0, 1); } }
+          addCloud(S, p, p.x - p.fx * 20, p.y - 10 - p.fy * 14, 98 * area * p.m.sarea, 1.4, 0, 1); } }
       else if (p.atkT <= 0) { p.atkT = 3.4 * p.m.srate / as; p.lastAtk = t; addCloud(S, p, p.x - p.fx * 30, p.y - 10 - p.fy * 20, 85 * area * p.m.sarea, 4.2);
         if (p.m.double) addCloud(S, p, p.x + p.fy * 110, p.y - 10 - p.fx * 80, 75 * area * p.m.sarea, 4.2); }
       if (t - p.ultT > 0.95 && t - p.ultT - DT <= 0.95) addCloud(S, p, p.ux, p.uy, ULT_GAS * area, 6, 1);
