@@ -177,7 +177,9 @@
     if (p.hero === 'hasan') { if (g >= 2) { m.sdmg = 1.25; m.extra = 1; } if (g >= 3) { m.sarea = 1.25; m.pullN = 2; } }
     if (p.hero === 'danil') { if (g >= 2) { m.extra = 1; m.rico = 2; } if (g >= 3) { m.sdmg = 1.3; m.extra = 2; m.pierce = 1; } }
     if (p.hero === 'vitya') { if (g >= 2) { m.sarea = 1.2; m.srate = 0.8; } if (g >= 3) { m.sdmg = 1.3; m.double = 1; } }
-    if (p.hero === 'leha') { p.tier = p.gun || 0; m.sdmg = 1 + 0.12 * Math.max(0, g - 1); const A = p.att || {}; m.crit += 0.08 * (A.sight || 0); m.armor *= 1 - 0.1 * (A.vest || 0); m.pierce += A.ap || 0; }
+    if (p.hero === 'leha') { p.tier = p.gun || 0; m.sdmg = 1 + 0.12 * Math.max(0, g - 1); const A = p.att || {}, G = { rate: 0, dmg: 0, pel: 0, tight: 0, blast: 0 };
+      for (const a of GATT[p.gun || 0]) if (A[a.id]) for (const k in a.fx) { if (k === 'crit') m.crit += a.fx[k]; else if (k === 'pierce') m.pierce += a.fx[k]; else G[k] += a.fx[k]; }
+      m.sdmg *= 1 + G.dmg; m.gun = G; m.armor *= 1 - 0.1 * (A.vest || 0); }
     if (p.sigEvo) { const E = HEVO[p.sigEvo]; m.smods = E.mods; m.sdmg *= 1 + 0.2 * L(p.sigEvo); if (E.mods.home) m.extra += 1; if (E.mods.pierce) m.pierce += E.mods.pierce; }
     p.hpMax = H.hp + 20 * L('hp') + 70 * lu + gift(p, 'g_hp') * GIFTS.g_hp.k; p.hp = Math.min(p.hp, p.hpMax);
   }
@@ -519,13 +521,13 @@
       if (t - p.ultT > 0.95 && t - p.ultT - DT <= 0.95) addCloud(S, p, p.ux, p.uy, ULT_GAS * area, 6, 1);
     }
     if (p.hero === 'leha') {
-      const g = S.t - p.ultT < 7 ? 5 : p.gun || 0, rate = [0.5, 0.13, 1.0, 0.085, 1.4, 0.35][g] / (1 + 0.15 * ((p.att && p.att.mag) || 0));
+      const g = S.t - p.ultT < 7 ? 5 : p.gun || 0, GA = p.m.gun || {}, rate = [0.5, 0.13, 1.0, 0.085, 1.4, 0.35][g] / (1 + (GA.rate || 0));
       if (S.t < p.nadeT && every2(p, 'nade', 1.1)) { const e2 = nearest(S, p.x, p.y, 520, []); if (e2) S.proj.push({ id: S.nid++, own: p.id, kind: 'petard', lob: 1, x: p.x, y: p.y - 50, vx: (e2.x - p.x) / 0.6, vy: (e2.y - 45 - p.y + 50) / 0.6, t0: t, ttl: 0.6, ttl0: 0.6, hit: [], r: 90 * area, dmg: 30 * p.m.dmg, mods: {}, wid: 'nade' }); }
       if (p.atkT <= 0 && tgt) { p.atkT = rate / as; p.lastAtk = t; p.atkN++; const ang = Math.atan2(p.ay, p.ax);
         const shot = (a, sp, dmg, kind, ttl) => S.proj.push({ id: S.nid++, own: p.id, kind, x: p.x + Math.cos(a) * 46, y: p.y - 52 + Math.sin(a) * 30, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, dmg: dmg * 1.2 * p.m.dmg * p.m.sdmg, ttl, rico: 0, hit: [], mods: p.m.smods, pierce: p.m.pierce });
         if (g === 0) shot(ang, 1300, 13, 'bullet', 0.6);
-        if (g === 1) shot(ang + (h2(S.steps, 3) - 0.5) * 0.22, 1400, 6.5, 'bullet', 0.55);
-        if (g === 2) for (let k = 0; k < 6; k++) shot(ang + (k - 2.5) * 0.11 + (h2(S.steps, k) - 0.5) * 0.06, 1150, 8, 'pellet', 0.32);
+        if (g === 1) shot(ang + (h2(S.steps, 3) - 0.5) * 0.22 * (1 - (GA.tight || 0)), 1400, 6.5, 'bullet', 0.55);
+        if (g === 2) { const n = 6 + (GA.pel || 0), sp = 0.11 * (1 - (GA.tight || 0)) * 6 / n; for (let k = 0; k < n; k++) shot(ang + (k - (n - 1) / 2) * sp + (h2(S.steps, k) - 0.5) * 0.06, 1150, 8, 'pellet', 0.32 * (1 + (GA.tight || 0) * 0.5)); }
         if (g === 3) shot(ang + (h2(S.steps, 5) - 0.5) * (p.stillT > 0.3 ? 0.06 : 0.2), 1500, 6, 'bullet', 0.6);
         if (g >= 4) shot(ang, 820, g === 5 ? 52 : 34, 'rocket', 1.1);
         if (p.evo) { if (g === 4 || g === 5) { shot(ang - 0.2, 800, 30, 'rocket', 1.1); shot(ang + 0.2, 800, 30, 'rocket', 1.1); } else if (p.atkN % 2 === 0) { shot(ang - 0.18, 1300, 9, 'bullet', 0.5); shot(ang + 0.18, 1300, 9, 'bullet', 0.5); } }
@@ -646,7 +648,7 @@
     if (S.bus && !down && (S.bus.to === 'meleuz' || S.players.every((q) => q.bot || q.out || q.inBus))) {
       const bx = S.bus.x + DOOR[0], by = S.bus.y + DOOR[1], d = dist(bx, by, p.x, p.y) || 1; mx += (bx - p.x) / d * 7; my += (by - p.y) / d * 7; }
     let gb = null, gd = 260; for (const g of S.gems) { const d = dist(g.x, g.y, p.x, p.y); if (d < gd) { gd = d; gb = g; } }
-    if (p.hero === 'leha' && S.dealer && p.shells >= 40 && !down) { const d = dist(S.dealer.x, S.dealer.y, p.x, p.y) || 1; if (d > 90) { mx += (S.dealer.x - p.x) / d * 3; my += (S.dealer.y - p.y) / d * 3; } }
+    if (p.hero === 'leha' && S.dealer && !down && botWant(S, p) >= 0) { const d = dist(S.dealer.x, S.dealer.y, p.x, p.y) || 1; if (d > 90) { mx += (S.dealer.x - p.x) / d * 3; my += (S.dealer.y - p.y) / d * 3; } }
     for (const c of S.cards) { const d = dist(c.x, c.y, p.x, p.y); if (d < 600 && !down) { mx += (c.x - p.x) / d * 1.6; my += (c.y - p.y) / d * 1.6; break; } }   // photocards: worth a detour
     if (gb && !down) { mx += (gb.x - p.x) / gd * 0.7; my += (gb.y - p.y) / gd * 0.7; }
     if (p.hp < p.hpMax * 0.6) for (const f of S.food) { const d = dist(f.x, f.y, p.x, p.y); if (d < 500) { mx += (f.x - p.x) / d * 1.5; my += (f.y - p.y) / d * 1.5; break; } }
@@ -926,40 +928,64 @@
 
 
   // ---------------- «Чёрный рынок» (LEHA_MARKET.md): Лёха earns shell casings and buys guns, attachments and supplies from a dealer ----------------
-  // a gun bought replaces the one in his hands; attachments sit on Лёха, so they carry over to every gun
-  const MARKET = [
-    { id: 'g1', gun: 1, n: 'ПП «Кедр»', d: 'Очередь: быстро, пули слабые', cost: 60, icon: 'gun_smg' },
-    { id: 'g2', gun: 2, n: 'Дробовик «Сайга»', d: 'Веер дроби в упор', cost: 220, icon: 'gun_shotgun' },
-    { id: 'g3', gun: 3, n: 'Пулемёт «Печенег»', d: 'Длинная очередь, стоя точнее', cost: 400, icon: 'gun_mg' },
-    { id: 'g4', gun: 4, n: 'РПГ', d: 'Медленно, взрыв по площади', cost: 700, icon: 'gun_rpg' },
-    { id: 'mag', att: 1, n: 'Расширенный магазин', d: '+15% скорострельности', cost: [40, 80, 120], icon: 'mk_mag' },
-    { id: 'ap', att: 1, n: 'Бронебойные', d: 'Пули пробивают +1 врага', cost: [50, 100, 150], icon: 'mk_ap' },
-    { id: 'sight', att: 1, n: 'Коллиматор', d: '+8% шанс крита', cost: [40, 80, 120], icon: 'mk_sight' },
-    { id: 'vest', att: 1, n: 'Трофейная разгрузка', d: '-10% входящего урона', cost: [50, 100, 150], icon: 'mk_vest' },
-    { id: 'med', n: 'Аптечка', d: 'Лечит 50% HP', cost: 30, icon: 'mk_med' },
-    { id: 'nades', n: 'Ящик гранат', d: '20 с кидает гранаты', cost: 45, icon: 'mk_nades' }];
-  const SALE = 0.6, DEALER_SPOTS = [[-760, -420], [760, -420], [-760, 460], [760, 460], [0, -620], [0, 640]];
-  const priceOf = (p, it, S) => { const base = it.att ? it.cost[(p.att[it.id] || 0)] : it.cost; if (base === undefined) return null;
-    return Math.round(base * (S.dealer && S.dealer.sale === it.id ? SALE : 1)); };
+  // guns go in order: the next one only once the gun in hand wears its full kit; a gun bought replaces the old one, kit and all (each gun has its own)
+  const GUNS = [{ n: 'ПМ' },
+    { k: 'gun', gun: 1, n: 'ПП «Кедр»', d: 'Очередь: быстро, пули слабые', cost: 50, icon: 'gun_smg' },
+    { k: 'gun', gun: 2, n: 'Дробовик «Сайга»', d: 'Веер дроби в упор', cost: 150, icon: 'gun_shotgun' },
+    { k: 'gun', gun: 3, n: 'Пулемёт «Печенег»', d: 'Длинная очередь, стоя точнее', cost: 280, icon: 'gun_mg' },
+    { k: 'gun', gun: 4, n: 'РПГ', d: 'Медленно, взрыв по площади', cost: 450, icon: 'gun_rpg' }];
+  // fx: rate / dmg (+share), crit (+chance), pierce (+enemies), pel (+pellets), tight (narrower spread), blast (+radius)
+  const GATT = [
+    [{ id: 'pm_mag', n: 'Удлинённый магазин', d: '+30% скорострельности', cost: 20, icon: 'mk_mag', fx: { rate: 0.3 } },
+      { id: 'pm_lcu', n: 'Лазерный целеуказатель', d: '+12% шанс крита', cost: 25, icon: 'mk_sight', fx: { crit: 0.12 } },
+      { id: 'pm_exp', n: 'Экспансивные патроны', d: '+30% урона', cost: 30, icon: 'mk_ap', fx: { dmg: 0.3 } }],
+    [{ id: 'kd_mag', n: 'Спаренные магазины', d: '+25% скорострельности', cost: 45, icon: 'mk_mag', fx: { rate: 0.25 } },
+      { id: 'kd_comp', n: 'Компенсатор', d: 'Очередь кучнее, +15% урона', cost: 50, icon: 'mk_sight', fx: { tight: 0.6, dmg: 0.15 } },
+      { id: 'kd_ap', n: 'Бронебойные 9×18', d: 'Пули пробивают +1 врага', cost: 55, icon: 'mk_ap', fx: { pierce: 1 } }],
+    [{ id: 'sg_drum', n: 'Барабан на 12', d: '+30% скорострельности', cost: 85, icon: 'mk_mag', fx: { rate: 0.3 } },
+      { id: 'sg_choke', n: 'Чок', d: 'Дробь кучнее и дальше, +20% урона', cost: 90, icon: 'mk_sight', fx: { tight: 0.4, dmg: 0.2 } },
+      { id: 'sg_buck', n: 'Крупная картечь', d: '+3 дробины в выстреле', cost: 95, icon: 'mk_ap', fx: { pel: 3 } }],
+    [{ id: 'pk_box', n: 'Короб на 200', d: '+25% скорострельности', cost: 130, icon: 'mk_mag', fx: { rate: 0.25 } },
+      { id: 'pk_pso', n: 'Прицел ПСО', d: '+15% шанс крита', cost: 135, icon: 'mk_sight', fx: { crit: 0.15 } },
+      { id: 'pk_ap', n: 'Бронебойная лента', d: 'Пули пробивают +2 врага', cost: 140, icon: 'mk_ap', fx: { pierce: 2 } }],
+    [{ id: 'rp_tan', n: 'Тандемная БЧ', d: '+35% урона', cost: 180, icon: 'mk_ap', fx: { dmg: 0.35 } },
+      { id: 'rp_frag', n: 'Осколочная рубашка', d: '+30% радиус взрыва', cost: 190, icon: 'mk_nades', fx: { blast: 0.3 } },
+      { id: 'rp_fast', n: 'Быстрая перезарядка', d: '+30% скорострельности', cost: 200, icon: 'mk_mag', fx: { rate: 0.3 } }]];
+  const SUPPLY = [{ k: 'vest', id: 'vest', max: 3, n: 'Трофейная разгрузка', d: '-10% входящего урона', cost: [50, 100, 150], icon: 'mk_vest' },
+    { k: 'med', n: 'Аптечка', d: 'Лечит 50% HP', cost: 30, icon: 'mk_med' },
+    { k: 'nades', n: 'Ящик гранат', d: '20 с кидает гранаты', cost: 45, icon: 'mk_nades' }];
+  // the counter for each gun in hand: its 3 attachments, the next gun, supplies (keys 1–7)
+  const SHOP = GATT.map((A, g) => [...A.map((a, i) => Object.assign({ k: 'a' + i, att: 1, max: 1 }, a)), ...(GUNS[g + 1] ? [GUNS[g + 1]] : []), ...SUPPLY]);
+  const shopList = (p) => SHOP[p.gun || 0];
+  const SALES = ['a0', 'a1', 'a2', 'gun', 'vest', 'med', 'nades'], SALE = 0.6;
+  const priceOf = (p, it, S) => { const base = Array.isArray(it.cost) ? it.cost[(p.att[it.id] || 0)] : it.cost; if (base === undefined) return null;
+    return Math.round(base * (S.dealer && S.dealer.sale === it.k ? SALE : 1)); };
   // can Лёха buy it right now: null = yes, else why not
-  const whyNot = (S, p, it) => { if (it.gun && p.gun === it.gun) return 'В РУКАХ'; if (it.att && (p.att[it.id] || 0) >= 3) return 'МАКС'; if (it.id === 'med' && p.hp >= p.hpMax) return 'HP ПОЛНОЕ';
-    const c = priceOf(p, it, S); return c > p.shells ? 'МАЛО ГИЛЬЗ' : null; };
+  const whyNot = (S, p, it) => { if (it.max && (p.att[it.id] || 0) >= it.max) return it.max > 1 ? 'МАКС' : 'КУПЛЕНО';
+    if (it.gun && GATT[p.gun || 0].some((a) => !p.att[a.id])) return 'СНАЧАЛА ОБВЕС'; if (it.k === 'med' && p.hp >= p.hpMax) return 'HP ПОЛНОЕ';
+    return priceOf(p, it, S) > p.shells ? 'МАЛО ГИЛЬЗ' : null; };
+  // what a bot Лёха saves for: the next gun, then the kit, then the vest
+  const botWant = (S, p) => { const L = shopList(p); for (const k of ['gun', 'a0', 'a1', 'a2', 'vest']) { const i = L.findIndex((it) => it.k === k); if (i >= 0 && !whyNot(S, p, L[i])) return i; } return -1; };
   function buy(S, p, i) {
-    const it = MARKET[i]; if (!it || whyNot(S, p, it)) return; const c = priceOf(p, it, S); p.shells -= c;
-    if (it.gun) { p.gun = p.tier = it.gun; ev(S, { k: 'gunup', pid: p.id, g: it.gun, x: p.x, y: p.y }); }
-    else if (it.att) { p.att[it.id] = (p.att[it.id] || 0) + 1; recalc(p); }
-    else if (it.id === 'med') p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.5);
-    else if (it.id === 'nades') p.nadeT = S.t + 20;
-    ev(S, { k: 'buy', pid: p.id, id: it.id, x: p.x, y: p.y, cost: c });
+    const it = shopList(p)[i]; if (!it || whyNot(S, p, it)) return; const c = priceOf(p, it, S); p.shells -= c;
+    if (it.gun) { p.gun = p.tier = it.gun; p.att = { vest: p.att.vest || 0 }; recalc(p); ev(S, { k: 'gunup', pid: p.id, g: it.gun, x: p.x, y: p.y }); }
+    else if (it.max) { p.att[it.id] = (p.att[it.id] || 0) + 1; recalc(p); }
+    else if (it.k === 'med') p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.5);
+    else if (it.k === 'nades') p.nadeT = S.t + 20;
+    ev(S, { k: 'buy', pid: p.id, id: it.id || it.k, x: p.x, y: p.y, cost: c });
   }
-  // the dealer parks in a corner of the square at every break and stays a few seconds into the next wave
+  // the dealer parks once per map on an empty patch of grass, off the centre but not out at the edge, and stays there all game; a new sale every wave
   function dealerStep(S, t) {
-    const L = S.players.find((p) => p.hero === 'leha' && !p.out); if (!L) { S.dealer = null; return; }
-    if (S.brk > 0 && !S.dealer && !S.bus) { const free = DEALER_SPOTS.map(([dx, dy]) => [C[0] + dx, C[1] + dy]).filter(([x, y]) => !blocked(x, y, 90));
-      const [x, y] = free[Math.floor(h1(S.wave * 7 + 3) * free.length)] || [C[0], C[1] + 300];
-      S.dealer = { x, y, t0: t, until: t + S.brk + 6, sale: MARKET[Math.floor(h1(S.wave * 13) * MARKET.length)].id }; ev(S, { k: 'dealer', x, y }); }
-    if (S.dealer && t > S.dealer.until) { S.dealer = null; for (const p of S.players) p.shop = 0; }
+    const L = S.players.find((p) => p.hero === 'leha' && !p.out);
+    if (!L || S.bus) { if (S.dealer) for (const p of S.players) p.shop = 0; S.dealer = null; return; }
+    if (!S.dealer) { const grass = (x, y) => [-130, 0, 130].every((dx) => [10, -90].every((dy) => !onPave(x + dx, y + dy))) 
+        && !PROPS.some((q) => Math.abs(q[1] - x) < 210 && q[2] > y - 170 && q[2] < y + (q[0] === 'lamp' || q[0] === 'mlamp' ? 300 : 90)); let spot = null;     // the whole car on grass (it's drawn up from (x, y)), no prop in front of or behind it (lamps are tall)
+      for (let k = 0; k < 2000 && !spot; k++) { const a = h2(k, 41) * 6.283, r = 500 + h2(k, 42) * 1000, x = C[0] + Math.cos(a) * r, y = C[1] + Math.sin(a) * r * 0.75;
+        if (x > WORLD.x0 + 200 && x < WORLD.x1 - 200 && y > WORLD.y0 + 260 && y < WORLD.y1 - 120 && !blocked(x, y, 90) && (k >= 1600 || grass(x, y))) spot = [x, y]; }
+      const [x, y] = spot || [C[0], C[1] + 600]; S.dealer = { x, y, t0: t, w: -1, sale: 'med' }; ev(S, { k: 'dealer', x, y }); }
+    const E = S.dealer; if (E && E.w !== S.wave) { E.w = S.wave; E.sale = SALES[Math.floor(h1(S.wave * 13) * SALES.length)]; }
   }
+
 
   // test hook: hit an enemy through the normal damage path (tools/*.cjs)
   const debugHit = (S, e, dmg) => { buildGrid(S); hurtEnemy(S, e, dmg, S.players[1] || S.players[0], 'card'); };
@@ -1049,8 +1075,8 @@
       // «Ночной ларёк»: an energy drink for the whole team — enemies tougher, XP and score up, for the rest of the run
       if (p.hero === 'leha') { const dd = S.dealer ? dist(p.x, p.y, S.dealer.x, S.dealer.y) : 1e9;
         if (eE && dd < 140) p.shop = p.shop ? 0 : 1; if (dd > 200) p.shop = 0;
-        if (p.shop && !p.pick && inp.slot >= 1 && inp.slot <= MARKET.length) buy(S, p, inp.slot - 1);
-        if (p.bot && dd < 140 && t > (p.botBuyT || 0)) { p.botBuyT = t + 0.6; const want = [MARKET.findIndex((it) => it.gun === (p.gun || 0) + 1), 4, 5, 7, 6]; for (const i of want) if (i >= 0 && !whyNot(S, p, MARKET[i])) { buy(S, p, i); break; } } }
+        if (p.shop && !p.pick && inp.slot >= 1 && inp.slot <= shopList(p).length) buy(S, p, inp.slot - 1);
+        if (p.bot && dd < 140 && t > (p.botBuyT || 0)) { p.botBuyT = t + 0.6; const i = botWant(S, p); if (i >= 0) buy(S, p, i); else if (p.hp < p.hpMax * 0.5) buy(S, p, shopList(p).findIndex((it) => it.k === 'med')); } }
       if (eE && LV.KIOSK && !S.bus && S.wave >= S.kioskNext && dist(p.x, p.y, LV.KIOSK[0], LV.KIOSK[1] + 50) < 120) {
         S.drinks++; S.kioskNext = S.wave + 3; ev(S, { k: 'drink', pid: p.id, x: p.x, y: p.y, n: S.drinks }); }
       if (p.m.leech) { const cap = 4 * lv(p, 'kumys'); p.lsB = Math.min(cap, p.lsB + cap * DT); }
@@ -1161,7 +1187,7 @@
         if (b.back) { const dx = p.x - b.x, dy = p.y - 50 - b.y, d = Math.hypot(dx, dy) || 1; b.vx = dx / d * b.sp * 1.1; b.vy = dy / d * b.sp * 1.1; if (d < 30) { b.ttl = 0; continue; } } }
       const e = nearest(S, b.x, b.y + 45, b.kind === 'rocket' ? 34 : 26, b.hit);
       if (e) { b.hit.push(e.id);
-        if (b.kind === 'rocket') { explode(S, b.x, b.y + 45, (S.t - p.ultT < 7 ? 150 : 130) * p.m.area, b.dmg, p, 'rocket', b.mods); b.ttl = 0; continue; }
+        if (b.kind === 'rocket') { explode(S, b.x, b.y + 45, (S.t - p.ultT < 7 ? 150 : 130) * p.m.area * (1 + ((p.m.gun && p.m.gun.blast) || 0)), b.dmg, p, 'rocket', b.mods); b.ttl = 0; continue; }
         hurtEnemy(S, e, b.dmg, p, b.kind, b.vx * 0.15, b.vy * 0.15); ev(S, { k: 'hit', x: b.x, y: b.y + 45, kind: b.kind, tox: b.tox || 0 });
         if (b.mods && e.hp > 0) applyMods(S, e, p, b.mods, b.dmg);
         if (b.kind === 'sugar' && b.mods && b.mods.boom) explode(S, e.x, e.y, b.mods.boom * p.m.area, b.dmg * 0.6, p, 'caramel', { burn: b.mods.burn });
@@ -1304,7 +1330,7 @@
     for (const [x, y] of LAMPS) if (onPave(x, y) && dist(x, y, C[0], C[1]) < 200) f.push('lamp in plaza centre'); };
 
   root.SIM = { DT, L, VIEW, WORLD, HINT, C, PLAZA, PATHS, SUBS, PROPS, SOLIDS, POND, LAMPS, WALLS, LV, HEROES, ORDER, ETYPES, UPG, QCD, LEHA_GUNS, WAVE_LEN, BREAK, WAVES,
-    MAPS, MAPN, SPORS, QUESTS, DOOR, useMap, scoreX, PHOTOCARDS, debugHitRaw: debugHit, MARKET, priceOf, whyNot, CUTS, lineDur, startBoss, HOLE_R, hotCell, LAS_W, LAS_GROUND, RING_GAP,
+    MAPS, MAPN, SPORS, QUESTS, DOOR, useMap, scoreX, PHOTOCARDS, debugHitRaw: debugHit, GUNS, GATT, shopList, priceOf, whyNot, CUTS, lineDur, startBoss, HOLE_R, hotCell, LAS_W, LAS_GROUND, RING_GAP,
     onPave, inGas, collide, cardFor, kettleCards, recalc, lv, create, spawn, respawn, outOfPlay, step, at, scriptInput, demoCheck, selfCheck, botInput };
   if (typeof module !== 'undefined') module.exports = root.SIM;
 })(typeof window !== 'undefined' ? window : globalThis);

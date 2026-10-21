@@ -688,25 +688,25 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
 
 
 
-  // ---- «Чёрный рынок»: the dealer's counter (Лёха at the car, E): ten cards, keys 1–0 ----
+  // ---- «Чёрный рынок»: the dealer's counter (Лёха at the car, E): the gun in hand's kit, the next gun, supplies — keys 1–7 ----
   function drawShop(ST, me, GT, F) {
-    const MK = SIM.MARKET, cw = 216, ch = 150, gap = 12, x0 = W / 2 - (cw * 5 + gap * 4) / 2, y0 = H - 520;
+    const MK = SIM.shopList(me), cw = 216, ch = 150, gap = 12, x0 = W / 2 - (cw * 5 + gap * 4) / 2, y0 = H - 520;
     panel('shop', x0 - 16, y0 - 64, cw * 5 + gap * 4 + 32, ch * 2 + gap + 80, 0.94);
-    lab('shopt', 'ЧЁРНЫЙ РЫНОК', x0, y0 - 38, Object.assign({ size: 28, col: '#ffd76a' }, F));
+    lab('shopt', 'ЧЁРНЫЙ РЫНОК · ' + SIM.GUNS[me.gun || 0].n, x0, y0 - 38, Object.assign({ size: 28, col: '#ffd76a' }, F));
     L.sprite('mk_shells', x0 + cw * 5 + gap * 4 - 210, y0 - 56, { w: 34, h: 34 });
     lab('shops', `${me.shells || 0} гильз`, x0 + cw * 5 + gap * 4 - 170, y0 - 38, Object.assign({ size: 22, col: '#ffe066' }, F));
-    lab('shoph', '1–0 купить · E закрыть', x0 + (cw * 5 + gap * 4) / 2, y0 - 38, Object.assign({ size: 15, al: 0.5, col: '#9fd0ff' }, F));
-    MK.forEach((it, i) => { const x = x0 + (i % 5) * (cw + gap), y = y0 + Math.floor(i / 5) * (ch + gap), why = SIM.whyNot(ST, me, it), cost = SIM.priceOf(me, it, ST), sale = ST.dealer && ST.dealer.sale === it.id;
+    lab('shoph', `1–${MK.length} купить · E закрыть`, x0 + (cw * 5 + gap * 4) / 2, y0 - 38, Object.assign({ size: 15, al: 0.5, col: '#9fd0ff' }, F));
+    MK.forEach((it, i) => { const x = x0 + (i % 5) * (cw + gap), y = y0 + Math.floor(i / 5) * (ch + gap), why = SIM.whyNot(ST, me, it), cost = SIM.priceOf(me, it, ST), sale = ST.dealer && ST.dealer.sale === it.k;
       L.rrect(x, y, cw, ch, 8, why ? [0.16, 0.11, 0.12] : [0.24, 0.16, 0.1], why ? [0.1, 0.07, 0.08] : [0.16, 0.1, 0.06], 0.95);
       if (sale) L.glow(x + cw / 2, y + ch / 2, 120, [1, 0.4, 0.3], 0.25 + 0.1 * Math.sin(GT * 6), 2);
       L.sprite(it.icon, x + 8, y + 8, { w: 56, h: 56, u: { grade: why ? [0.55, 0.45, 0, 1] : [1, 1, 0, 1] } });
       L.rrect(x + 4, y + 4, 24, 24, 6, [0.35, 0.2, 0.08], [0.2, 0.1, 0.05]); lab('sk' + i, String((i + 1) % 10), x + 16, y + 17, Object.assign({ size: 18, al: 0.5, col: '#ffd76a' }, F));
       const lvl = it.att ? (me.att && me.att[it.id]) || 0 : 0;
       wrap(it.n, 14).slice(0, 2).forEach((ln, j) => lab('sn' + i + j, ln, x + 72, y + 18 + j * 18, Object.assign({ size: 16, col: it.gun ? '#9fe0ff' : it.att ? '#f6e7c8' : '#9fffa0' }, F)));
-      if (it.att) for (let j = 0; j < 3; j++) L.solid(x + 72 + j * 14, y + 52, 11, 5, j < lvl ? [1, 0.85, 0.35] : [0.3, 0.2, 0.2]);
+      if (it.max > 1) for (let j = 0; j < it.max; j++) L.solid(x + 72 + j * 14, y + 52, 11, 5, j < lvl ? [1, 0.85, 0.35] : [0.3, 0.2, 0.2]);
       wrap(it.d, 22).slice(0, 2).forEach((ln, j) => lab('sd' + i + j, ln, x + 10, y + 82 + j * 17, Object.assign({ size: 13, col: '#c8b8a0' }, F)));
-      lab('sp' + i, why === 'В РУКАХ' || why === 'МАКС' ? why : cost === null ? '' : cost + ' гильз' + (sale ? ' −40%' : ''), x + 10, y + ch - 16,
-        Object.assign({ size: 15, col: why === 'МАЛО ГИЛЬЗ' ? '#ff7a6a' : why ? '#8a7a6a' : sale ? '#ff9a6a' : '#ffe066' }, F)); });
+      lab('sp' + i, why && why !== 'МАЛО ГИЛЬЗ' && why !== 'HP ПОЛНОЕ' ? why : cost === null ? '' : cost + ' гильз' + (sale ? ' −40%' : ''), x + 10, y + ch - 16,
+        Object.assign({ size: 15, col: why === 'МАЛО ГИЛЬЗ' ? '#ff7a6a' : why === 'КУПЛЕНО' ? '#9fffa0' : why ? '#8a7a6a' : sale ? '#ff9a6a' : '#ffe066' }, F)); });
   }
 
   // ---- the build panel: Tab (held) or while choosing an upgrade — weapons, passives and what the hero does ----
@@ -738,9 +738,9 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     const HI = U.HINFO[me.hero];
     wrap(HI.role, 27).slice(0, 3).forEach((ln, j) => lab('bhr' + j, ln, cx3, y0 + 82 + j * 17, Object.assign({ size: 15, col: '#f6e7c8' }, F)));
     row('bhq', cx3, y0 + 132, 'ic_' + me.hero + '_q', 'Q', 0, 0, HI.q, '#ffd76a'); row('bhu', cx3, y0 + 190, 'ic_' + me.hero + '_r', 'R', 0, 0, HI.r, '#ffd76a');
-    if (me.hero === 'leha') { lab('bhl', `Гильзы: ${me.shells || 0} · обвесы:`, cx3, y0 + 254, Object.assign({ size: 14, col: '#ffe066' }, F));
-      ['mag', 'ap', 'sight', 'vest'].forEach((k, j) => { const l = (me.att && me.att[k]) || 0; L.sprite('mk_' + k, cx3 + j * 80, y0 + 266, { w: 32, h: 32, u: { grade: l ? [1, 1, 0, 1] : [0.4, 0.35, 0, 1] } });
-        for (let q = 0; q < 3; q++) L.solid(cx3 + j * 80 + 36, y0 + 270 + q * 9, 10, 5, q < l ? [1, 0.85, 0.35] : [0.3, 0.2, 0.2]); }); }
+    if (me.hero === 'leha') { const g = me.gun || 0; lab('bhl', `Гильзы: ${me.shells || 0} · ${SIM.GUNS[g].n}, обвес:`, cx3, y0 + 254, Object.assign({ size: 14, col: '#ffe066' }, F));
+      [...SIM.GATT[g], { id: 'vest', icon: 'mk_vest', max: 3 }].forEach((a, j) => { const l = (me.att && me.att[a.id]) || 0; L.sprite(a.icon, cx3 + j * 80, y0 + 266, { w: 32, h: 32, u: { grade: l ? [1, 1, 0, 1] : [0.4, 0.35, 0, 1] } });
+        if (a.max) for (let q = 0; q < a.max; q++) L.solid(cx3 + j * 80 + 36, y0 + 270 + q * 9, 10, 5, q < l ? [1, 0.85, 0.35] : [0.3, 0.2, 0.2]); }); }
     if (me.hero === 'danil') { const n = (me.album || []).length, N = SIM.PHOTOCARDS.length;
       lab('bha', `Альбом: ${n}/${N}` + (n >= N ? ' · эволюция открыта!' : ' · эволюция при 8/8'), cx3, y0 + 254, Object.assign({ size: 14, col: n >= N ? '#9fffa0' : '#ffb0e0' }, F));
       for (let j = 0; j < N; j++) { if (j < n) L.sprite('pc_' + me.album[j], cx3 + j * 34, y0 + 264, { w: 28, h: 38 }); else L.rrect(cx3 + j * 34, y0 + 266, 26, 34, 4, [0.25, 0.17, 0.2], [0.17, 0.1, 0.13]); } }
@@ -825,7 +825,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     else for (const e of ST.enemies) L.solid(MX + e.x * ks - 1.5, MY + e.y * ks - 1.5, 3, 3, [0.95, 0.25, 0.3]);
     for (const p of ST.players) if (!p.out && !p.inBus) { const c = p.id === me.id ? [0.4, 1, 0.4] : hcol(p.hero); L.solid(MX + p.x * ks - 4, MY + p.y * ks - 4, 8, 8, p.down && Math.floor(GT * 4) % 2 ? [1, 0.2, 0.2] : c, Math.PI / 4, 4, 4); }
     L.rrect(MX + me.cam[0] * ks, MY + me.cam[1] * ks, W * ks, H * ks, 2, [1, 1, 1], [1, 1, 1], 0.08);
-    if (ST.dealer && me.hero === 'leha' && !me.down && !ST.over) { const bx = sx(ST.dealer.x), by = sy(ST.dealer.y) - 80;
+    if (ST.dealer && me.hero === 'leha' && !me.down && !ST.over && SIM.shopList(me).some((it) => it.k !== 'med' && it.k !== 'nades' && !SIM.whyNot(ST, me, it))) { const bx = sx(ST.dealer.x), by = sy(ST.dealer.y) - 80;
       if (bx < 40 || bx > W - 40 || by < 40 || by > H - 40) { const a = Math.atan2(by - H / 2, bx - W / 2), r = Math.min((W / 2 - 90) / Math.abs(Math.cos(a) || 1e-3), (H / 2 - 90) / Math.abs(Math.sin(a) || 1e-3));
         const ax = W / 2 + Math.cos(a) * r, ay2 = H / 2 + Math.sin(a) * r, pu = 0.7 + 0.3 * Math.sin(GT * 6);
         L.glow(ax, ay2, 46, [1, 0.8, 0.3], 0.45 * pu, 2); L.solid(ax - 22, ay2 - 7, 44, 14, [1, 0.8, 0.3], a, 22, 7, pu); L.solid(ax + Math.cos(a) * 16 - 12, ay2 + Math.sin(a) * 16 - 12, 24, 24, [1, 0.8, 0.3], a + Math.PI / 4, 12, 12, pu);
@@ -838,7 +838,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         lab('busar', 'АВТОБУС', ax - Math.cos(a) * 60, ay2 - Math.sin(a) * 40, Object.assign({ size: 16, al: 0.5, col: '#ffe066' }, F)); } }
     // ---- abilities (bottom centre): auto attack, Q, R ult — each with its painted icon ----
     if (!ST.over) { const gun = SIM.LEHA_GUNS[GT - me.ultT < 7 ? 4 : me.tier || 0];
-      const slots = [['АВТО', me.sigEvo ? SIM.UPG.HEVO[me.sigEvo].n : me.hero === 'leha' ? gun : BN[me.hero], 0, 0, me.sigEvo ? icon(me.hero, me.sigEvo) : me.evo ? icon(me.hero, 'evo') : icon(me.hero, 'sig')],
+      const slots = [['АВТО', me.sigEvo ? SIM.UPG.HEVO[me.sigEvo].n : me.hero === 'leha' ? gun : BN[me.hero], 0, 0, me.sigEvo ? icon(me.hero, me.sigEvo) : me.evo ? icon(me.hero, 'evo') : me.hero === 'leha' ? GUNS[GT - me.ultT < 7 ? 4 : me.tier || 0] : icon(me.hero, 'sig')],
         ['Q', QN[me.hero], me.qCD / (SIM.QCD[me.hero] * me.m.cd), 0, `ic_${me.hero}_q`], ['R', RN[me.hero], 1 - me.ult, 1, `ic_${me.hero}_r`]];
     const ultPct = Math.floor(me.ult * 100);
     slots.forEach(([key, name, cd, ult, ic], i) => { const x = W / 2 - 200 + i * 140, y = H - 150, s = 112;

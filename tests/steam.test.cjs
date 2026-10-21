@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { roomCode, lobbyId, encode, decode } = require('../desktop/wire.cjs');
-const { SteamNet } = require('../desktop/steam-net.cjs');
+const { SteamNet, PROTOCOL } = require('../desktop/steam-net.cjs');
 test('room code preserves every bit of Steam lobby IDs', () => {
   for (const id of ['109775245123456789', '18446744073709551615']) assert.equal(lobbyId(roomCode(id)), id);
   assert.equal(lobbyId('friendpocalypse://join/109775245123456789'), '109775245123456789');
@@ -18,7 +18,7 @@ test('wire keeps binary snapshots and rejects forged control messages', () => {
 });
 function fixture() {
   const events = [], sent = [], rejected = [], members = new Set(['host', 'friend']);
-  const metadata = { game: 'friendpocalypse', protocol: 'steam-1', host: 'host' };
+  const metadata = { game: 'friendpocalypse', protocol: PROTOCOL, host: 'host' };
   let callback;
   const steam = {
     getStatus: () => ({ steamId: 'host' }), runCallbacks() {},
