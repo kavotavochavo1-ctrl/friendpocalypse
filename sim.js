@@ -934,7 +934,7 @@
   // ---------------- «Барбершоп» (HASAN.md): Хасан's own weapon grows at the barber, not from level-ups ----------------
   // one shop per wave at a random empty spot, gone at the break or after one try. Хасан walks in → the mini-game: scissors sweep left→right
   // over his mustache, Space on the mark. A good cut: +1 mustache, +reach; a miss: −1 mustache, −reach
-  const CUT_IN = 0.6, CUT_PASS = 1.4, CUT_W = 0.065, BOT_CUT = 0.65;      // intro (s), one sweep (s), half-width of the mark (share of the bar), bots' hit rate
+  const CUT_IN = 0.6, CUT_PASS = 1.4 / 1.175, CUT_W = 0.065 * 2 / 3, BOT_CUT = 0.65;      // intro (s), one sweep (s), half-width of the mark (share of the bar), bots' hit rate
   const trimPos = (c, t) => (t - c.t0 - CUT_IN) / (c.pass || CUT_PASS);
   function barberStep(S, t) {
     const H = S.players.find((p) => p.hero === 'hasan' && !p.out), busy = S.players.some((p) => p.trim);
