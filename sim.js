@@ -871,14 +871,15 @@
 
   // ---- Лёха — «Красный комиссар» ----
   function leninSides(S, e) {
-    if (!S.players.some((p) => p.hero === 'leha')) { startCut(S, 'ln_npc', LV.LENIN[0], LV.LENIN[1], 'npc'); return; }     // no Лёха in the party: the party has its own
-    const L = S.players.find((p) => p.hero === 'leha' && alive(p)); if (!L) return;
+    const L = S.players.find((p) => p.hero === 'leha' && !p.out);
+    if (!L) { startCut(S, 'ln_npc', LV.LENIN[0], LV.LENIN[1], 'npc'); return; }     // no Лёха in the party (or he's out): the party has its own
     const humans = S.players.filter((p) => !p.bot && !p.out);
     if (!L.bot && humans.length === 1) { startCut(S, 'ln_solo', L.x, L.y); L.crisisT = S.t + 10; return; }      // alone at the keyboard: he stays himself, with a doubt
     startCut(S, 'ln_b', L.x, L.y, 'betray');
   }
   function betray(S) {
-    const L = S.players.find((p) => p.hero === 'leha' && alive(p)); if (!L || !S.boss) return;
+    const L = S.players.find((p) => p.hero === 'leha' && !p.out); if (!L || !S.boss) return;
+    if (L.down) { L.down = 0; L.hp = L.hpMax; L.revP = 0; ev(S, { k: 'revive', pid: L.id, by: L.id, x: L.x, y: L.y }); }      // the party raises its fallen comrade
     const few = S.players.filter((p) => !p.bot && !p.out).length <= 2;
     const e = mkEnemy(S, 'komissar', L.x, L.y, ETYPES.komissar.hp * hpScale(S) * (few ? 0.55 : 1), {}); S.enemies.push(e);
     L.nat = 1; L.vx = L.vy = 0; S.boss.km = { eid: e.id, pid: L.id, mode: 0, until: S.t + (few ? 25 : 45), atk: null, next: S.t + 1.5, aim: 0 };
@@ -960,6 +961,8 @@
     if (S.dealer && t > S.dealer.until) { S.dealer = null; for (const p of S.players) p.shop = 0; }
   }
 
+  // test hook: hit an enemy through the normal damage path (tools/*.cjs)
+  const debugHit = (S, e, dmg) => { buildGrid(S); hurtEnemy(S, e, dmg, S.players[1] || S.players[0], 'card'); };
   // ---------------- step ----------------
   function step(S, inpAll) {
     if (S.over) { S.t += DT; S.steps++; if (S.ev.length > 96) S.ev.splice(0, S.ev.length - 96); return S; }
@@ -1301,7 +1304,7 @@
     for (const [x, y] of LAMPS) if (onPave(x, y) && dist(x, y, C[0], C[1]) < 200) f.push('lamp in plaza centre'); };
 
   root.SIM = { DT, L, VIEW, WORLD, HINT, C, PLAZA, PATHS, SUBS, PROPS, SOLIDS, POND, LAMPS, WALLS, LV, HEROES, ORDER, ETYPES, UPG, QCD, LEHA_GUNS, WAVE_LEN, BREAK, WAVES,
-    MAPS, MAPN, SPORS, QUESTS, DOOR, useMap, scoreX, PHOTOCARDS, MARKET, priceOf, whyNot, CUTS, lineDur, startBoss, HOLE_R, hotCell, LAS_W, LAS_GROUND, RING_GAP,
+    MAPS, MAPN, SPORS, QUESTS, DOOR, useMap, scoreX, PHOTOCARDS, debugHitRaw: debugHit, MARKET, priceOf, whyNot, CUTS, lineDur, startBoss, HOLE_R, hotCell, LAS_W, LAS_GROUND, RING_GAP,
     onPave, inGas, collide, cardFor, kettleCards, recalc, lv, create, spawn, respawn, outOfPlay, step, at, scriptInput, demoCheck, selfCheck, botInput };
   if (typeof module !== 'undefined') module.exports = root.SIM;
 })(typeof window !== 'undefined' ? window : globalThis);

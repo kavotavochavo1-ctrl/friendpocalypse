@@ -389,7 +389,8 @@
   const meSnap = () => { const b = snaps[snaps.length - 1]; return b && b.S.players.find((o) => o.id === myPid); };
   function predict(inp) {
     const me = meSnap(), now = performance.now(); if (!me) return;
-    const b = snaps[snaps.length - 1]; if (pred && b.S.pause) { pred.vx = pred.vy = 0; lastPred = now; return; }          // level-up pause: the world (and you) stand still
+    // level-up pause: the world (and you) stand still — sit on the host's position, or reconcile re-adds the same offset every snapshot
+    const b = snaps[snaps.length - 1]; if (pred && b.S.pause) { pred.x = me.x; pred.y = me.y; pred.vx = pred.vy = 0; corr = [0, 0]; hist = []; lastPred = now; return; }
     if (!pred || me.down || me.out) { pred = { x: me.x, y: me.y, vx: 0, vy: 0, dist: me.dist || 0, dir: me.dir || 0 }; hist = []; corr = [0, 0]; lastPred = now; return; }
     let dt = Math.min(0.1, (now - lastPred) / 1000); lastPred = now;
     const H = SIM.HEROES[me.hero], spd = H.spd * ((me.m && me.m.spd) || 1) * (me.hero === 'leha' ? 1 - 0.04 * (me.tier || 0) : 1);

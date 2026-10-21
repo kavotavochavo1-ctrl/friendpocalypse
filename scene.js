@@ -866,6 +866,10 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         const tw = labW('pcb', s2, Object.assign({ size: 28 }, F)); L.rrect(W / 2 - tw / 2 - 30, 270, tw + 60, 60, 14, [0.45, 0.12, 0.35], [0.25, 0.05, 0.2], 0.88 * k); L.uiBox('pcb', W / 2 - tw / 2 - 30, 270, tw + 60, 60);
         lab('pcb', s2, W / 2, 300, Object.assign({ size: 28, al: 0.5, col: '#ffd0f0', a: k }, F));
         if (!pc.full) L.sprite('pc_' + pc.card, W / 2 - tw / 2 - 96, 252, { w: 64, h: 86, u: { alpha: k } }); } }
+    { const ph = [...ST.ev].reverse().find((v) => v.k === 'phase' && GT - v.t < 2.4 && GT >= v.t);
+      if (ph && !ST.cut) { const a = GT - ph.t, k = SS(0, 0.15, a) * SS(2.4, 1.9, a), s2 = 'ФАЗА ' + ph.ph + (ph.ph === 3 ? ' — ПОСЛЕДНЯЯ!' : '!'), sz = 64 + 16 * SS(0.25, 0, a);
+        const tw = labW('phb', s2, Object.assign({ size: sz }, F)); L.rrect(W / 2 - tw / 2 - 40, H * 0.3 - 54, tw + 80, 108, 18, [0.5, 0.06, 0.06], [0.25, 0.02, 0.03], 0.85 * k); L.uiBox('phb', W / 2 - tw / 2 - 40, H * 0.3 - 54, tw + 80, 108);
+        lab('phb', s2, W / 2, H * 0.3, Object.assign({ size: sz, al: 0.5, col: '#ffe066', a: k }, F)); } }
     // ---- wave start / break banner ----
     const wv = [...ST.ev].reverse().find((v) => (v.k === 'wave' || v.k === 'break' || v.k === 'clear' || v.k === 'bus' || v.k === 'arrive' || v.k === 'drink' || v.k === 'timeout') && GT - v.t < 2.5);
     if (wv) { const a = GT - wv.t, k = SS(0, 0.2, a) * SS(2.5, 2.0, a), dp = wv.pid !== undefined && ST.players.find((q) => q.id === wv.pid);
