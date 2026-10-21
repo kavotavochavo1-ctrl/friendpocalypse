@@ -32,6 +32,8 @@ jobs:
         shell: pwsh
         run: |
           $files = Get-ChildItem release -File | Where-Object { $_.Extension -in '.exe','.zip','.blockmap','.yml','.txt' } | ForEach-Object { $_.FullName }
+          gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Output 'Release already exists; preserving its verified assets.'; exit 0 }
           gh release create $env:GITHUB_REF_NAME @files --title "Friendpocalypse $env:GITHUB_REF_NAME" --notes-file RELEASE_NOTES.md --repo $env:GITHUB_REPOSITORY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
