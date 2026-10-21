@@ -13,7 +13,7 @@ canvas{display:block;width:min(100vw,calc(100vh*var(--ar)));height:auto;aspect-r
 </head><body><canvas id="c"></canvas>
 <div id="hint"></div>
 <div id="dev"></div><div id="flash">reloaded</div>
-<script>window.__STATIC__ = 1; window.__BUILD__ = '1792524738';</script>
+<script>window.__STATIC__ = 1; window.__BUILD__ = '1792570475';</script>
 <script>
 // LIVE PREVIEW. Scripts and images load with a cache-buster; the page polls its sources and reloads itself when any of
 // them changes, keeping the play state (sessionStorage). Attract demo until a key or click, then play (keyboard + pointer).
@@ -43,7 +43,8 @@ const load = (src) => new Promise((res, rej) => { const s = document.createEleme
   window.__ready = true;
   if (render) return;
 
-  const keys = {}, hint = document.getElementById('hint'), dev = document.getElementById('dev'), flash = document.getElementById('flash');
+  // KEYS: the scene reads Tab (build panel)
+  const keys = (window.KEYS = {}), hint = document.getElementById('hint'), dev = document.getElementById('dev'), flash = document.getElementById('flash');
   const SPEEDS = [0.1, 0.25, 0.5, 1];
   let CFG = { hero: q.get('hero') || 'hasan', solo: q.has('solo') };
   const start = () => { const s = SIM.spawn(simT, Object.assign({ meta: window.NET && NET.meta ? NET.meta() : null }, CFG)); s.me = 0; return s; };

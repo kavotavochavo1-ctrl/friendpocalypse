@@ -16,14 +16,14 @@
 
   // ---------------- heroes ----------------
   const HEROES = {
-    hasan: { name: 'ХАСАН', hp: 85, spd: 227, col: [0.85, 0.55, 0.25], pick: 1.2 },
+    hasan: { name: 'ХАСАН', hp: 105, spd: 227, col: [0.85, 0.55, 0.25], pick: 1.2 },
     danil: { name: 'ДАНИЛ', hp: 100, spd: 218, col: [1.0, 0.35, 0.75], pick: 1.0 },
     vitya: { name: 'ВИТЯ', hp: 100, spd: 220, col: [0.55, 0.95, 0.25], pick: 1.0 },
     leha: { name: 'ЛЁХА', hp: 140, spd: 194, col: [0.6, 0.7, 0.35], pick: 1.0 },
   };
   const ORDER = ['hasan', 'danil', 'vitya', 'leha'];
   const QCD = { hasan: 16, danil: 20, vitya: 18, leha: 22 };
-  const LEHA_GUNS = ['ПИСТОЛЕТ', 'ПП', 'ДРОБОВИК', 'РПГ'];
+  const LEHA_GUNS = ['ПИСТОЛЕТ', 'ПП «КЕДР»', 'ДРОБОВИК', 'ПУЛЕМЁТ', 'РПГ'];
 
   // ---------------- enemies ----------------
   // map: which level spawns them; skin: the art (scene); elite: the type an elite of that level uses
@@ -41,8 +41,8 @@
     mom: { hp: 46, spd: 88, r: 30, dmg: 20, xp: 3, sc: 1.05, from: 14, charge: 1, w: 0.1, map: 'meleuz' },
     alpha: { hp: 110, spd: 168, r: 30, dmg: 15, xp: 5, sc: 1.45, from: 999, w: 0, map: 'meleuz', howl: 1 },    // «Вожак стаи»: elites only
     // bosses (BOSSES.md): hp is the wave-1 base, scaled by hpScale like everyone else
-    vlad: { hp: 3600, spd: 0, r: 46, dmg: 14, xp: 60, sc: 1, from: 999, w: 0, map: 'park', boss: 1 },
-    lenin: { hp: 4000, spd: 0, r: 95, dmg: 16, xp: 120, sc: 1, from: 999, w: 0, map: 'meleuz', boss: 1 },
+    vlad: { hp: 1400, spd: 0, r: 46, dmg: 14, xp: 60, sc: 1, from: 999, w: 0, map: 'park', boss: 1 },
+    lenin: { hp: 2000, spd: 0, r: 95, dmg: 16, xp: 120, sc: 1, from: 999, w: 0, map: 'meleuz', boss: 1 },
     komissar: { hp: 900, spd: 0, r: 26, dmg: 0, xp: 0, sc: 1, from: 999, w: 0, map: 'meleuz', mini: 1 },
   };
   const ELITES = { park: ['brute'], meleuz: ['starshiy', 'alpha'] };      // «Батя района» (a starshiy elite) and «Вожак стаи»
@@ -87,7 +87,7 @@
     hasan: { n: 'Усы-хлысты', lv: ['Два уса хлещут ближайших', 'Два хлыста за удар, +25% урона', '+25% радиус, чаще связывает усами'], evo: 'pick', evoN: 'Усатый вихрь', evoD: 'Пробуждение: усы крутятся вокруг, режут и связывают толпу' },
     danil: { n: 'Фотокарточки', lv: ['Карты с рикошетом', '+1 карта, +1 рикошет', '+30% урона, +1 карта, карты пробивают'], evo: 'crit', evoN: 'Коллекция ультраредок', evoD: 'Пробуждение: кольцо карт вращается вокруг и бьёт само' },
     vitya: { n: 'Тихий, но смертельный', lv: ['Облако позади себя', 'Облако больше, пукает чаще', '+30% урона, два облака за раз'], evo: 'hp', evoN: 'Насрал в штаны', evoD: 'Пробуждение: больше не пукает — за ним тянется сплошной газовый след' },
-    leha: { n: 'Оружейная лицензия', lv: ['Пистолет', 'ПП: очередь', 'Дробовик: веер дроби'], evo: 'armor', evoN: 'Карманный апокалипсис', evoD: 'Пробуждение: РПГ, залп из 3 ракет' },
+    leha: { n: 'Оружейная лицензия', lv: ['Пушки — у барыги за гильзы', '+12% урона любой пушке', '+24% урона любой пушке'], evo: 'armor', evoN: 'Карманный апокалипсис', evoD: 'Пробуждение: РПГ, залп из 3 ракет' },
   };
   // shared weapons: b = behaviour (gearStep), el = element, mods = what its hits add (burn / chill / freeze / shock / boom …), mult = power
   const LVUP = ['', '+25% урона, +1 снаряд', '+25% урона, быстрее и дальше'];
@@ -177,7 +177,7 @@
     if (p.hero === 'hasan') { if (g >= 2) { m.sdmg = 1.25; m.extra = 1; } if (g >= 3) { m.sarea = 1.25; m.pullN = 2; } }
     if (p.hero === 'danil') { if (g >= 2) { m.extra = 1; m.rico = 2; } if (g >= 3) { m.sdmg = 1.3; m.extra = 2; m.pierce = 1; } }
     if (p.hero === 'vitya') { if (g >= 2) { m.sarea = 1.2; m.srate = 0.8; } if (g >= 3) { m.sdmg = 1.3; m.double = 1; } }
-    if (p.hero === 'leha') { p.tier = p.evo ? 3 : [0, 1, 2][Math.max(0, g - 1)]; if (g >= 2) m.sdmg = 1.15; if (g >= 3) m.sdmg = 1.3; }
+    if (p.hero === 'leha') { p.tier = p.gun || 0; m.sdmg = 1 + 0.12 * Math.max(0, g - 1); const A = p.att || {}; m.crit += 0.08 * (A.sight || 0); m.armor *= 1 - 0.1 * (A.vest || 0); m.pierce += A.ap || 0; }
     if (p.sigEvo) { const E = HEVO[p.sigEvo]; m.smods = E.mods; m.sdmg *= 1 + 0.2 * L(p.sigEvo); if (E.mods.home) m.extra += 1; if (E.mods.pierce) m.pierce += E.mods.pierce; }
     p.hpMax = H.hp + 20 * L('hp') + 70 * lu + gift(p, 'g_hp') * GIFTS.g_hp.k; p.hp = Math.min(p.hp, p.hpMax);
   }
@@ -196,10 +196,10 @@
       d: found ? rdesc(r.id) : `${a} + ${b} = ?`, tag: found ? 'ЭВОЛЮЦИЯ' : 'НОВЫЙ РЕЦЕПТ?' }; };
   // recipes whose two ingredients are both at max level right now (fused items are locked in their pair)
   // the hero's own weapon evolves ONCE: either the awakening (with its partner passive) or an element evolution (with a shared weapon)
-  const readyRecipes = (p) => RECIPES.filter((r) => (!r.hero || r.hero === p.hero)
+  const readyRecipes = (p) => RECIPES.filter((r) => (!r.hero || r.hero === p.hero) && !(r.hero === 'danil' && (p.album || []).length < PHOTOCARDS.length)
     && r.from.every((id) => id === 'sig' ? lv(p, 'sig') >= MAXL && !p.sigEvo && !p.evo : lv(p, id) >= pmax(id) && !isFused(p, id)));
   const kettleCards = (S, p) => {
-    const cards = [{ id: 'fission', kind: 'fission', n: 'Деление', d: '+1 уровень трём случайным предметам', tag: 'КОТЁЛ' }];
+    const cards = [{ id: 'fission', kind: 'fission', n: 'Деление', d: '+1 уровень двум случайным предметам', tag: 'КОТЁЛ' }];
     const rr = readyRecipes(p); for (let k = 0; k < 2 && rr.length; k++) cards.push(cardRecipe(S, p, rr.splice(Math.floor(h2(S.steps + k, p.id) * rr.length), 1)[0]));
     const maxed = sharedW(p).filter((id) => lv(p, id) >= MAXL && !isFused(p, id)), inRecipe = (a, b) => RECIPES.some((r) => r.from.includes(a) && r.from.includes(b));
     for (let i = 0; i < maxed.length && cards.length < 4; i++) for (let j = i + 1; j < maxed.length; j++) if (!inRecipe(maxed[i], maxed[j])) {
@@ -208,7 +208,19 @@
   // icon texture per item / recipe result (HUD, cards, almanac)
   const iconOf = (id, hero) => id === 'sig' ? `ic_${hero}_base` : id.startsWith('awake_') ? `ic_${id.slice(6)}_evo` : id === 'evo' ? `ic_${hero}_evo` : GIFTS[id] ? 'it_' + id.slice(2)
     : (WEAPONS[id] && !WEAPONS[id].from) || (PASSIVES[id] && !PASSIVES[id].from) ? 'it_' + id : 'ic_' + id;
-  const UPG = { WEAPONS, PASSIVES, SIG, HEVO, RECIPES, GIFTS, MAXL, MAXW, MAXP, rname, rdesc, iconOf };
+  // what the hero is, for the build panel (Tab): role, Q, R
+  const HINFO = {
+    hasan: { role: 'Ближний бой, хрупкий. Хлысты связывают врагов', q: 'Подкрутил усы: усы-лезвия крутятся вокруг 4 с, отбивают плевки', r: 'Усатое торнадо: смерч тянет и рубит толпу' },
+    danil: { role: 'Дальний бой. Карточки рикошетят; фотокарточки с элиток', q: 'Фан-чант: конус очаровывает врагов, друзья рядом быстрее', r: 'Камбэк года: кольцо гигантских карт вокруг' },
+    vitya: { role: 'Газ задевает и своих. Один — газ сильнее', q: 'Залп по ветру: струя газа назад отталкивает и травит', r: 'Катастрофа: огромное облако через секунду' },
+    leha: { role: 'Танк. Гильзы за убийства — пушки и обвесы у барыги', q: 'Прикрыл!: щит спереди блокирует плевки', r: 'До зубов: 7 с с ракетницей' } };
+  // «Фотокарточки»: Данил's album of K-pop idol photocards (art + his pickup lines: see DANIL_CARDS.md)
+  // r: the friend who answers Данил's line about this card (voiced dc_<id>_0 / _1; no answer when that friend isn't in the party)
+  const PHOTOCARDS = [{ id: 'lisa', n: 'Лиса', g: 'BLACKPINK', r: 'hasan' }, { id: 'jennie', n: 'Дженни', g: 'BLACKPINK', r: 'vitya' }, { id: 'rose', n: 'Розэ', g: 'BLACKPINK', r: 'leha' },
+    { id: 'jisoo', n: 'Джису', g: 'BLACKPINK', r: 'leha' }, { id: 'nayeon', n: 'Наён', g: 'TWICE', r: 'hasan' }, { id: 'karina', n: 'Карина', g: 'aespa', r: 'vitya' },
+    { id: 'wonyoung', n: 'Вонён', g: 'IVE', r: 'leha' }, { id: 'hanni', n: 'Ханни', g: 'NewJeans', r: 'hasan' }];
+  const CARD_P = 0.45, ALBUM_BONUS = 0.04;                                  // drop chance per elite (a miss raises the next one), +4% card damage per card
+  const UPG = { WEAPONS, PASSIVES, SIG, HEVO, RECIPES, GIFTS, HINFO, MAXL, MAXW, MAXP, rname, rdesc, iconOf };
 
   // ---------------- the levels, as data (useMap swaps the current one in) ----------------
   // paved areas (drawn + spawn-safe): rects [cx, cy, w, h, rot] and sub-plazas [x, y, rx, ry, kind]; props [kind, x, y, scale, flip]
@@ -330,7 +342,7 @@
       atkT: 0, atkN: 0, atkSide: 1, lastAtk: -9, tier: 0, tokens: [], set: -1, hitN: 0, hitSet: [], fastT: -9, stillT: 0,
       m: { dmg: 1, as: 1, area: 1, spd: 1, pick: H.pick, armor: 1, regen: 0, crit: 0.04, cd: 1, extra: 0, rico: 1, pullN: 3, ttl: 1, deo: 1, shield: 0 },
       pick: null, pickT: 0, items: { sig: 1 }, fused: [], sigEvo: null, rerolls: 2, kq: 0, queue: 0, petN: 0, evo: 0, ultLock: 0, wcd: {}, vcd: 0, gasT: -9, buffT: -9, selfRes: 1,
-      inBus: 0, gifts: {}, smol: 0, lsB: 0,
+      inBus: 0, gifts: {}, smol: 0, lsB: 0, album: [], shells: 0, gun: 0, att: {}, shop: 0, nadeT: -9,
       st: { dmg: 0, ally: 0, allyHit: 0, rev: 0, downs: 0, xp: 0, kills: 0, gasIn: 0 },
       prev: {}, cam: [C[0] - VIEW.W / 2, C[1] - VIEW.H / 2], camV: [0, 0] }; };
   const newPlayer = (id, hero, bot, i) => { const p = mkPlayer(id, hero, bot, i); recalc(p); return p; };
@@ -341,7 +353,7 @@
       map: LV.id, spor: SPORS[cfg.spor] ? cfg.spor : null, daily: cfg.daily ? 1 : 0, bus: null, endless: 0, swarmT: 0, score: 0, drinks: 0, kioskNext: 3, sporWon: 0,
       players: [], enemies: [], proj: [], eproj: [], clouds: [], zones: [], gems: [], marks: [], booms: [], nid: 1, rt: 0, pause: 0, pend: [], clear: 0, clearT: 0,
       wave: 1, waveT: 0, brk: 0, xp: 0, lvl: 1, xpNext: 6, eliteT: 20, chests: [], food: [], spawnAcc: 0, over: 0, won: 0, freeze: 0, kills: 0,
-      comboT: -9, comboK: {}, sayT: -9, banter: 0, ev: [], awards: null, me: 0, solo: 0, boss: null, cut: null, traps: [], bossWave: 0,
+      comboT: -9, comboK: {}, sayT: -9, banter: 0, ev: [], awards: null, me: 0, solo: 0, cards: [], cardMiss: 0, barkQ: [], dealer: null, boss: null, cut: null, traps: [], bossWave: 0,
       found: ((cfg.meta && cfg.meta.found) || []).slice(), unlock: Object.assign({}, cfg.meta && cfg.meta.unlock) };
     heroes.forEach((h, i) => S.players.push(newPlayer(i, h, cfg.humans ? !cfg.humans.includes(i) : 1, i)));
     S.solo = S.players.filter((p) => !p.bot).length <= 1 && S.players.length === 1 ? 1 : 0;
@@ -394,26 +406,32 @@
   const hurtEnemy = (S, e, dmg, p, kind, kx = 0, ky = 0) => {
     if (e.hp <= 0 || S.t < (e.inv || 0)) return;
     if (e.boss && S.t < S.boss.vuln) dmg *= 2; if (S.t < (e.shieldT || 0)) dmg *= 0.25; if (p && S.t < (p.crisisT || 0)) dmg *= 0.8;
-    if (e.boss) bossHit(S, e, dmg);
+    if (e.boss) { bossHit(S, e, dmg); if (S.boss.ph < 3 && e.hp - dmg <= 1) { e.hitT = S.t; if (p) p.st.dmg += Math.max(0, e.hp - 1); e.hp = 1; return; } }   // a phase ends, the boss doesn't
     if (e.type === 'komissar' && e.hp - dmg <= 0) { e.hitT = S.t; if (p) p.st.dmg += dmg; freeLeha(S, e, 1); return; }
     if (S.marks.length && S.marks.some((m) => m.id === e.id && S.t < m.until)) dmg *= 1.5;
     if (S.t < (e.gooT || -9)) dmg *= 1.25;                                    // stuck in condensed milk
     let crit = 0; if (p && h2(S.steps + e.id, dmg) < p.m.crit) { dmg *= p.m.critX || 2; crit = 1; }
     KB_T = S.t; const k = kb(e); e.hp -= dmg; e.hitT = S.t; e.kx += kx * k; e.ky += ky * k; e.lastHit = p ? p.id : -1; e.lastKind = kind;
-    if (p) { p.st.dmg += dmg;
+    if (p) { p.st.dmg += dmg; const kd = p.st.kd || (p.st.kd = {}); kd[kind] = (kd[kind] || 0) + dmg;     // kd: damage per source (balance telemetry)
       if (p.m.leech && alive(p) && p.lsB > 0) { const h = Math.min(dmg * p.m.leech, p.lsB, p.hpMax - p.hp); if (h > 0) { p.hp += h; p.lsB -= h; } }   // Кумыс
       if (p.hero === 'hasan' && !p.hitSet.includes(e.id)) { p.hitSet.push(e.id); if (p.hitSet.length > 8) p.hitSet.shift(); } }
     if (crit) ev(S, { k: 'crit', x: e.x, y: e.y });
     if (e.hp <= 0) killEnemy(S, e, p, kind);
   };
   const killEnemy = (S, e, p, kind) => {
-    const T = ETYPES[e.type]; S.kills++; if (T.boss) bossDead(S, e); if (p) { p.st.kills++; if (S.t > p.ultLock) p.ult = Math.min(1, p.ult + 0.0032 * T.xp); }
+    const T = ETYPES[e.type]; S.kills++; if (T.boss) { bossDead(S, e); for (const q of S.players) if (q.hero === 'leha') q.shells += 50; }
+    if (p && p.hero === 'leha' && (kind === 'bullet' || kind === 'pellet' || kind === 'rocket')) { p.shellF = (p.shellF || 0) + (e.elite ? 12 : 0.6); const w = Math.floor(p.shellF); p.shells += w; p.shellF -= w; } if (p) { p.st.kills++; if (S.t > p.ultLock) p.ult = Math.min(1, p.ult + 0.0032 * T.xp); }
     S.score += Math.round(T.xp * 10 * (e.elite ? 10 : 1) * scoreX(S));
     ev(S, { k: 'kill', x: e.x, y: e.y, type: e.type, kind, pid: p ? p.id : -1, sc: T.sc });
-    S.gems.push({ id: S.nid++, x: e.x, y: e.y - 4, v: T.xp * (S.map === 'meleuz' ? 1.6 : 1), t0: S.t });
+    if (!e.run) S.gems.push({ id: S.nid++, x: e.x, y: e.y - 4, v: T.xp * (S.map === 'meleuz' ? 1.3 : 1), t0: S.t });     // stampede rats: no crystals
     if (e.elite || h2(e.id, S.steps) < 0.015) S.food.push({ id: S.nid++, x: e.x + 20, y: e.y + 10, t0: S.t });
     if (T.bomb) explode(S, e.x, e.y, 100, 0, null, 'bomb');
-    if (e.elite && S.kettleW !== S.wave && S.spor !== 'nokettle') { S.kettleW = S.wave; S.chests.push({ id: S.nid++, x: e.x, y: e.y, t0: S.t }); }
+    { const dn = S.players.find((q) => q.hero === 'danil' && !q.out), have = dn ? [...dn.album, ...S.cards.map((c) => c.card)] : [];
+      const left = PHOTOCARDS.filter((c) => !have.includes(c.id));
+      if (e.elite && dn && left.length) { S.cardMiss = (S.cardMiss || 0); if (h2(e.id, S.steps + 7) < CARD_P + 0.25 * S.cardMiss) { S.cardMiss = 0;
+          S.cards.push({ id: S.nid++, x: e.x - 50, y: e.y + 20, t0: S.t, card: left[Math.floor(h2(e.id, S.steps) * left.length)].id }); ev(S, { k: 'carddrop', x: e.x, y: e.y }); } else S.cardMiss++; } }
+    // a cauldron every other wave
+    if (e.elite && S.wave - (S.kettleW || -9) >= 2 && S.spor !== 'nokettle') { S.kettleW = S.wave; S.chests.push({ id: S.nid++, x: e.x, y: e.y, t0: S.t }); }
     if (e.elite) { for (let i = 0; i < 6; i++) S.gems.push({ id: S.nid++, x: e.x + 80 * (h2(S.steps, i) - 0.5), y: e.y + 60 * (h2(S.steps, i + 3) - 0.5), v: 3, t0: S.t }); }
   };
   const explode = (S, x, y, r, dmg, p, kind, M) => {
@@ -448,6 +466,7 @@
     if (S.clouds.length > 48) S.clouds.shift(); if (!quiet) ev(S, { k: 'fart', x, y, pid: p.id, big: big ? 1 : 0 }); };
 
   // ---------------- hero attacks ----------------
+  const every2 = (p, id, period) => { p.wcd[id] = (p.wcd[id] || 0) - DT; if (p.wcd[id] > 0) return false; p.wcd[id] = period; return true; };
   function heroStep(S, p, inp, t) {
     const as = p.m.as * (S.t < p.buffT ? 1.4 : 1), area = p.m.area;
     const tgt = nearest(S, p.x, p.y - 40, p.hero === 'hasan' ? 230 * area : p.hero === 'vitya' ? 0 : 760);
@@ -476,7 +495,7 @@
     if (p.hero === 'danil') {
       if (p.atkT <= 0 && tgt) { p.atkT = 0.55 / as * (p.set === 0 ? 0.85 : 1); p.lastAtk = t; const n = 1 + p.m.extra, ang = Math.atan2(p.ay, p.ax);
         for (let k = 0; k < n; k++) { const a = ang + (k - (n - 1) / 2) * 0.16;
-          S.proj.push({ id: S.nid++, own: p.id, kind: 'card', x: p.x + p.ax * 24, y: p.y - 50, vx: Math.cos(a) * 920, vy: Math.sin(a) * 920, dmg: 10 * p.m.dmg * p.m.sdmg, ttl: 0.9, rico: p.m.rico + (p.set === 2 ? 1 : 0), pierce: p.m.pierce || 0, hit: [], tox: 0, c: (p.atkN + k) % 4,
+          S.proj.push({ id: S.nid++, own: p.id, kind: 'card', x: p.x + p.ax * 24, y: p.y - 50, vx: Math.cos(a) * 920, vy: Math.sin(a) * 920, dmg: 6.5 * p.m.dmg * p.m.sdmg * (1 + ALBUM_BONUS * p.album.length), ttl: 0.9, rico: p.m.rico + (p.set === 2 ? 1 : 0), pierce: p.m.pierce || 0, hit: [], tox: 0, c: (p.atkN + k) % 4,
             mods: p.m.smods, home: p.m.smods && p.m.smods.home ? 1 : 0 }); }
         p.atkN++; ev(S, { k: 'throw', pid: p.id, x: p.x, y: p.y }); }
       // R «Камбэк года»: a stage of 8 giant idol cards orbits him for 5 s — a fence that hits and shoves out whoever touches it, then the cards fly out
@@ -500,13 +519,16 @@
       if (t - p.ultT > 0.95 && t - p.ultT - DT <= 0.95) addCloud(S, p, p.ux, p.uy, ULT_GAS * area, 6, 1);
     }
     if (p.hero === 'leha') {
-      const g = S.t - p.ultT < 7 ? 4 : p.tier, rate = [0.5, 0.13, 1.0, 1.5, 0.35][g];
+      const g = S.t - p.ultT < 7 ? 5 : p.gun || 0, rate = [0.5, 0.13, 1.0, 0.085, 1.4, 0.35][g] / (1 + 0.15 * ((p.att && p.att.mag) || 0));
+      if (S.t < p.nadeT && every2(p, 'nade', 1.1)) { const e2 = nearest(S, p.x, p.y, 520, []); if (e2) S.proj.push({ id: S.nid++, own: p.id, kind: 'petard', lob: 1, x: p.x, y: p.y - 50, vx: (e2.x - p.x) / 0.6, vy: (e2.y - 45 - p.y + 50) / 0.6, t0: t, ttl: 0.6, ttl0: 0.6, hit: [], r: 90 * area, dmg: 30 * p.m.dmg, mods: {}, wid: 'nade' }); }
       if (p.atkT <= 0 && tgt) { p.atkT = rate / as; p.lastAtk = t; p.atkN++; const ang = Math.atan2(p.ay, p.ax);
-        const shot = (a, sp, dmg, kind, ttl) => S.proj.push({ id: S.nid++, own: p.id, kind, x: p.x + Math.cos(a) * 46, y: p.y - 52 + Math.sin(a) * 30, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, dmg: dmg * p.m.dmg * p.m.sdmg, ttl, rico: 0, hit: [], mods: p.m.smods, pierce: p.m.pierce });
+        const shot = (a, sp, dmg, kind, ttl) => S.proj.push({ id: S.nid++, own: p.id, kind, x: p.x + Math.cos(a) * 46, y: p.y - 52 + Math.sin(a) * 30, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, dmg: dmg * 1.2 * p.m.dmg * p.m.sdmg, ttl, rico: 0, hit: [], mods: p.m.smods, pierce: p.m.pierce });
         if (g === 0) shot(ang, 1300, 13, 'bullet', 0.6);
         if (g === 1) shot(ang + (h2(S.steps, 3) - 0.5) * 0.22, 1400, 6.5, 'bullet', 0.55);
         if (g === 2) for (let k = 0; k < 6; k++) shot(ang + (k - 2.5) * 0.11 + (h2(S.steps, k) - 0.5) * 0.06, 1150, 8, 'pellet', 0.32);
-        if (g >= 3) { shot(ang, 820, g === 4 ? 52 : 42, 'rocket', 1.1); if (p.evo && g === 3) { shot(ang - 0.2, 800, 30, 'rocket', 1.1); shot(ang + 0.2, 800, 30, 'rocket', 1.1); } }
+        if (g === 3) shot(ang + (h2(S.steps, 5) - 0.5) * (p.stillT > 0.3 ? 0.06 : 0.2), 1500, 6, 'bullet', 0.6);
+        if (g >= 4) shot(ang, 820, g === 5 ? 52 : 34, 'rocket', 1.1);
+        if (p.evo) { if (g === 4 || g === 5) { shot(ang - 0.2, 800, 30, 'rocket', 1.1); shot(ang + 0.2, 800, 30, 'rocket', 1.1); } else if (p.atkN % 2 === 0) { shot(ang - 0.18, 1300, 9, 'bullet', 0.5); shot(ang + 0.18, 1300, 9, 'bullet', 0.5); } }
         ev(S, { k: 'shot', pid: p.id, x: p.x, y: p.y, ang, g }); }
     }
   }
@@ -624,6 +646,8 @@
     if (S.bus && !down && (S.bus.to === 'meleuz' || S.players.every((q) => q.bot || q.out || q.inBus))) {
       const bx = S.bus.x + DOOR[0], by = S.bus.y + DOOR[1], d = dist(bx, by, p.x, p.y) || 1; mx += (bx - p.x) / d * 7; my += (by - p.y) / d * 7; }
     let gb = null, gd = 260; for (const g of S.gems) { const d = dist(g.x, g.y, p.x, p.y); if (d < gd) { gd = d; gb = g; } }
+    if (p.hero === 'leha' && S.dealer && p.shells >= 40 && !down) { const d = dist(S.dealer.x, S.dealer.y, p.x, p.y) || 1; if (d > 90) { mx += (S.dealer.x - p.x) / d * 3; my += (S.dealer.y - p.y) / d * 3; } }
+    for (const c of S.cards) { const d = dist(c.x, c.y, p.x, p.y); if (d < 600 && !down) { mx += (c.x - p.x) / d * 1.6; my += (c.y - p.y) / d * 1.6; break; } }   // photocards: worth a detour
     if (gb && !down) { mx += (gb.x - p.x) / gd * 0.7; my += (gb.y - p.y) / gd * 0.7; }
     if (p.hp < p.hpMax * 0.6) for (const f of S.food) { const d = dist(f.x, f.y, p.x, p.y); if (d < 500) { mx += (f.x - p.x) / d * 1.5; my += (f.y - p.y) / d * 1.5; break; } }
     const wob = Math.sin(S.t * 0.9 + p.id * 2.1); mx += wob * 0.25; my += Math.cos(S.t * 0.7 + p.id) * 0.25;
@@ -660,7 +684,8 @@
   const CUTS = {
     rk_in: ['rk_in_0', 'rk_in_1', 'rk_in_2', 'rk_in_3', 'rk_in_4'], rk_p2: ['rk_p2_0', 'rk_p2_1'], rk_p3: ['rk_p3_0', 'rk_p3_1', 'rk_p3_2'], rk_end: ['rk_end_0', 'rk_end_1'],
     ln_in: ['ln_in_0', 'ln_in_1', 'ln_in_2', 'ln_in_3', 'ln_in_4'], ln_b: ['ln_b_0', 'ln_b_1', 'ln_b_2', 'ln_b_3', 'ln_b_4'], ln_f: ['ln_f_0', 'ln_f_1', 'ln_f_2'],
-    ln_p3: ['ln_p3'], ln_end: ['ln_end'], ln_solo: ['ln_b_0', 'ln_solo'] };
+    ln_p3: ['ln_p3'], ln_end: ['ln_end'], ln_solo: ['ln_b_0', 'ln_solo'],
+    ln_npc: ['ln_n_0', 'ln_n_1', 'ln_n_2', 'ln_n_3', 'ln_n_4', 'ln_n_5'], ln_nf: ['ln_nf_0', 'ln_nf_1'] };
   const startCut = (S, key, fx, fy, then) => {
     const ids = CUTS[key].filter((id) => { const who = (BL[id] || [])[0]; return !HEROES[who] || S.players.some((p) => p.hero === who && !p.out); });
     S.cut = { key, ids, i: 0, t0: S.rt, fx, fy, then: then || null }; };
@@ -675,6 +700,7 @@
     S.cut = null; const then = c.then;
     if (then === 'go') { const e = bossE(S); if (e) e.inv = 0; S.boss.go = 1; S.boss.next = S.t + 1.5; }
     if (then === 'betray') betray(S);
+    if (then === 'npc') npcKomissar(S);
     if (then === 'end') { S.bossWave = 0; S.clear = 1; S.clearT = 0; S.boss.gone = 1; ev(S, { k: 'clear', n: S.wave }); }
   }
   function startBoss(S) {
@@ -699,7 +725,7 @@
     S.enemies.push(mkEnemy(S, 'sprinter', x, y, ETYPES.sprinter.hp * hpScale(S) * 0.5, { run: [dx * sp, dy * sp], runEnd: S.t + ttl, hitP: [] })); };
   function runStep(S, e, t) {
     e.vx = e.run[0]; e.vy = e.run[1]; e.x += e.vx * DT; e.y += e.vy * DT; e.dist += Math.hypot(e.vx, e.vy) * DT; e.face = e.vx >= 0 ? 1 : -1;
-    for (const p of S.players) if (alive(p) && !e.hitP.includes(p.id) && dist(p.x, p.y, e.x, e.y) < e.r + 26) { e.hitP.push(p.id); e.biteT = t; hurtPlayer(S, p, ETYPES.sprinter.dmg * 1.4 * enemyX(S), e); }
+    for (const p of S.players) if (alive(p) && !e.hitP.includes(p.id) && dist(p.x, p.y, e.x, e.y) < e.r + 26) { e.hitP.push(p.id); e.biteT = t; hurtPlayer(S, p, ETYPES.sprinter.dmg * 1.8 * enemyX(S), e); }
     if (t > e.runEnd || e.x < WORLD.x0 || e.x > WORLD.x1 || e.y < WORLD.y0 || e.y > WORLD.y1) e.hp = 0;
   }
   const lobAt = (S, x0, y0, tx, ty, ttl, kind, r, dmg, extra) => { S.eproj.push(Object.assign({ lob: 1, kind, x: x0, y: y0, vx: (tx - x0) / ttl, vy: (ty - 40 - y0) / ttl, ttl, ttl0: ttl, r, dmg }, extra));
@@ -722,11 +748,11 @@
   const HOLE_R = [[520, 0], [-520, 0], [0, 400], [0, -400]];
   const holes = () => HOLE_R.map(([dx, dy]) => [C[0] + dx, C[1] + dy]);
   function vladStep(S, e, t, B) {
-    const hp = e.hp / e.hpMax;
-    if (B.ph === 1 && hp < 0.65) { B.ph = 2; B.atk = null; B.next = t + 2; e.r = 30;                       // the throne falls apart — into rats
+    const down = e.hp <= 1, refill = () => { e.hp = e.hpMax; B.hits = []; ev(S, { k: 'phase', ph: B.ph, x: e.x, y: e.y }); };
+    if (B.ph === 1 && down) { B.ph = 2; refill(); B.atk = null; B.next = t + 2; e.r = 30;                       // the throne falls apart — into rats
       for (let k = 0; k < 10; k++) { const a = k / 10 * TAU; S.enemies.push(mkEnemy(S, 'ghoul', e.x + Math.cos(a) * 90, e.y + Math.sin(a) * 70, ETYPES.ghoul.hp * hpScale(S))); }
       ev(S, { k: 'boom', x: e.x, y: e.y, r: 170, kind: 'dust' }); startCut(S, 'rk_p2', e.x, e.y); return; }
-    if (B.ph === 2 && hp < 0.3) { B.ph = 3; B.atk = null; B.next = t + 2.5; e.r = 64; B.hide = 0; e.inv = 0; e.vx = e.vy = 0; startCut(S, 'rk_p3', e.x, e.y); return; }
+    if (B.ph === 2 && down) { B.ph = 3; refill(); B.atk = null; B.next = t + 2.5; e.r = 64; B.hide = 0; e.inv = 0; e.vx = e.vy = 0; startCut(S, 'rk_p3', e.x, e.y); return; }
     const tg = heroNear(S, e.x, e.y); if (!tg) return;
     const d = dist(tg.x, tg.y, e.x, e.y) || 1, ux = (tg.x - e.x) / d, uy = (tg.y - e.y) / d;
     // scared: a burst of damage makes him cower for a second (and dive into a sewer when he can)
@@ -736,7 +762,7 @@
     if (B.hide) { if (t >= B.hide) { let best = null, bd = -1; for (const h of holes()) { const q = heroNear(S, h[0], h[1]), dd = q ? dist(q.x, q.y, h[0], h[1]) : 0; if (dd > bd) { bd = dd; best = h; } }
         e.x = best[0]; e.y = best[1] + 10; B.hide = 0; e.inv = 0; ev(S, { k: 'hole', x: best[0], y: best[1], out: 1 }); } return; }
     if (B.dash) { e.x += B.dash.vx * DT; e.y += B.dash.vy * DT; collide(e, 24);
-      for (const p of S.players) if (alive(p) && !B.dash.hit.includes(p.id) && dist(p.x, p.y, e.x, e.y) < 60) { B.dash.hit.push(p.id); hurtPlayer(S, p, 22 * enemyX(S), e); p.vx += B.dash.vx * 0.5; p.vy += B.dash.vy * 0.5; }
+      for (const p of S.players) if (alive(p) && !B.dash.hit.includes(p.id) && dist(p.x, p.y, e.x, e.y) < 85) { B.dash.hit.push(p.id); hurtPlayer(S, p, 34 * enemyX(S), e); p.vx += B.dash.vx * 0.5; p.vy += B.dash.vy * 0.5; }
       if (t > B.dash.until) B.dash = null; return; }
     if (t < B.scared) return;
     // movement per phase
@@ -749,7 +775,7 @@
       e.vx += ux * 520 * DT; e.vy += uy * 520 * DT; const v = Math.hypot(e.vx, e.vy), vm = 430; if (v > vm) { e.vx *= vm / v; e.vy *= vm / v; }
       const ox = e.x, oy = e.y; e.x += e.vx * DT; e.y += e.vy * DT; e.x = clamp(e.x, C[0] - 1100, C[0] + 1100); e.y = clamp(e.y, C[1] - 760, C[1] + 760); collide(e, 50);
       if (e.x !== ox + e.vx * DT) e.vx *= -0.8; if (e.y !== oy + e.vy * DT) e.vy *= -0.8; e.dist += v * DT;
-      for (const p of S.players) if (alive(p) && dist(p.x, p.y, e.x, e.y) < e.r + 30 && t > (p.ballT || 0)) { p.ballT = t + 0.8; hurtPlayer(S, p, 24 * enemyX(S), e); p.vx += e.vx * 1.2; p.vy += e.vy * 1.2; } }
+      for (const p of S.players) if (alive(p) && dist(p.x, p.y, e.x, e.y) < e.r + 30 && t > (p.ballT || 0)) { p.ballT = t + 0.8; hurtPlayer(S, p, 36 * enemyX(S), e); p.vx += e.vx * 1.2; p.vy += e.vy * 1.2; } }
     else if (sp) { const l = Math.hypot(mx, my) || 1; e.vx = mx / l * sp; e.vy = my / l * sp; e.x += e.vx * DT; e.y += e.vy * DT; e.dist += sp * DT * (mx || my ? 1 : 0); collide(e, 24);
       e.x = clamp(e.x, C[0] - 1300, C[0] + 1300); e.y = clamp(e.y, C[1] - 900, C[1] + 900); }
     if (Math.abs(e.vx) > 4) e.face = e.vx > 0 ? 1 : -1;
@@ -761,10 +787,10 @@
         ev(S, { k: 'lanes', x: A.cx, y: A.cy, ax: A.ax, ay: A.ay, gaps: A.gaps, until: t + 1.1 }); if (h1(S.steps + 1) < 0.5) bark(S, 'rk_wave', e.x, e.y); }
       if (A.k === 'cheese') { const up = S.players.filter(alive), n = B.ph === 3 ? 6 : 4;
         for (let k = 0; k < n; k++) { const p = up[k % up.length], ox = (h1(S.steps + k) - 0.5) * 240, oy = (h1(S.steps + k + 9) - 0.5) * 180;
-          lobAt(S, ...vladHand(e, B), p.x + p.vx * 0.6 + ox, p.y + p.vy * 0.6 + oy, 1.0 + k * 0.15, 'cheese', 78, 14 * enemyX(S), { slow: 1 }); } }
+          lobAt(S, ...vladHand(e, B), p.x + p.vx * 0.6 + ox, p.y + p.vy * 0.6 + oy, 1.0 + k * 0.15, 'cheese', 110, 16 * enemyX(S), { slow: 1 }); } }
       if (A.k === 'summon') { for (let k = 0; k < 5; k++) { const a = k / 5 * TAU; const x = e.x + Math.cos(a) * 130, y = e.y + Math.sin(a) * 100; if (!blocked(x, y, 20)) S.enemies.push(mkEnemy(S, 'ghoul', x, y, ETYPES.ghoul.hp * hpScale(S))); }
         ev(S, { k: 'summon', x: e.x, y: e.y }); }
-      if (A.k === 'dash') { const L = Math.min(800, d + 250); A.tx = e.x + ux * L; A.ty = e.y + uy * L; ev(S, { k: 'bline', x: e.x, y: e.y, x2: A.tx, y2: A.ty, w: 70, until: t + 0.7 }); }
+      if (A.k === 'dash') { const L = Math.min(800, d + 250); A.tx = e.x + ux * L; A.ty = e.y + uy * L; ev(S, { k: 'bline', x: e.x, y: e.y, x2: A.tx, y2: A.ty, w: 170, until: t + 0.7 }); }
       if (A.k === 'traps') { if (!B.said.trap) { B.said.trap = 1; bark(S, 'rk_trap', e.x, e.y); }
         S.players.filter(alive).forEach((p, k) => { for (let j = 0; j < 2; j++) { const a = Math.atan2(p.fy, p.fx) + (j - 0.5) * 1.1 + (h1(S.steps + k * 3 + j) - 0.5) * 0.6, r = 140 + 90 * h1(S.steps + k + j * 5);
           const x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r * 0.75; if (!blocked(x, y, 20)) S.traps.push({ id: S.nid++, x, y, t0: t, arm: t + 0.5, snap: 0 }); } });
@@ -782,7 +808,7 @@
 
   // ---- Владимир Ильич ----
   // a shock ring's safe gaps: a fixed walkable width (ground px) whatever the ring's size — narrow, but a hero fits
-  const RING_GAP = 58, inGap = (R, a, r) => { const h = Math.min(0.7, RING_GAP / Math.max(1, r)); return R.gaps.some((g) => Math.abs(Math.atan2(Math.sin(a - g), Math.cos(a - g))) < h); };
+  const RING_GAP = 72, inGap = (R, a, r) => { const h = Math.min(0.7, RING_GAP / Math.max(1, r)); return R.gaps.some((g) => Math.abs(Math.atan2(Math.sin(a - g), Math.cos(a - g))) < h); };
   const LAS_W = 30, LAS_GROUND = 280;                    // the beams leave his eyes and hit the paving LAS_GROUND px out from the pedestal
   // where things leave the boss sprites (measured on the art): Ilyich's fist lands in front of the pedestal; Vlad throws from the plunger tip
   const FIST = (e) => [e.x - 27, e.y + 15];
@@ -791,9 +817,9 @@
       for (const p of S.players) { if (!alive(p)) continue; const dx = p.x - e.x, dy = (p.y - e.y) / 0.75, along = dx * ca + dy * sa, perp = Math.abs(-dx * sa + dy * ca);
         if (along > LAS_GROUND && along < 1700 && perp < LAS_W + 16) hurtPlayer(S, p, 12 * enemyX(S), e); } } };
   function leninStep(S, e, t, B) {
-    const hp = e.hp / e.hpMax; e.vx = e.vy = 0; e.x = LV.LENIN[0]; e.y = LV.LENIN[1];
-    if (B.ph === 1 && hp < 0.7) { B.ph = 2; B.atk = null; B.lasers = []; B.next = t + 3; leninSides(S, e); return; }
-    if (B.ph === 2 && hp < 0.35) { B.ph = 3; B.atk = null; B.lasers = []; B.next = t + 3; B.world = t + 2; B.rev = t + 11; startCut(S, 'ln_p3', e.x, e.y); return; }
+    const down = e.hp <= 1, refill = () => { e.hp = e.hpMax; B.hits = []; ev(S, { k: 'phase', ph: B.ph, x: e.x, y: e.y }); }; e.vx = e.vy = 0; e.x = LV.LENIN[0]; e.y = LV.LENIN[1];
+    if (B.ph === 1 && down) { B.ph = 2; refill(); B.atk = null; B.lasers = []; B.next = t + 3; leninSides(S, e); return; }
+    if (B.ph === 2 && down) { B.ph = 3; refill(); B.atk = null; B.lasers = []; B.next = t + 3; B.world = t + 2; B.rev = t + 11; startCut(S, 'ln_p3', e.x, e.y); return; }
     // lasers turn; «Революционный поворот» / «Мировая революция»: they stop, show the new way, and turn back
     for (const L of B.lasers) if (t >= L.on && !(L.hold > t)) L.a += L.spin * DT;
     if (B.world && t >= B.world && !B.lasers.some((L) => L.world)) { const a0 = h1(S.steps) * TAU; B.lasers.push({ a: a0, on: t + 1.2, spin: 0.38, world: 1 }, { a: a0 + Math.PI, on: t + 1.2, spin: 0.38, world: 1 }); bark(S, 'ln_laser', e.x, e.y); }
@@ -845,6 +871,7 @@
 
   // ---- Лёха — «Красный комиссар» ----
   function leninSides(S, e) {
+    if (!S.players.some((p) => p.hero === 'leha')) { startCut(S, 'ln_npc', LV.LENIN[0], LV.LENIN[1], 'npc'); return; }     // no Лёха in the party: the party has its own
     const L = S.players.find((p) => p.hero === 'leha' && alive(p)); if (!L) return;
     const humans = S.players.filter((p) => !p.bot && !p.out);
     if (!L.bot && humans.length === 1) { startCut(S, 'ln_solo', L.x, L.y); L.crisisT = S.t + 10; return; }      // alone at the keyboard: he stays himself, with a doubt
@@ -857,15 +884,22 @@
     L.nat = 1; L.vx = L.vy = 0; S.boss.km = { eid: e.id, pid: L.id, mode: 0, until: S.t + (few ? 25 : 45), atk: null, next: S.t + 1.5, aim: 0 };
     ev(S, { k: 'betray', pid: L.id, x: L.x, y: L.y });
   }
+  // the party's own Лёха: a commissar who walks out from behind the monument; beaten, he gives up and leaves
+  function npcKomissar(S) {
+    const few = S.players.filter((p) => !p.bot && !p.out).length <= 2, x = LV.LENIN[0] + 140, y = LV.LENIN[1] + 160;
+    const e = mkEnemy(S, 'komissar', x, y, ETYPES.komissar.hp * hpScale(S) * (few ? 0.55 : 1), {}); S.enemies.push(e);
+    S.boss.km = { eid: e.id, pid: -1, npc: 1, mode: 0, until: 9e9, atk: null, next: S.t + 1.5, aim: 0 }; ev(S, { k: 'betray', pid: -1, x, y });
+  }
   function freeLeha(S, e, beaten) {
     const B = S.boss, K = B && B.km; if (!K) return; const L = S.players.find((p) => p.id === K.pid); e.hp = 0; B.km = null;
+    if (K.npc) { ev(S, { k: 'boom', x: e.x, y: e.y, r: 120, kind: 'dust' }); startCut(S, 'ln_nf', e.x, e.y); return; }
     if (!L) return; L.nat = 0; L.x = e.x; L.y = e.y; L.hp = L.hpMax * 0.5; L.inv = S.t + 2; if (!beaten) L.rootT = S.t + 2;
     ev(S, { k: 'freed', pid: L.id, x: L.x, y: L.y }); if (beaten) startCut(S, 'ln_f', L.x, L.y); else bark(S, 'ln_f_0', LV.LENIN[0], LV.LENIN[1]);
   }
   function komStep(S, e, t) {
     const B = S.boss, K = B && B.km; if (!K || K.eid !== e.id) { e.hp = 0; return; }
     if (t >= K.until) return freeLeha(S, e, 0); K.hpf = e.hp / e.hpMax;
-    const L = S.players.find((p) => p.id === K.pid); if (L && L.bot && t > (K.botMode || 0)) { K.botMode = t + 10; K.mode = (K.mode + 1) % 3; }
+    const L = S.players.find((p) => p.id === K.pid); if ((K.npc || (L && L.bot)) && t > (K.botMode || 0)) { K.botMode = t + 10; K.mode = (K.mode + 1) % 3; }
     const tg = heroNear(S, e.x, e.y); if (!tg) return; const d = dist(tg.x, tg.y, e.x, e.y) || 1, ux = (tg.x - e.x) / d, uy = (tg.y - e.y) / d;
     const A = K.atk, still = A && A.k === 'speech';
     if (!still) { let mx = 0, my = 0;
@@ -887,6 +921,43 @@
         lobAt(S, e.x, e.y - 60, p.x + (h1(S.steps) - 0.5) * 160, p.y + (h1(S.steps + 4) - 0.5) * 120, 1.0, 'nade', 90, 16 * enemyX(S)); N.i++; }
       if (t - N.t0 > 1.6) { K.atk = null; K.next = t + 1.6; } }
     else if (N.k === 'speech' && t - N.t0 > 2.5) { K.atk = null; K.next = t + 1.2; }
+  }
+
+
+  // ---------------- «Чёрный рынок» (LEHA_MARKET.md): Лёха earns shell casings and buys guns, attachments and supplies from a dealer ----------------
+  // a gun bought replaces the one in his hands; attachments sit on Лёха, so they carry over to every gun
+  const MARKET = [
+    { id: 'g1', gun: 1, n: 'ПП «Кедр»', d: 'Очередь: быстро, пули слабые', cost: 60, icon: 'gun_smg' },
+    { id: 'g2', gun: 2, n: 'Дробовик «Сайга»', d: 'Веер дроби в упор', cost: 220, icon: 'gun_shotgun' },
+    { id: 'g3', gun: 3, n: 'Пулемёт «Печенег»', d: 'Длинная очередь, стоя точнее', cost: 400, icon: 'gun_mg' },
+    { id: 'g4', gun: 4, n: 'РПГ', d: 'Медленно, взрыв по площади', cost: 700, icon: 'gun_rpg' },
+    { id: 'mag', att: 1, n: 'Расширенный магазин', d: '+15% скорострельности', cost: [40, 80, 120], icon: 'mk_mag' },
+    { id: 'ap', att: 1, n: 'Бронебойные', d: 'Пули пробивают +1 врага', cost: [50, 100, 150], icon: 'mk_ap' },
+    { id: 'sight', att: 1, n: 'Коллиматор', d: '+8% шанс крита', cost: [40, 80, 120], icon: 'mk_sight' },
+    { id: 'vest', att: 1, n: 'Трофейная разгрузка', d: '-10% входящего урона', cost: [50, 100, 150], icon: 'mk_vest' },
+    { id: 'med', n: 'Аптечка', d: 'Лечит 50% HP', cost: 30, icon: 'mk_med' },
+    { id: 'nades', n: 'Ящик гранат', d: '20 с кидает гранаты', cost: 45, icon: 'mk_nades' }];
+  const SALE = 0.6, DEALER_SPOTS = [[-760, -420], [760, -420], [-760, 460], [760, 460], [0, -620], [0, 640]];
+  const priceOf = (p, it, S) => { const base = it.att ? it.cost[(p.att[it.id] || 0)] : it.cost; if (base === undefined) return null;
+    return Math.round(base * (S.dealer && S.dealer.sale === it.id ? SALE : 1)); };
+  // can Лёха buy it right now: null = yes, else why not
+  const whyNot = (S, p, it) => { if (it.gun && p.gun === it.gun) return 'В РУКАХ'; if (it.att && (p.att[it.id] || 0) >= 3) return 'МАКС'; if (it.id === 'med' && p.hp >= p.hpMax) return 'HP ПОЛНОЕ';
+    const c = priceOf(p, it, S); return c > p.shells ? 'МАЛО ГИЛЬЗ' : null; };
+  function buy(S, p, i) {
+    const it = MARKET[i]; if (!it || whyNot(S, p, it)) return; const c = priceOf(p, it, S); p.shells -= c;
+    if (it.gun) { p.gun = p.tier = it.gun; ev(S, { k: 'gunup', pid: p.id, g: it.gun, x: p.x, y: p.y }); }
+    else if (it.att) { p.att[it.id] = (p.att[it.id] || 0) + 1; recalc(p); }
+    else if (it.id === 'med') p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.5);
+    else if (it.id === 'nades') p.nadeT = S.t + 20;
+    ev(S, { k: 'buy', pid: p.id, id: it.id, x: p.x, y: p.y, cost: c });
+  }
+  // the dealer parks in a corner of the square at every break and stays a few seconds into the next wave
+  function dealerStep(S, t) {
+    const L = S.players.find((p) => p.hero === 'leha' && !p.out); if (!L) { S.dealer = null; return; }
+    if (S.brk > 0 && !S.dealer && !S.bus) { const free = DEALER_SPOTS.map(([dx, dy]) => [C[0] + dx, C[1] + dy]).filter(([x, y]) => !blocked(x, y, 90));
+      const [x, y] = free[Math.floor(h1(S.wave * 7 + 3) * free.length)] || [C[0], C[1] + 300];
+      S.dealer = { x, y, t0: t, until: t + S.brk + 6, sale: MARKET[Math.floor(h1(S.wave * 13) * MARKET.length)].id }; ev(S, { k: 'dealer', x, y }); }
+    if (S.dealer && t > S.dealer.until) { S.dealer = null; for (const p of S.players) p.shop = 0; }
   }
 
   // ---------------- step ----------------
@@ -954,6 +1025,7 @@
       if (!blocked(x, y, 40)) { const L2 = ELITES[S.map], ty = L2[Math.floor(h1(S.steps + 9) * L2.length)], hp = ETYPES[ty].hp * 6 * hpScale(S) * (S.spor === 'chonk' ? 2 : 1);
         S.enemies.push(mkEnemy(S, ty, x, y, hp, { elite: 1, r: ETYPES[ty].r * 1.2, shotT: 9e9 }));
         ev(S, { k: 'elite', x, y, type: ty }); } }
+    dealerStep(S, t);
     // ---- players ----
     for (const p of S.players) {
       const inp = p.bot ? botInput(S, p) : (inps[p.id] || {});
@@ -972,6 +1044,10 @@
         if (p.downT <= 0) { p.out = 1; ev(S, { k: 'out', pid: p.id, x: p.x, y: p.y }); }
         continue; }
       // «Ночной ларёк»: an energy drink for the whole team — enemies tougher, XP and score up, for the rest of the run
+      if (p.hero === 'leha') { const dd = S.dealer ? dist(p.x, p.y, S.dealer.x, S.dealer.y) : 1e9;
+        if (eE && dd < 140) p.shop = p.shop ? 0 : 1; if (dd > 200) p.shop = 0;
+        if (p.shop && !p.pick && inp.slot >= 1 && inp.slot <= MARKET.length) buy(S, p, inp.slot - 1);
+        if (p.bot && dd < 140 && t > (p.botBuyT || 0)) { p.botBuyT = t + 0.6; const want = [MARKET.findIndex((it) => it.gun === (p.gun || 0) + 1), 4, 5, 7, 6]; for (const i of want) if (i >= 0 && !whyNot(S, p, MARKET[i])) { buy(S, p, i); break; } } }
       if (eE && LV.KIOSK && !S.bus && S.wave >= S.kioskNext && dist(p.x, p.y, LV.KIOSK[0], LV.KIOSK[1] + 50) < 120) {
         S.drinks++; S.kioskNext = S.wave + 3; ev(S, { k: 'drink', pid: p.id, x: p.x, y: p.y, n: S.drinks }); }
       if (p.m.leech) { const cap = 4 * lv(p, 'kumys'); p.lsB = Math.min(cap, p.lsB + cap * DT); }
@@ -986,7 +1062,7 @@
       p.qCD = Math.max(0, p.qCD - DT);
       const mx = p.vx, my = p.vy;
       p.x += mx * DT; p.y += my * DT; collide(p, 24);
-      for (const tr of S.traps) if (!tr.snap && t > tr.arm && dist(p.x, p.y, tr.x, tr.y) < 36) { tr.snap = t; p.rootT = t + 1.2; hurtPlayer(S, p, 8 * enemyX(S), null); ev(S, { k: 'snap', x: tr.x, y: tr.y, pid: p.id }); }
+      for (const tr of S.traps) if (!tr.snap && t > tr.arm && dist(p.x, p.y, tr.x, tr.y) < 50) { tr.snap = t; p.rootT = t + 1.0; hurtPlayer(S, p, 10 * enemyX(S), null); ev(S, { k: 'snap', x: tr.x, y: tr.y, pid: p.id }); }
       if (S.bus && dist(p.x, p.y, S.bus.x + DOOR[0], S.bus.y + DOOR[1]) < 95) { p.inBus = 1; p.vx = p.vy = 0; ev(S, { k: 'board', pid: p.id, x: p.x, y: p.y }); continue; }
       const moved = Math.hypot(mx, my) * DT; if (moved > 0.05) { const b = Math.floor(p.dist / 62); p.dist += moved; if (Math.floor(p.dist / 62) !== b) ev(S, { k: 'step', pid: p.id, x: p.x, y: p.y }); }
       if (qE && p.qCD <= 0) useQ(S, p, t);
@@ -1056,7 +1132,7 @@
       }
       // gas damage
       const g = inGas(S, e.x, e.y); if (g && Math.floor((t - g.t0) / 0.5) !== Math.floor((t - DT - g.t0) / 0.5)) { const v = S.players.find((q) => q.id === g.owner);
-        hurtEnemy(S, e, (g.big ? 26 : 7) * (g.cyc ? 1.5 : 1) * (v ? v.m.dmg * v.m.sdmg * (v.zone || 1) : 1), v, 'gas'); e.poisT = t + 1.5; if (v && lv(v, 'sig') >= 3) e.slowT = Math.max(e.slowT, t + 0.6);
+        hurtEnemy(S, e, (g.big ? 48 : 15) * (g.cyc ? 1.5 : 1) * (v ? v.m.dmg * v.m.sdmg * (v.zone || 1) : 1), v, 'gas'); e.poisT = t + 1.5; if (v && lv(v, 'sig') >= 3) e.slowT = Math.max(e.slowT, t + 0.6);
         if (v && v.m.smods && v.m.smods.frost) { e.slowT = Math.max(e.slowT, t + 1); if (e.hp > 0 && h2(e.id, S.steps) < 0.2) { e.freezeT = t + 1; ev(S, { k: 'freeze', x: e.x, y: e.y }); } } }
       if (t < (e.burnT || 0) && e.hp > 0 && Math.floor(t * 2) !== Math.floor((t - DT) * 2)) hurtEnemy(S, e, e.burnD * 0.5, S.players.find((q) => q.id === e.burnBy), 'burn');
     }
@@ -1087,8 +1163,6 @@
         if (b.mods && e.hp > 0) applyMods(S, e, p, b.mods, b.dmg);
         if (b.kind === 'sugar' && b.mods && b.mods.boom) explode(S, e.x, e.y, b.mods.boom * p.m.area, b.dmg * 0.6, p, 'caramel', { burn: b.mods.burn });
         if (b.kind === 'scoop') { if (b.mods && b.mods.boom) explode(S, e.x, e.y, b.mods.boom * p.m.area, b.dmg * 0.8, p, 'fried', Object.assign({}, b.mods, { boom: 0 })); b.ttl = 0; continue; }
-        if (b.kind === 'card') { p.hitN++; if (p.hitN % 15 === 0 && p.tokens.length < 3) { p.tokens.push(Math.floor(h2(S.steps, p.hitN) * 3)); ev(S, { k: 'token', pid: p.id });
-            if (p.tokens.length === 3) { const tk = p.tokens; p.set = tk[0] === tk[1] && tk[1] === tk[2] ? 0 : new Set(tk).size === 3 ? 1 : 2; if (p.set === 1) p.m.crit += 0.1; ev(S, { k: 'set', pid: p.id, set: p.set }); } } }
         if (b.rico > 0) { const n2 = nearest(S, e.x, e.y, 300, b.hit); if (n2) { const d = dist(n2.x, n2.y, e.x, e.y) || 1; b.vx = (n2.x - e.x) / d * 900; b.vy = (n2.y - e.y) / d * 900; b.x = e.x; b.y = e.y - 45; b.rico--; b.dmg *= b.ramp || 0.65; b.ttl = 0.5; continue; } }
         if (b.kind === 'tapok') continue;
         if (b.pierce && b.hit.length <= b.pierce) continue;
@@ -1122,6 +1196,14 @@
       S.kettleBy = p.id; for (const q of S.players) if (!q.out) { q.kq = (q.kq || 0) + 1; if (!q.pick) openNext(S, q); }
       ev(S, { k: 'chest', pid: p.id, x: c.x, y: c.y }); say(S, p, 'lvl'); }
     S.chests = S.chests.filter((c) => !c.got);
+    for (const c of S.cards) for (const p of S.players) if (alive(p) && !c.got && dist(p.x, p.y, c.x, c.y) < 60) { const dn = S.players.find((q) => q.hero === 'danil'); c.got = 1; if (!dn) break;
+      dn.album.push(c.card); ev(S, { k: 'photocard', pid: dn.id, by: p.id, card: c.card, n: dn.album.length, full: dn.album.length >= PHOTOCARDS.length ? 1 : 0, x: c.x, y: c.y });
+      const scene = [[dn.id, 'dc_' + c.card + '_0'], [PHOTOCARDS.find((q) => q.id === c.card).r, 'dc_' + c.card + '_1']];
+      if (dn.album.length >= PHOTOCARDS.length) scene.push([dn.id, 'dc_full_0'], ['vitya', 'dc_full_1']);
+      let at = S.t; for (const [who, id] of scene) { const sp = typeof who === 'number' ? S.players.find((q) => q.id === who) : S.players.find((q) => q.hero === who && !q.out);
+        if (!sp) continue; S.barkQ.push({ t: at, id, pid: sp.id }); at += voiceLen(id) + 0.35; } }
+    S.cards = S.cards.filter((c) => !c.got);
+    while (S.barkQ.length && t >= S.barkQ[0].t) { const b = S.barkQ.shift(), sp = S.players.find((q) => q.id === b.pid); if (sp) { bark(S, b.id, sp.x, sp.y); S.sayT = t; } }
     for (const f of S.food) for (const p of S.players) if (alive(p) && !f.got && p.hp < p.hpMax && dist(p.x, p.y, f.x, f.y) < 55) { f.got = 1; p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.25); ev(S, { k: 'food', pid: p.id, x: f.x, y: f.y }); }
     S.food = S.food.filter((f) => !f.got && t - f.t0 < 40);
     if (S.gems.length > 260) S.gems.splice(0, S.gems.length - 260);
@@ -1134,10 +1216,10 @@
     if (S.ev.length > 96) S.ev.splice(0, S.ev.length - 96);
     return S;
   }
-  const xpNeed = (S, l) => Math.round(1.5 * (4 + 3.5 * l + 0.22 * l * l) * (0.1 + 0.35 * S.players.length));   // solo ~lvl 18, four players ~lvl 24 by the end
+  const xpNeed = (S, l) => Math.round((6 + 6 * l + 1.5 * l * l) * (0.1 + 0.35 * S.players.length));   // solo ~lvl 18, four players ~lvl 24 by the end
   const openNext = (S, p) => { p.pickT = S.rt;
     if (p.kq > 0) { p.kq--; p.pick = kettleCards(S, p); } else if (p.queue > 0) { p.queue--; p.pick = rollPick(S, p); } else p.pick = null; };
-  const hpScale = (S) => { const w1 = S.wave - 1; return (1 + 0.18 * w1 + 0.025 * w1 * w1) * COOP_HP[Math.min(8, S.players.length)] * enemyX(S) * (S.map === 'meleuz' ? 1.3 : 1); };
+  const hpScale = (S) => { const w1 = S.wave - 1; return (1 + 0.12 * w1 + 0.012 * w1 * w1) * COOP_HP[Math.min(8, S.players.length)] * enemyX(S) * (S.map === 'meleuz' ? 1.3 : 1); };
   // «Дела» → S.unlock (the page keeps them between runs)
   const QDONE = { icecream: (S) => S.wave >= 5, pigeon: (S) => S.found.length >= 3, meleuz: (S) => S.map === 'meleuz', condensed: (S) => S.endless, kumys: (S) => S.sporWon };
   const checkUnlocks = (S) => { for (const q of QUESTS) if (!S.unlock[q.id] && QDONE[q.id](S)) { S.unlock[q.id] = 1; ev(S, { k: 'unlock', id: q.id }); } };
@@ -1147,7 +1229,7 @@
   // the PAZik drives off: a fresh level, everyone at its square, a breather before wave 11
   function travel(S, to) {
     useMap(to); S.map = to; S.bus = null; S.swarmT = 0; S.boss = null; S.traps = []; S.bossWave = 0;
-    for (const k of ['enemies', 'proj', 'eproj', 'clouds', 'zones', 'gems', 'chests', 'food', 'marks']) S[k] = [];
+    for (const k of ['enemies', 'proj', 'eproj', 'clouds', 'zones', 'gems', 'chests', 'food', 'marks', 'cards']) S[k] = [];
     S.players.forEach((p, i) => { if (p.out) return; const a = i / 4 * Math.PI * 2 + 0.6; p.inBus = 0; p.x = C[0] + Math.cos(a) * 110; p.y = C[1] + Math.sin(a) * 90; p.vx = p.vy = 0;
       p.cam = [p.x - VIEW.W / 2, p.y - 60 - VIEW.H / 2]; p.camV = [0, 0]; p.trX = undefined; p.lash = null; });
     S.brk = BREAK; S.kioskNext = S.wave + 2; S.score += Math.round(5000 * scoreX(S)); if (S.spor) S.sporWon = 1;
@@ -1158,7 +1240,7 @@
     if (id === 'heal') p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.4);
     else if (id === 'fission') {                                      // +1 level to up to three random items below their cap
       const up = [...(lv(p, 'sig') < MAXL ? ['sig'] : []), ...(p.sigEvo && lv(p, p.sigEvo) < MAXL ? [p.sigEvo] : []), ...sharedW(p).filter((w) => lv(p, w) < MAXL), ...ownedP(p).filter((q) => lv(p, q) < pmax(q))];
-      const got = []; for (let k = 0; k < 3 && up.length; k++) { const w = up.splice(Math.floor(h2(S.steps + k * 5, p.id) * up.length), 1)[0]; p.items[w]++; got.push(w); }
+      const got = []; for (let k = 0; k < 2 && up.length; k++) { const w = up.splice(Math.floor(h2(S.steps + k * 5, p.id) * up.length), 1)[0]; p.items[w]++; got.push(w); }
       if (!got.length) { const gl = Object.keys(GIFTS); for (let k = 0; k < 3; k++) { const g = gl[Math.floor(h2(S.steps + k * 7, p.id + 5) * gl.length)]; p.gifts[g] = gift(p, g) + 1; got.push(g); } }   // all maxed: three gifts
       ev(S, { k: 'fission', pid: p.id, x: p.x, y: p.y, ids: got }); }
     else if (id.startsWith('fuse:')) { p.fused.push([c.a, c.b]); ev(S, { k: 'fusion', pid: p.id, x: p.x, y: p.y, a: c.a, b: c.b }); }
@@ -1171,7 +1253,6 @@
     else if (GIFTS[id]) { p.gifts[id] = gift(p, id) + 1; if (id === 'g_hp') p.hp += GIFTS.g_hp.k; }
     else { p.items[id] = lv(p, id) + 1; if (id === 'hp') p.hp += 20; }
     recalc(p); if (!id.startsWith('r:')) ev(S, { k: 'upgrade', pid: p.id, id, x: p.x, y: p.y, evo: 0 });
-    if (p.hero === 'leha' && p.tier !== tier0) ev(S, { k: 'gunup', pid: p.id, g: p.tier, x: p.x, y: p.y });             // the arsenal grows: shown over his head
     openNext(S, p);
   }
   // a level-up: +1 level to something owned, or something new while a slot is free (locked weapons stay out until the meta opens them)
@@ -1220,7 +1301,7 @@
     for (const [x, y] of LAMPS) if (onPave(x, y) && dist(x, y, C[0], C[1]) < 200) f.push('lamp in plaza centre'); };
 
   root.SIM = { DT, L, VIEW, WORLD, HINT, C, PLAZA, PATHS, SUBS, PROPS, SOLIDS, POND, LAMPS, WALLS, LV, HEROES, ORDER, ETYPES, UPG, QCD, LEHA_GUNS, WAVE_LEN, BREAK, WAVES,
-    MAPS, MAPN, SPORS, QUESTS, DOOR, useMap, scoreX, CUTS, lineDur, startBoss, HOLE_R, hotCell, LAS_W, LAS_GROUND, RING_GAP,
+    MAPS, MAPN, SPORS, QUESTS, DOOR, useMap, scoreX, PHOTOCARDS, MARKET, priceOf, whyNot, CUTS, lineDur, startBoss, HOLE_R, hotCell, LAS_W, LAS_GROUND, RING_GAP,
     onPave, inGas, collide, cardFor, kettleCards, recalc, lv, create, spawn, respawn, outOfPlay, step, at, scriptInput, demoCheck, selfCheck, botInput };
   if (typeof module !== 'undefined') module.exports = root.SIM;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -111,7 +111,7 @@
   const preloadFarts = () => { if (fartsReady || !ctx) return; fartsReady = true; [...FARTS, ...BIG].forEach(load); };
   const fartSample = (t, d, r, big) => { preloadFarts(); const list = big ? BIG : FARTS, url = list[Math.floor(r * list.length) % list.length], b = buffers[url]; if (!b) return false;
     const s = ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = 0.82 + 0.4 * ((r * 7.31) % 1); s.connect(d); s.start(t); return true; };
-  const lastKind = {}, GAP = { bass: 0.3, whip: 0.2, throw: 0.16, shot0: 0.14, shot1: 0.11, shot2: 0.3, shot3: 0.3, kill: 0.14, hit: 0.25, gem: 0.07, boom: 0.18, spit: 0.5, fart: 0.25, dash: 0.2, block: 0.3, revive: 0.5, down: 0.5 };
+  const lastKind = {}, GAP = { bass: 0.3, whip: 0.2, throw: 0.16, shot0: 0.14, shot1: 0.11, shot2: 0.3, shot3: 0.08, shot4: 0.3, shot5: 0.3, kill: 0.14, hit: 0.25, gem: 0.07, boom: 0.18, spit: 0.5, fart: 0.25, dash: 0.2, block: 0.3, revive: 0.5, down: 0.5 };
   const h = (x) => { const v = Math.sin(x * 127.1) * 43758.5453; return v - Math.floor(v); };
 
   // ---------------- per-frame: consume new events ----------------
@@ -142,6 +142,7 @@
       if (e.k === 'drink' || (e.k === 'board' && e.pid === me.id)) { FX.chest(now, out(0, 0.7)); continue; }
       if (e.k === 'howl') { FX.elite(now, out(pan, 0.5)); continue; }
       if (e.k === 'chest' && e.pid === me.id) { FX.chest(now, out(0, 0.8)); continue; }
+      if ((e.k === 'buy' || e.k === 'dealer') && (e.k === 'dealer' || e.pid === me.id)) { FX.chest(now, out(0, 0.7)); continue; }
       if (e.k === 'food' && e.pid === me.id) { FX.food(now, out(0, 0.7)); continue; }
       // a crowd fight is a texture, not 200 sounds: my own actions at full volume, allies' quieter, each kind rate-limited
       const mine = e.pid === me.id, kind = e.k === 'shot' ? 'shot' + e.g : e.k;
@@ -153,7 +154,7 @@
       const d = out(pan, near * (mine ? 1 : 0.45));
       if (e.k === 'whip') { FX.whip(now, d, r); if (e.pull) FX.pull(now + 0.05, d); }
       else if (e.k === 'throw') FX.throw(now, d, r);
-      else if (e.k === 'shot') (e.g === 0 ? FX.pistol : e.g === 1 ? FX.smg : e.g === 2 ? FX.shotgun : FX.rocket)(now, d, r);
+      else if (e.k === 'shot') (e.g === 0 ? FX.pistol : e.g === 1 || e.g === 3 ? FX.smg : e.g === 2 ? FX.shotgun : FX.rocket)(now, d, r);
       else if (e.k === 'boom') FX.boom(now, d, r, e.gas ? 1 : 0);
       else if (e.k === 'hit' && r < 0.35) FX.hit(now, d, r);
       else if (e.k === 'kill' && r < 0.6) FX.kill(now, d, r);

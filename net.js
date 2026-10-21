@@ -21,7 +21,7 @@
   const ET = Object.keys(SIM.ETYPES), r1 = (v) => Math.round(v), r2 = (v) => Math.round(v * 100) / 100;
   const HN = ['hasan', 'danil', 'vitya', 'leha'];
   const PF = ['id', 'hero', 'bot', 'x', 'y', 'vx', 'vy', 'fx', 'fy', 'ax', 'ay', 'dir', 'dist', 'hp', 'hpMax', 'down', 'downT', 'revP', 'out', 'inv', 'hurtT',
-    'qa', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo', 'nick', 'petN', 'sigEvo', 'rerolls', 'inBus', 'nat', 'rootT', 'slowT', 'crisisT'];
+    'qa', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo', 'nick', 'petN', 'sigEvo', 'rerolls', 'inBus', 'nat', 'rootT', 'slowT', 'crisisT', 'shells', 'gun', 'shop', 'nadeT'];
   // enemies go as two kinds of rows: FAST (every snapshot: id, x, y, vx, vy, hp, dist, hitT, face) and SLOW (type, hpMax and the effect timers —
   // sent only when they change for this friend, or every SLOW_EVERY snapshots as a resync). A crowd costs ~7 numbers per enemy, not 20.
   const EF = 9, SLOW_EVERY = 40, SF = 11;
@@ -35,7 +35,7 @@
     // players as flat number rows (only what drawing, HUD, audio and prediction read); own row also carries cam + upgrade pick
     const players = S.players.map((o) => { const row = PF.map((k) => { const v = o[k]; return typeof v === 'number' ? (Number.isInteger(v) ? v : r2(v)) : v; });
       row[PF.indexOf('hero')] = HN.indexOf(o.hero); row[PF.indexOf('ack')] = ackOf[o.id] || 0;
-      return [row, [r2(o.m.area), r2(o.m.cd), r2(o.m.shield), r2(o.m.spd)], o.tokens, o.id === pid ? o.pick : 0, o.id === pid ? o.cam.map(r1) : 0, o.id === pid ? o.items : 0, o.id === pid ? o.fused : 0, o.id === pid ? o.gifts : 0]; });
+      return [row, [r2(o.m.area), r2(o.m.cd), r2(o.m.shield), r2(o.m.spd)], o.album, o.id === pid ? o.pick : 0, o.id === pid ? o.cam.map(r1) : 0, o.id === pid ? o.items : 0, o.id === pid ? o.fused : 0, o.id === pid ? o.gifts : 0, o.id === pid ? o.att : 0]; });
     let cache = slowSent[pid]; if (!cache || cache.S !== S) cache = slowSent[pid] = { S, m: new Map(), n: 0 };
     const full = cache.n++ % SLOW_EVERY === 0, E = [], ES2 = [];
     for (const e of S.enemies) { if (!nearP(e.x, e.y)) continue; E.push(e.id, r1(e.x), r1(e.y), r1(e.vx), r1(e.vy), r1(e.hp), r1(e.dist % 10000), r2(e.hitT), e.face);
@@ -50,7 +50,7 @@
     return { t: S.t, wave: S.wave, waveT: r2(S.waveT), brk: r2(S.brk), xp: S.xp, lvl: S.lvl, xpNext: S.xpNext, kills: S.kills, over: S.over, won: S.won,
       awards: S.awards, comboT: S.comboT, solo: S.solo, kettleBy: S.kettleBy, players, E, ES: ES2, G, B, EB, clouds: S.clouds, zones: S.zones, marks: S.marks, ev, dots: enemyDots,
       pause: S.pause, pend: S.pend, clear: S.clear, clearT: r2(S.clearT), left: S.enemies.length,
-      boss: S.boss && Object.assign({}, S.boss, { hits: 0, said: 0 }), cut: S.cut, traps: S.traps, bossWave: S.bossWave,
+      cards: S.cards, dealer: S.dealer, boss: S.boss && Object.assign({}, S.boss, { hits: 0, said: 0 }), cut: S.cut, traps: S.traps, bossWave: S.bossWave,
       map: S.map, bus: S.bus, endless: S.endless, home: S.home, score: S.score, drinks: S.drinks, kioskNext: S.kioskNext, spor: S.spor, daily: S.daily,
       chests: S.chests.map((c) => ({ id: c.id, x: r1(c.x), y: r1(c.y) })), food: S.food.filter((f) => nearP(f.x, f.y)).map((f) => ({ id: f.id, x: r1(f.x), y: r1(f.y) })) };
   }
@@ -65,8 +65,8 @@
     const gems = []; for (let i = 0; i < n.G.length; i += 4) gems.push({ id: n.G[i], x: n.G[i + 1], y: n.G[i + 2], v: n.G[i + 3] });
     const proj = n.B.map((b) => ({ id: b[0], kind: b[1], x: b[2], y: b[3], vx: b[4], vy: b[5], c: b[6], tox: b[7], ttl: b[8], ttl0: b[9], mods: b[10] ? { burn: b[10] & 1, shock: b[10] & 2 } : null, own: b[11] }));
     const eproj = n.EB.map((b) => ({ x: b[0], y: b[1], ttl: b[2], lob: b[3] ? 1 : 0, ttl0: b[3], kind: b[4] || null, vx: b[5], vy: b[6] }));
-    const players = n.players.map(([row, m, tokens, pick, cam, items, fused, gifts]) => { const o = {}; PF.forEach((k, i) => (o[k] = row[i])); o.hero = HN[o.hero];
-      o.m = { area: m[0], cd: m[1], shield: m[2], spd: m[3] }; o.tokens = tokens || []; o.pick = pick || null; o.items = items || { sig: 1 }; o.fused = fused || []; o.gifts = gifts || {}; o.cam = cam || [o.x - 960, o.y - 600]; return o; });
+    const players = n.players.map(([row, m, tokens, pick, cam, items, fused, gifts, att]) => { const o = {}; PF.forEach((k, i) => (o[k] = row[i])); o.hero = HN[o.hero];
+      o.m = { area: m[0], cd: m[1], shield: m[2], spd: m[3] }; o.album = tokens || []; o.tokens = []; o.pick = pick || null; o.items = items || { sig: 1 }; o.fused = fused || []; o.gifts = gifts || {}; o.att = att || {}; o.cam = cam || [o.x - 960, o.y - 600]; return o; });
     for (const e of n.ev) evBuf.push(e); while (evBuf.length && evBuf[0].t < n.t - 3) evBuf.shift(); if (evBuf.length > 200) evBuf.splice(0, evBuf.length - 200);
     return Object.assign({}, n, { players, enemies, gems, proj, eproj, dots: n.dots, ev: evBuf.slice() });
   }
