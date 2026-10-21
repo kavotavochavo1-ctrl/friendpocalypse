@@ -1,5 +1,5 @@
 const { encode, decode, roomCode, lobbyId } = require('./wire.cjs');
-const GAME = 'friendpocalypse', PROTOCOL = 'steam-3';
+const GAME = 'friendpocalypse', PROTOCOL = 'steam-4';
 class SteamNet {
   constructor(steam, emit) {
     this.steam = steam; this.emit = emit; this.connections = new Map(); this.members = new Set();
@@ -41,7 +41,7 @@ class SteamNet {
     this.leave(); const m = this.steam.matchmaking;
     try {
       if (host) {
-        const result = await m.createLobby(2, 8);
+        const result = await m.createLobby(2, 4);
         if (!result.success) throw Error(result.error || 'Не удалось создать комнату Steam');
         this.lobby = String(result.lobbyId); this.host = this.id;
         this.listen = this.steam.networkingSockets.createListenSocketP2P(0);

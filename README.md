@@ -1,6 +1,6 @@
 # Friendpocalypse
 
-Кооператив на 1–8 игроков. [Скачать Windows-лаунчер](https://github.com/kavotavochavo1-ctrl/friendpocalypse/releases).
+Кооператив на 1–4 игроков. [Скачать Windows-лаунчер](https://github.com/kavotavochavo1-ctrl/friendpocalypse/releases).
 
 Запусти Steam и лаунчер. Хост создаёт комнату, друзья вводят FP-код и нажимают «Я готов!», хост запускает забег. Можно пригласить через встроенный список друзей Steam. Соло и боты работают без Steam. Исходный браузерный режим сохраняется и использует Trystero.
 
@@ -29,6 +29,6 @@ npm run dist:win
 
 Для собственного Steam AppID: замени 480 в `desktop/main.cjs` и `desktop/steam_appid.txt`, настрой запуск exe в Steamworks. Сертификат Windows для подписи установщика настраивается отдельно через electron-builder.
 
-Сетевой адаптер: `desktop/steam-net.cjs`; изолированный мост: `desktop/preload.cjs`; поддержка существующего room API: `steam-room.js`. Данные лобби проверяются по `game=friendpocalypse` и `protocol=steam-3`. Код FP — точное представление ID лобби; чужие лобби Spacewar отклоняются. Соединения принимаются только от участников текущего лобби.
+Сетевой адаптер: `desktop/steam-net.cjs`; изолированный мост: `desktop/preload.cjs`; поддержка существующего room API: `steam-room.js`. Данные лобби проверяются по `game=friendpocalypse` и `protocol=steam-4`. Код FP — точное представление ID лобби; чужие лобби Spacewar отклоняются. Соединения принимаются только от участников текущего лобби.
 
 См. [проверку зависимостей](SECURITY_REVIEW.md) и [инструкцию игрокам](PLAY.txt).

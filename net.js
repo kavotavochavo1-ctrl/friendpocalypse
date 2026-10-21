@@ -1,7 +1,7 @@
 // live/net.js — lobby + online co-op over WebRTC (Trystero, serverless signalling) — host-authoritative.
 // Host: runs SIM.step with every player's input, sends each client a compressed snapshot of what is near its hero (15 Hz).
 // Client: sends its input (30 Hz, presses latched so quick taps are never lost) and renders snapshots interpolated by id.
-// Rooms are links: ?room=CODE. Whoever creates the room hosts; up to 8 players; free hero slots can be bots.
+// Rooms are links: ?room=CODE. Whoever creates the room hosts; up to 4 players; free hero slots can be bots.
 (function () {
   const STEAM = !!window.FP_STEAM;
   let connecting = false;
@@ -103,13 +103,15 @@
 #lobby .code{color:#ffd76a;font-size:22px;letter-spacing:4px}
 #lobby .heroes{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 #lobby .h{background:#22141a;border:3px solid #4a2e22;border-radius:10px;padding:7px;cursor:pointer;text-align:center;transition:transform .1s;position:relative}
-#lobby .h:hover{transform:translateY(-3px)} #lobby .h.on{border-color:#ffd76a;background:#3a2218}
+#lobby .h.locked{cursor:not-allowed;border-color:#6b4a42} #lobby .h.locked img{filter:grayscale(.8);opacity:.65}
+#lobby .h.locked:hover{transform:none} #lobby .h:focus-visible{outline:3px solid #9fe0ff;outline-offset:3px}
+#lobby .h:not(.locked):hover{transform:translateY(-3px)} #lobby .h.on{border-color:#ffd76a;background:#3a2218}
 #lobby .h img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;image-rendering:pixelated}
 #lobby .h b{display:block;font-size:14px;margin-top:4px} #lobby .h small{display:block;font-size:8px;line-height:1.5;opacity:.8;min-height:30px}
 #lobby .box.room .h{display:grid;grid-template-columns:56px 1fr;gap:8px;align-items:center;text-align:left;padding:6px}
 #lobby .box.room .h img{width:56px;height:56px} #lobby .box.room .h b{margin:0;font-size:12px} #lobby .box.room .h small{display:none} #lobby .box.room .h .who{left:auto;right:6px;top:4px;justify-content:flex-end}
 #lobby .h .who{position:absolute;left:6px;right:6px;top:6px;display:flex;flex-wrap:wrap;gap:3px}
-#lobby .h .who span{font-size:7px;background:#000c;border-radius:4px;padding:3px 4px;color:#9fe0ff}
+#lobby .h .who span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:7px;background:#000c;border-radius:4px;padding:3px 4px;color:#9fe0ff}
 #lobby .row{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;align-items:center}
 #lobby button{font:inherit;font-size:12px;padding:10px 18px;border-radius:9px;border:2px solid #8a5a32;background:#5a2e1a;color:#ffe9b0;cursor:pointer}
 #lobby button:hover{background:#7a3e22} #lobby button.alt{background:#1e3040;border-color:#3e6a8a} #lobby button.alt:hover{background:#28425a}
@@ -128,7 +130,8 @@
 #lobby .status{font-size:11px;margin-top:12px;color:#9fd0ff;line-height:1.7} #lobby .status.warn{color:#ffb070}
 #lobby input[type=checkbox]{flex:0 0 auto;min-width:0;width:18px;height:18px;padding:0;accent-color:#ffd76a}
 #lobby .note{font-size:9px;line-height:1.7;opacity:.75;margin-top:10px} #lobby label{font-size:11px;cursor:pointer;display:flex;gap:8px;align-items:center}
-#netmsg{position:absolute;left:50%;top:14px;transform:translateX(-50%);font:11px "Press Start 2P",monospace;color:#ffe9b0;background:#000a;padding:4px 12px;border-radius:8px;z-index:6;display:none}`;
+@media(max-width:680px){#lobby .heroes{grid-template-columns:repeat(2,minmax(0,1fr))} #lobby .h{min-width:0}}
+#netmsg{max-width:calc(100vw - 32px);width:max-content;box-sizing:border-box;line-height:1.6;position:absolute;left:50%;top:14px;transform:translateX(-50%);font:11px "Press Start 2P",monospace;color:#ffe9b0;background:#000a;padding:4px 12px;border-radius:8px;z-index:6;display:none}`;
   document.head.appendChild(css);
   const el = document.createElement('div'); el.id = 'lobby'; document.body.appendChild(el);
   const msg = document.createElement('div'); msg.id = 'netmsg'; document.body.appendChild(msg);
@@ -139,6 +142,7 @@
   NET.ready = false;
   const hello = () => act.hello && act.hello.send({ hero: NET.hero, nick: NET.nick, ready: NET.ready ? 1 : 0 });
   const me = () => roster.find((r) => r.self);
+  const heroOwner = (hero) => NET.mode !== 'off' && roster.find((r) => !r.self && r.hero === hero);
 
   let screen = '';
   function render() {
@@ -147,8 +151,10 @@
     if (sc !== screen) { screen = sc; shell(); }
     dyn();
   }
-  const heroGrid = () => HEROES.map((h) => `<div class="h ${NET.hero === h ? 'on' : ''}" data-h="${h}"><div class="who">${
-    roster.filter((r) => r.hero === h).map((r) => `<span>${esc(r.nick || '?')}</span>`).join('')}</div><img src="assets/portrait_${h}.png"><b>${NAMES[h]}</b><small>${DESC[h]}</small></div>`).join('');
+  const heroGrid = () => HEROES.map((h) => { const owner = heroOwner(h), locked = !!owner;
+    return `<div class="h ${NET.hero === h ? 'on' : ''} ${locked ? 'locked' : ''}" data-h="${h}" role="button" tabindex="${locked ? -1 : 0}" aria-disabled="${locked}" aria-pressed="${NET.hero === h}" title="${esc(locked ? 'Занят: ' + (owner.nick || 'Игрок') : NAMES[h])}"><div class="who">${
+      roster.filter((r) => r.hero === h).map((r) => `<span>${r.self ? 'ТЫ: ' : 'Занят: '}${esc(r.nick || 'Игрок')}</span>`).join('')}</div><img src="assets/portrait_${h}.png" alt=""><b>${NAMES[h]}</b><small>${DESC[h]}</small></div>`;
+  }).join('');
   function shell() {
     const inRoom = NET.mode !== 'off', isHost = NET.mode === 'host';
     const link = STEAM ? NET.code || '' : location.origin + location.pathname + '?room=' + (NET.code || '');
@@ -193,18 +199,22 @@
   }
   const netCls = (r) => r.host ? 'g' : r.ping == null ? 'y' : r.ping < 120 ? 'g' : r.ping < 250 ? 'y' : 'r';
   const netTxt = (r) => r.host ? 'хост' : r.ping == null ? 'подключается…' : r.ping + ' мс';
-  const allReady = () => roster.length > 0 && roster.every((r) => r.host || r.ready);
+  const allReady = () => roster.length > 0 && roster.length <= HEROES.length && new Set(roster.map((r) => r.hero)).size === roster.length && roster.every((r) => HEROES.includes(r.hero) && (r.host || r.ready));
   function dyn() {
     const $ = (id) => el.querySelector('#' + id); if (!$('heroes')) return;
     $('heroes').innerHTML = heroGrid();
-    el.querySelectorAll('.h').forEach((d) => (d.onclick = () => { NET.hero = d.dataset.h; localStorage.setItem('fp_hero', NET.hero);
-      if (NET.mode === 'host' && me()) { me().hero = NET.hero; sendRoster(); } else hello(); dyn(); }));
+    el.querySelectorAll('.h').forEach((d) => { d.onclick = () => {
+      if (heroOwner(d.dataset.h)) { say('Этот герой уже занят. Выбери свободного.'); return; }
+      if (NET.hero === d.dataset.h) return;
+      NET.hero = d.dataset.h; NET.ready = NET.mode === 'host'; localStorage.setItem('fp_hero', NET.hero);
+      if (NET.mode === 'host' && me()) { me().hero = NET.hero; sendRoster(); } else hello(); dyn(); };
+      d.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); d.click(); } }; });
     rules(); if (!$('plist')) return;
     const isHost = NET.mode === 'host', connected = NET.mode === 'host' || !!NET.hostPeer;
     $('plist').innerHTML = roster.map((r) => `<div class="pl ${r.ready || r.host ? 'rdy' : ''} ${r.self ? 'me' : ''}"><img src="assets/portrait_${r.hero}.png">
         <div class="nm"><b>${esc(r.nick || 'Игрок')}${r.host ? '<span class="tag">ХОСТ</span>' : ''}${r.self ? '<span class="tag" style="background:#1e3040;color:#9fe0ff">ТЫ</span>' : ''}</b><i>${NAMES[r.hero]}</i></div>
         <div class="net ${netCls(r)}">● ${netTxt(r)}</div><div class="st ${r.ready || r.host ? 'on' : 'off'}">${r.host ? 'запускает' : r.ready ? '✔ ГОТОВ' : 'не готов'}</div></div>`).join('')
-      + Array.from({ length: Math.max(0, Math.min(4, 8) - roster.length) }, () => `<div class="pl empty">свободно${NET.bots && isHost ? ' — займёт бот' : ''}</div>`).join('');
+      + Array.from({ length: Math.max(0, HEROES.length - roster.length) }, () => `<div class="pl empty">свободно${NET.bots && isHost ? ' — займёт бот' : ''}</div>`).join('');
     const waiting = roster.filter((r) => !r.host && !r.ready).map((r) => esc(r.nick || 'Игрок'));
     let st = '', warn = false;
     if (!connected) { const s = Math.floor((performance.now() - (NET.joinT || performance.now())) / 1000);
@@ -213,7 +223,7 @@
     else if (waiting.length) st = `Ждём готовности: ${waiting.join(', ')}`;
     else st = isHost ? 'Все готовы — жми СТАРТ!' : 'Все готовы — ждём, когда хост нажмёт старт';
     $('status').innerHTML = st; $('status').className = 'status' + (warn ? ' warn' : '');
-    if ($('rdy')) { $('rdy').style.display = isHost ? 'none' : ''; $('rdy').textContent = NET.ready ? '✔ Готов (отменить)' : 'Я готов!'; $('rdy').className = 'big ' + (NET.ready ? 'ok' : ''); $('rdy').disabled = !connected; }
+    if ($('rdy')) { $('rdy').style.display = isHost ? 'none' : ''; $('rdy').textContent = NET.ready ? '✔ Готов (отменить)' : 'Я готов!'; $('rdy').className = 'big ' + (NET.ready ? 'ok' : ''); $('rdy').disabled = !connected || !me(); }
     if ($('go')) { const ok = allReady(); $('go').disabled = !ok; $('go').textContent = ok ? `СТАРТ (${roster.length} игр.)` : `Ждём готовности (${roster.filter((r) => r.host || r.ready).length}/${roster.length})`; }
   }
   // «Спор» (one optional rule, multiplies the score) and «Забег дня» (today's seed + today's spor, same for everyone)
@@ -351,8 +361,12 @@
     await joinRoomCode(NET.code);
     roster = [{ peer: selfId, hero: NET.hero, nick: NET.nick, host: 1, ready: 1, self: 1 }];
     act.hello.onMessage = (d, { peerId }) => { let r = roster.find((x) => x.peer === peerId); const fresh = !r;
-      if (!r) { if (roster.length >= 8) return; roster.push((r = { peer: peerId })); }
-      r.hero = HEROES.includes(d.hero) ? d.hero : 'hasan'; r.nick = cleanNick(d.nick) || 'Игрок'; r.ready = d.ready ? 1 : 0;
+      if (!r) { if (roster.length >= HEROES.length) { act.roster.send({ denied: 'Все четыре героя уже заняты. Дождись свободного места.' }, { target: peerId }); return; } roster.push((r = { peer: peerId })); }
+      const requested = NET.started && !fresh ? r.hero : HEROES.includes(d.hero) ? d.hero : HEROES[0];
+      const taken = (h) => roster.some((other) => other !== r && other.hero === h);
+      const hero = !taken(requested) ? requested : r.hero || HEROES.find((h) => !taken(h));
+      const changed = r.hero !== hero;
+      r.hero = hero; r.nick = cleanNick(d.nick) || 'Игрок'; r.ready = d.ready && !changed && requested === hero ? 1 : 0;
       if (fresh) { say(r.nick + ' зашёл в комнату'); act.ping.send({ t: performance.now() }, { target: peerId }); }
       sendRoster(); render();
       if (window.GAME.state() && NET.started && fresh) lateJoin(peerId, r); };
@@ -362,8 +376,9 @@
   }
   function hostStart() {
     if (!window.GAME) { setTimeout(hostStart, 50); return; }
+    if (!allReady()) return;
     const heroes = roster.map((r) => r.hero), humans = roster.map((_, i) => i);
-    if (NET.bots) for (const h of HEROES) if (!heroes.includes(h) && heroes.length < 8) heroes.push(h);
+    if (NET.bots) for (const h of HEROES) if (!heroes.includes(h) && heroes.length < HEROES.length) heroes.push(h);
     const S = SIM.create(Object.assign({ heroes, humans, meta: NET.meta() }, runCfg())); S.solo = roster.length === 1 && heroes.length === 1 ? 1 : 0; S.me = 0; S.wt0 = 0;
     roster.forEach((r, i) => { peerToPid[r.peer] = i; S.players[i].nick = r.nick; });
     NET.started = true; NET.open = false; render();
@@ -371,14 +386,18 @@
     roster.forEach((r, i) => { if (!r.self) act.start.send({ pid: i }, { target: r.peer }); });
   }
   function lateJoin(peerId, r) {           // a friend who opens the link mid-run takes a bot's hero, or joins as a new hero
-    const S = window.GAME.state(); let p = S.players.find((o) => o.bot && o.hero === r.hero && !Object.values(peerToPid).includes(o.id)) || S.players.find((o) => o.bot && !Object.values(peerToPid).includes(o.id));
-    if (!p && S.players.length < 8) { const base = S.players[0]; const np = JSON.parse(JSON.stringify(SIM.create({ heroes: [r.hero] }).players[0])); np.id = S.players.length; np.x = base.x + 60; np.y = base.y; S.players.push(np); p = np; }
+    const S = window.GAME.state(); let p = S.players.find((o) => o.bot && o.hero === r.hero && !Object.values(peerToPid).includes(o.id));
+    if (!p && S.players.length < HEROES.length) { const base = S.players[0]; const np = JSON.parse(JSON.stringify(SIM.create({ heroes: [r.hero] }).players[0])); np.id = S.players.length; np.x = base.x + 60; np.y = base.y; S.players.push(np); p = np; }
     if (!p) return; p.bot = 0; p.nick = r.nick; peerToPid[peerId] = p.id; act.start.send({ pid: p.id }, { target: peerId }); say(esc(r.nick) + ' в игре!');
   }
   async function client(code) {
     NET.mode = 'client'; NET.ready = false; await joinRoomCode(code);
-    act.roster.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; hostGone = false; NET.bots = !!d.bots; NET.spor = d.spor || ''; NET.daily = !!d.daily;
-      roster = d.list.map((r) => Object.assign(r, { self: r.peer === selfId })); render(); };
+    act.roster.onMessage = async (d, { peerId }) => {
+      if (d.denied) { try { await room?.leave(); } catch {} room = null; act = {}; roster = []; NET.mode = 'off'; NET.ready = false; NET.hostPeer = null; NET.open = true; render(); say(d.denied, 0); return; }
+      NET.hostPeer = peerId; hostGone = false; NET.bots = !!d.bots; NET.spor = d.spor || ''; NET.daily = !!d.daily;
+      roster = d.list.map((r) => Object.assign(r, { self: r.peer === selfId }));
+      const mine = me(); if (mine) { const reassigned = NET.hero !== mine.hero; NET.hero = mine.hero; NET.ready = !!mine.ready; localStorage.setItem('fp_hero', NET.hero); if (reassigned) say('Герой занят другим игроком. Твой герой — ' + NAMES[NET.hero] + '.'); }
+      render(); };
     act.start.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; myPid = d.pid; NET.started = true; NET.open = false; render(); snaps = []; document.getElementById('hint').style.opacity = 0; };
     act.back.onMessage = () => { NET.started = false; NET.ready = false; snaps = []; pred = null; SCENE.state = null; NET.open = true; render(); hello(); };   // host went back to the room
     act.snap.onMessage = async (d) => { if (LAG && !d.__lag) { setTimeout(() => act.snap.onMessage(Object.assign(d, { __lag: 1 })), LAG); return; } NET.dbg.got++; NET.dbg.bytes = d.byteLength || d.length || 0; let S; try { const data = await unpack(d instanceof Uint8Array ? d : new Uint8Array(d)); if ((data.sq || 0) <= lastSq) return; S = restore(data); } catch (e) { NET.dbg.err = String(e); return; } lastSq = Math.max(lastSq, S.sq || 0); snaps.push({ at: performance.now(), S }); if (snaps.length > 3) snaps.shift(); reconcile(S); };
