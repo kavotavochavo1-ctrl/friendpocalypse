@@ -411,11 +411,12 @@
   const hurtEnemy = (S, e, dmg, p, kind, kx = 0, ky = 0) => {
     if (e.hp <= 0 || S.t < (e.inv || 0)) return;
     if (e.boss && S.t < S.boss.vuln) dmg *= 2; if (S.t < (e.shieldT || 0)) dmg *= 0.25; if (p && S.t < (p.crisisT || 0)) dmg *= 0.8;
-    if (e.boss) { bossHit(S, e, dmg); if (S.boss.ph < 3 && e.hp - dmg <= 1) { e.hitT = S.t; if (p) p.st.dmg += Math.max(0, e.hp - 1); e.hp = 1; return; } }   // a phase ends, the boss doesn't
-    if (e.type === 'komissar' && e.hp - dmg <= 0) { e.hitT = S.t; if (p) p.st.dmg += dmg; freeLeha(S, e, 1); return; }
     if (S.marks.length && S.marks.some((m) => m.id === e.id && S.t < m.until)) dmg *= 1.5;
     if (S.t < (e.gooT || -9)) dmg *= 1.25;                                    // stuck in condensed milk
     let crit = 0; if (p && h2(S.steps + e.id, dmg) < p.m.crit) { dmg *= p.m.critX || 2; crit = 1; }
+    // after every multiplier (crits, marks, condensed milk): a crit on a low boss used to slip past the phase guard and kill it in phase 1
+    if (e.boss) { bossHit(S, e, dmg); if (S.boss.ph < 3 && e.hp - dmg <= 1) { e.hitT = S.t; if (p) p.st.dmg += Math.max(0, e.hp - 1); e.hp = 1; return; } }   // a phase ends, the boss doesn't
+    if (e.type === 'komissar' && e.hp - dmg <= 0) { e.hitT = S.t; if (p) p.st.dmg += dmg; freeLeha(S, e, 1); return; }
     KB_T = S.t; const k = kb(e); e.hp -= dmg; e.hitT = S.t; e.kx += kx * k; e.ky += ky * k; e.lastHit = p ? p.id : -1; e.lastKind = kind;
     if (p) { p.st.dmg += dmg; const kd = p.st.kd || (p.st.kd = {}); kd[kind] = (kd[kind] || 0) + dmg;     // kd: damage per source (balance telemetry)
       if (p.m.leech && alive(p) && p.lsB > 0) { const h = Math.min(dmg * p.m.leech, p.lsB, p.hpMax - p.hp); if (h > 0) { p.hp += h; p.lsB -= h; } }   // Кумыс
@@ -524,14 +525,14 @@
       if (t - p.ultT > 0.95 && t - p.ultT - DT <= 0.95) addCloud(S, p, p.ux, p.uy, ULT_GAS * area, 6, 1);
     }
     if (p.hero === 'leha') {
-      const g = S.t - p.ultT < 7 ? 5 : p.gun || 0, GA = p.m.gun || {}, rate = [0.5, 0.13, 1.0, 0.085, 1.4, 0.35][g] / (1 + (GA.rate || 0));
+      const g = S.t - p.ultT < 7 ? 5 : p.gun || 0, GA = p.m.gun || {}, rate = [0.5, 0.13, 0.85, 0.075, 1.4, 0.35][g] / (1 + (GA.rate || 0));
       if (S.t < p.nadeT && every2(p, 'nade', 1.1)) { const e2 = nearest(S, p.x, p.y, 520, []); if (e2) S.proj.push({ id: S.nid++, own: p.id, kind: 'petard', lob: 1, x: p.x, y: p.y - 50, vx: (e2.x - p.x) / 0.6, vy: (e2.y - 45 - p.y + 50) / 0.6, t0: t, ttl: 0.6, ttl0: 0.6, hit: [], r: 90 * area, dmg: 30 * p.m.dmg, mods: {}, wid: 'nade' }); }
       if (p.atkT <= 0 && tgt) { p.atkT = rate / as; p.lastAtk = t; p.atkN++; const ang = Math.atan2(p.ay, p.ax);
         const shot = (a, sp, dmg, kind, ttl) => S.proj.push({ id: S.nid++, own: p.id, kind, x: p.x + Math.cos(a) * 46, y: p.y - 52 + Math.sin(a) * 30, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, dmg: dmg * 1.2 * p.m.dmg * p.m.sdmg, ttl, rico: 0, hit: [], mods: p.m.smods, pierce: p.m.pierce });
         if (g === 0) shot(ang, 1300, 13, 'bullet', 0.6);
         if (g === 1) shot(ang + (h2(S.steps, 3) - 0.5) * 0.22 * (1 - (GA.tight || 0)), 1400, 6.5, 'bullet', 0.55);
-        if (g === 2) { const n = 6 + (GA.pel || 0), sp = 0.11 * (1 - (GA.tight || 0)) * 6 / n; for (let k = 0; k < n; k++) shot(ang + (k - (n - 1) / 2) * sp + (h2(S.steps, k) - 0.5) * 0.06, 1150, 8, 'pellet', 0.32 * (1 + (GA.tight || 0) * 0.5)); }
-        if (g === 3) shot(ang + (h2(S.steps, 5) - 0.5) * (p.stillT > 0.3 ? 0.06 : 0.2), 1500, 6, 'bullet', 0.6);
+        if (g === 2) { const n = 7 + (GA.pel || 0), sp = 0.11 * (1 - (GA.tight || 0)) * 6 / n; for (let k = 0; k < n; k++) shot(ang + (k - (n - 1) / 2) * sp + (h2(S.steps, k) - 0.5) * 0.06, 1150, 11, 'pellet', 0.34 * (1 + (GA.tight || 0) * 0.5)); }
+        if (g === 3) shot(ang + (h2(S.steps, 5) - 0.5) * (p.stillT > 0.3 ? 0.06 : 0.2), 1500, 8, 'bullet', 0.6);
         if (g >= 4) shot(ang, 820, g === 5 ? 52 : 34, 'rocket', 1.1);
         if (p.evo) { if (g === 4 || g === 5) { shot(ang - 0.2, 800, 30, 'rocket', 1.1); shot(ang + 0.2, 800, 30, 'rocket', 1.1); } else if (p.atkN % 2 === 0) { shot(ang - 0.18, 1300, 9, 'bullet', 0.5); shot(ang + 0.18, 1300, 9, 'bullet', 0.5); } }
         ev(S, { k: 'shot', pid: p.id, x: p.x, y: p.y, ang, g }); }
@@ -934,7 +935,7 @@
   // ---------------- «Барбершоп» (HASAN.md): Хасан's own weapon grows at the barber, not from level-ups ----------------
   // one shop per wave at a random empty spot, gone at the break or after one try. Хасан walks in → the mini-game: scissors sweep left→right
   // over his mustache, Space on the mark. A good cut: +1 mustache, +reach; a miss: −1 mustache, −reach
-  const CUT_IN = 0.6, CUT_PASS = 1.4 / 1.175, CUT_W = 0.065 * 2 / 3, BOT_CUT = 0.65;      // intro (s), one sweep (s), half-width of the mark (share of the bar), bots' hit rate
+  const CUT_IN = 0.6, CUT_PASS = 1.4 / 1.175 * 1.1, CUT_W = 0.065 * 2 / 3 * 1.1, BOT_CUT = 0.65;      // intro (s), one sweep (s), half-width of the mark (share of the bar), bots' hit rate
   const trimPos = (c, t) => (t - c.t0 - CUT_IN) / (c.pass || CUT_PASS);
   function barberStep(S, t) {
     const H = S.players.find((p) => p.hero === 'hasan' && !p.out), busy = S.players.some((p) => p.trim);
@@ -1100,7 +1101,10 @@
       const inp = p.bot ? botInput(S, p) : (inps[p.id] || {});
       const edge = (k) => { const v = !!inp[k], e = v && !p.prev[k]; p.prev[k] = v; return e; };
       const qE = edge('q'), rE = edge('r'), eE = edge('e');
-      if (p.out || p.inBus) continue;
+      // out of the run: watch a friend who's still in it (E — the next one)
+      if (p.out) { const live = S.players.filter((q) => q !== p && !q.out && !q.inBus); let i = live.findIndex((q) => q.id === p.spec);
+        if (live.length) { if (i < 0 || eE) i = (i + 1) % live.length; const q = live[i]; p.spec = q.id; p.cam[0] = q.cam[0]; p.cam[1] = q.cam[1]; } continue; }
+      if (p.inBus) continue;
       if (p.nat) { const K = S.boss && S.boss.km, e = K && S.enemies.find((o) => o.id === K.eid);
         if (!e) { p.nat = 0; continue; } p.x = e.x; p.y = e.y; if (!p.bot && inp.slot >= 1 && inp.slot <= 3) K.mode = inp.slot - 1; camStep(p); continue; }
       if (p.down) { const g = inGas(S, p.x, p.y); p.downT -= DT * (g ? 1.5 : 1); if (g) p.gasDown = t;

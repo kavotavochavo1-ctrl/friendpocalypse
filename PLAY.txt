@@ -1,6 +1,6 @@
-FRIENDPOCALYPSE — Steam playtest 0.1.3
+FRIENDPOCALYPSE — Steam playtest 0.1.4
 
-1. Установи Friendpocalypse-Setup-0.1.3.exe и запусти игру.
+1. Установи Friendpocalypse-Setup-0.1.4.exe и запусти игру.
    ZIP — запасной вариант: распакуй папку целиком и запусти Friendpocalypse.exe.
 2. Для игры с друзьями запусти Steam и войди в свой аккаунт.
 3. Хост: «Создать комнату для друзей» → «Копировать код».

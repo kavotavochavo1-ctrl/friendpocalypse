@@ -25,10 +25,10 @@ npm run dist:win
 
 ## Следующий релиз
 
-Измени версию в `package.json` и lockfile, обнови `RELEASE_NOTES.md`, создай тег `vX.Y.Z`. GitHub Actions соберёт и опубликует файлы. Для автообновления в одном **обычном, не prerelease** релизе должны находиться установщик, `latest.yml` и `.blockmap` с исходными именами. Релизы 0.1.0–0.1.3 опубликованы после локальной сборки и проверки.
+Измени версию в `package.json` и lockfile, обнови `RELEASE_NOTES.md`, создай тег `vX.Y.Z`. GitHub Actions соберёт и опубликует файлы. Для автообновления в одном **обычном, не prerelease** релизе должны находиться установщик, `latest.yml` и `.blockmap` с исходными именами. Релизы 0.1.0–0.1.4 опубликованы после локальной сборки и проверки.
 
 Для собственного Steam AppID: замени 480 в `desktop/main.cjs` и `desktop/steam_appid.txt`, настрой запуск exe в Steamworks. Сертификат Windows для подписи установщика настраивается отдельно через electron-builder.
 
-Сетевой адаптер: `desktop/steam-net.cjs`; изолированный мост: `desktop/preload.cjs`; поддержка существующего room API: `steam-room.js`. Данные лобби проверяются по `game=friendpocalypse` и `protocol=steam-4`. Код FP — точное представление ID лобби; чужие лобби Spacewar отклоняются. Соединения принимаются только от участников текущего лобби.
+Сетевой адаптер: `desktop/steam-net.cjs`; изолированный мост: `desktop/preload.cjs`; поддержка существующего room API: `steam-room.js`. Данные лобби проверяются по `game=friendpocalypse` и `protocol=steam-5`. Код FP — точное представление ID лобби; чужие лобби Spacewar отклоняются. Соединения принимаются только от участников текущего лобби.
 
 См. [проверку зависимостей](SECURITY_REVIEW.md) и [инструкцию игрокам](PLAY.txt).

@@ -23,7 +23,7 @@
   const ET = Object.keys(SIM.ETYPES), r1 = (v) => Math.round(v), r2 = (v) => Math.round(v * 100) / 100;
   const HN = ['hasan', 'danil', 'vitya', 'leha'];
   const PF = ['id', 'hero', 'bot', 'x', 'y', 'vx', 'vy', 'fx', 'fy', 'ax', 'ay', 'dir', 'dist', 'hp', 'hpMax', 'down', 'downT', 'revP', 'out', 'inv', 'hurtT',
-    'qa', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo', 'nick', 'petN', 'sigEvo', 'rerolls', 'inBus', 'nat', 'rootT', 'slowT', 'crisisT', 'shells', 'gun', 'shop', 'nadeT', 'must', 'mustR', 'trim'];
+    'qa', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo', 'nick', 'petN', 'sigEvo', 'rerolls', 'inBus', 'nat', 'rootT', 'slowT', 'crisisT', 'shells', 'gun', 'shop', 'nadeT', 'must', 'mustR', 'trim', 'spec'];
   // enemies go as two kinds of rows: FAST (every snapshot: id, x, y, vx, vy, hp, dist, hitT, face) and SLOW (type, hpMax and the effect timers —
   // sent only when they change for this friend, or every SLOW_EVERY snapshots as a resync). A crowd costs ~7 numbers per enemy, not 20.
   const EF = 9, SLOW_EVERY = 40, SF = 11;
@@ -33,7 +33,8 @@
   const evSince = {};
   function snapshot(S, pid) {
     // only what this friend's screen can show (view 1920×1080 around his camera centre, plus a margin for things walking in)
-    const p = S.players.find((o) => o.id === pid) || S.players[0], R = 880, nearP = (x, y, r = R) => Math.abs(x - p.x) < r * 1.55 && Math.abs(y - p.y - 60) < r;
+    const p = S.players.find((o) => o.id === pid) || S.players[0], focus = p.out ? S.players.find((o) => o.id === p.spec && !o.out && !o.inBus) || p : p;
+    const R = 880, nearP = (x, y, r = R) => Math.abs(x - focus.x) < r * 1.55 && Math.abs(y - focus.y - 60) < r;
     // players as flat number rows (only what drawing, HUD, audio and prediction read); own row also carries cam + upgrade pick
     const players = S.players.map((o) => { const row = PF.map((k) => { const v = o[k]; return typeof v === 'number' ? (Number.isInteger(v) ? v : r2(v)) : v; });
       row[PF.indexOf('hero')] = HN.indexOf(o.hero); row[PF.indexOf('ack')] = ackOf[o.id] || 0;

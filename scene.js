@@ -935,6 +935,9 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     if (me.inBus && !ST.over) { const s = ST.bus && ST.bus.to === 'home' ? 'Ты в автобусе домой. Ждём остальных…' : 'Ты в автобусе! Ждём остальных…';
       const tw = labW('inb', s, Object.assign({ size: 30 }, F)); L.rrect(W / 2 - tw / 2 - 30, H * 0.62 - 36, tw + 60, 72, 14, [0.25, 0.18, 0.05], [0.12, 0.08, 0.02], 0.8); L.uiBox('inb', W / 2 - tw / 2 - 30, H * 0.62 - 36, tw + 60, 72);
       lab('inb', s, W / 2, H * 0.62, Object.assign({ size: 30, al: 0.5, col: '#ffe066' }, F)); }
+    if (me.out && !ST.over && !ST.pause) { const q = ST.players.find((o) => o.id === me.spec);
+      if (q) { const s = `Ты выбыл. Смотришь: ${pname(q)}`, tw = labW('spc', s, Object.assign({ size: 26 }, F)); L.rrect(W / 2 - tw / 2 - 30, H - 330, tw + 60, 84, 14, [0.12, 0.12, 0.2], [0.06, 0.06, 0.1], 0.82); L.uiBox('spc', W / 2 - tw / 2 - 30, H - 330, tw + 60, 84);
+        lab('spc', s, W / 2, H - 302, Object.assign({ size: 26, al: 0.5, col: '#cfe0ff' }, F)); lab('spc2', 'E — следующий друг', W / 2, H - 268, Object.assign({ size: 16, al: 0.5, col: '#9fb0d0' }, F)); } }
     if (me.down && !me.out && !ST.over && !ST.pause) { const s = ST.solo && me.selfRes > 0 ? 'Тебя вырубило! E — встать' : 'Тебя вырубило! Ждём, пока поднимут…';
       const tw = labW('dn', s, Object.assign({ size: 34 }, F)); L.rrect(W / 2 - tw / 2 - 30, H * 0.62 - 40, tw + 60, 110, 14, [0.3, 0.05, 0.05], [0.15, 0.02, 0.02], 0.8); L.uiBox('dn', W / 2 - tw / 2 - 30, H * 0.62 - 40, tw + 60, 110);
       lab('dn', s, W / 2, H * 0.62, Object.assign({ size: 34, al: 0.5, col: '#ffb0a0' }, F)); bar(W / 2 - 200, H * 0.62 + 30, 400, 20, me.downT / 30, [1, 0.3, 0.3], [0.7, 0.1, 0.1]); }
