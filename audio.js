@@ -143,6 +143,8 @@
       if (e.k === 'howl') { FX.elite(now, out(pan, 0.5)); continue; }
       if (e.k === 'chest' && e.pid === me.id) { FX.chest(now, out(0, 0.8)); continue; }
       if ((e.k === 'buy' || e.k === 'dealer') && (e.k === 'dealer' || e.pid === me.id)) { FX.chest(now, out(0, 0.7)); continue; }
+      if (e.k === 'barber' && me.hero === 'hasan') { FX.chest(now, out(0, 0.7)); continue; }
+      if (e.k === 'trim') { FX.whip(now, out(0, 0.8), 0.5); if (e.ok && e.pid === me.id) FX.lvl(now, out(0, 0.6)); continue; }
       if (e.k === 'food' && e.pid === me.id) { FX.food(now, out(0, 0.7)); continue; }
       // a crowd fight is a texture, not 200 sounds: my own actions at full volume, allies' quieter, each kind rate-limited
       const mine = e.pid === me.id, kind = e.k === 'shot' ? 'shot' + e.g : e.k;

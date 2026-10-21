@@ -13,7 +13,7 @@ canvas{display:block;width:min(100vw,calc(100vh*var(--ar)));height:auto;aspect-r
 </head><body><canvas id="c"></canvas>
 <div id="hint"></div>
 <div id="dev"></div><div id="flash">reloaded</div>
-<script>window.__STATIC__ = 1; window.__BUILD__ = '0.1.1';</script>
+<script>window.__STATIC__ = 1; window.__BUILD__ = '0.1.2';</script>
 <script>
 // LIVE PREVIEW. Scripts and images load with a cache-buster; the page polls its sources and reloads itself when any of
 // them changes, keeping the play state (sessionStorage). Attract demo until a key or click, then play (keyboard + pointer).
@@ -64,6 +64,7 @@ const load = (src) => new Promise((res, rej) => { const s = document.createEleme
     if (c === 'BracketRight') { speed = SPEEDS[Math.min(SPEEDS.length - 1, SPEEDS.indexOf(speed) + 1)]; return; }
     if (c === 'Escape') { if (!NET.open) SETTINGS.toggle(); return; }                     // settings / pause
     keys[c] = 1;
+    if (c === 'Space' && window.SCENE && SCENE.trimAt() !== null) pend.trim = SCENE.trimAt() + 10;      // the barber's scissors: where they were on screen (+10)
     const dg = /^Digit(\d)$/.exec(c); if (dg) pend.slot = +dg[1] || 10;                     // 1–9, 0 → inp.slot (hotbars)
     if (play && c === 'Backspace' && NET.mode === 'off') play = start();
     if (play && c === 'Backspace' && NET.mode === 'host' && play.over) { play = null; NET.openLobby(); }
@@ -71,7 +72,7 @@ const load = (src) => new Promise((res, rej) => { const s = document.createEleme
   });
   addEventListener('keyup', (e) => { keys[e.code] = 0; });
   // pointer in view pixels (VW×VH); click is true for exactly one sim step
-  const cv = document.getElementById('c'), ptr = { x: VW / 2, y: VH / 2, down: 0, click: 0 }, pend = { slot: 0, wheel: 0 };
+  const cv = document.getElementById('c'), ptr = { x: VW / 2, y: VH / 2, down: 0, click: 0 }, pend = { slot: 0, wheel: 0, trim: 0 };
   addEventListener('wheel', (e) => { if (play) { pend.wheel = Math.sign(e.deltaY); e.preventDefault(); } }, { passive: false });
   addEventListener('contextmenu', (e) => e.preventDefault());
   const toView = (e) => { const r = cv.getBoundingClientRect(); ptr.x = (e.clientX - r.left) / r.width * VW; ptr.y = (e.clientY - r.top) / r.height * VH; };
@@ -80,7 +81,7 @@ const load = (src) => new Promise((res, rej) => { const s = document.createEleme
   addEventListener('pointerup', () => { ptr.down = 0; });
   let last = performance.now(), fpsAcc = 0, fpsN = 0;
   const mkInp = () => ({ left: keys.ArrowLeft || keys.KeyA, right: keys.ArrowRight || keys.KeyD, up: keys.ArrowUp || keys.KeyW, down: keys.ArrowDown || keys.KeyS,
-      act: keys.KeyX || keys.KeyJ || keys.Enter, q: keys.KeyQ, r: keys.KeyR, e: keys.KeyE, px: ptr.x, py: ptr.y, press: ptr.down, click: ptr.click, slot: pend.slot, wheel: pend.wheel });
+      act: keys.KeyX || keys.KeyJ || keys.Enter, q: keys.KeyQ, r: keys.KeyR, e: keys.KeyE, px: ptr.x, py: ptr.y, press: ptr.down, click: ptr.click, slot: pend.slot, wheel: pend.wheel, trim: pend.trim });
   // advance = time + sim (+ network). Driven by rAF while visible, and by a worker clock while the tab is hidden, so a host
   // who alt-tabs keeps the game running for everyone (rAF stops and main-thread timers throttle in background tabs).
   const advance = () => {
@@ -88,10 +89,10 @@ const load = (src) => new Promise((res, rej) => { const s = document.createEleme
     const hold = paused || (window.SETTINGS && SETTINGS.isOpen() && NET.mode === 'off' && play);   // solo: settings pause the run
     const dt = hold ? (stepOnce ? 1 / 60 : 0) : wall * speed; stepOnce = false;
     simT += dt;
-    if (NET.mode === 'client' && !NET.open) { const inp = mkInp(); NET.clientInput(inp); pend.slot = 0; SCENE.state = NET.view(); }
+    if (NET.mode === 'client' && !NET.open) { const inp = mkInp(); NET.clientInput(inp); pend.slot = pend.trim = 0; SCENE.state = NET.view(); }
     else if (play) {
       acc += dt; const inp = mkInp();
-      while (acc >= SIM.DT) { SIM.step(play, NET.mode === 'host' ? { players: NET.inputs(inp) } : inp); inp.click = ptr.click = 0; inp.slot = pend.slot = 0; inp.wheel = pend.wheel = 0; acc -= SIM.DT; }
+      while (acc >= SIM.DT) { SIM.step(play, NET.mode === 'host' ? { players: NET.inputs(inp) } : inp); inp.click = ptr.click = 0; inp.slot = pend.slot = 0; inp.wheel = pend.wheel = 0; inp.trim = pend.trim = 0; acc -= SIM.DT; }
       if (NET.mode === 'host') NET.hostTick(play);
       SCENE.state = play;
     } else SCENE.state = null;

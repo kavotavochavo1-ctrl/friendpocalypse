@@ -83,6 +83,8 @@
   // Recipes show as "???" until made once; the almanac (cfg.meta.found, saved by the page) remembers them between runs, and some
   // weapons stay locked until the meta unlocks them (cfg.meta.unlock).
   const MAXL = 3, MAXW = 3, MAXP = 4;
+  // Хасан's mustaches grow at the barber (HASAN.md), not from level-ups: how many whips, damage per whip by that count, reach per good cut
+  const MUST_MAX = 6, MUST_DMG = [1, 1.12, 0.98, 0.88, 0.8, 0.74], MUST_R = 0.08;
   const SIG = {
     hasan: { n: 'Усы-хлысты', lv: ['Два уса хлещут ближайших', 'Два хлыста за удар, +25% урона', '+25% радиус, чаще связывает усами'], evo: 'pick', evoN: 'Усатый вихрь', evoD: 'Пробуждение: усы крутятся вокруг, режут и связывают толпу' },
     danil: { n: 'Фотокарточки', lv: ['Карты с рикошетом', '+1 карта, +1 рикошет', '+30% урона, +1 карта, карты пробивают'], evo: 'crit', evoN: 'Коллекция ультраредок', evoD: 'Пробуждение: кольцо карт вращается вокруг и бьёт само' },
@@ -174,7 +176,7 @@
       crit: 0.04 + 0.06 * L('crit') + (fury ? 0.21 : 0) + gf('g_crit'), critX: fury ? 2.5 : 2, cd: (1 - 0.09 * L('cd')) * (es ? 0.7 : 1),
       deo: Math.pow(0.85, L('deo')), shield: 1.6 * L('plate'), extra: 0, rico: 1, pullN: 3, ttl: 1, sdmg: 1, sarea: 1, srate: 1, pierce: 0, double: 0, smods: null });
     const g = L('sig');
-    if (p.hero === 'hasan') { if (g >= 2) { m.sdmg = 1.25; m.extra = 1; } if (g >= 3) { m.sarea = 1.25; m.pullN = 2; } }
+    if (p.hero === 'hasan') { const n = p.must || 1; m.extra = n - 1; m.sdmg = MUST_DMG[n - 1]; m.sarea = 1 + MUST_R * (p.mustR || 0); m.pullN = n >= 3 ? 2 : 3; }
     if (p.hero === 'danil') { if (g >= 2) { m.extra = 1; m.rico = 2; } if (g >= 3) { m.sdmg = 1.3; m.extra = 2; m.pierce = 1; } }
     if (p.hero === 'vitya') { if (g >= 2) { m.sarea = 1.2; m.srate = 0.8; } if (g >= 3) { m.sdmg = 1.3; m.double = 1; } }
     if (p.hero === 'leha') { p.tier = p.gun || 0; m.sdmg = 1 + 0.12 * Math.max(0, g - 1); const A = p.att || {}, G = { rate: 0, dmg: 0, pel: 0, tight: 0, blast: 0 };
@@ -198,8 +200,9 @@
       d: found ? rdesc(r.id) : `${a} + ${b} = ?`, tag: found ? 'ЭВОЛЮЦИЯ' : 'НОВЫЙ РЕЦЕПТ?' }; };
   // recipes whose two ingredients are both at max level right now (fused items are locked in their pair)
   // the hero's own weapon evolves ONCE: either the awakening (with its partner passive) or an element evolution (with a shared weapon)
+  const sigMaxed = (p) => p.hero === 'hasan' ? (p.must || 1) >= 3 : lv(p, 'sig') >= MAXL;
   const readyRecipes = (p) => RECIPES.filter((r) => (!r.hero || r.hero === p.hero) && !(r.hero === 'danil' && (p.album || []).length < PHOTOCARDS.length)
-    && r.from.every((id) => id === 'sig' ? lv(p, 'sig') >= MAXL && !p.sigEvo && !p.evo : lv(p, id) >= pmax(id) && !isFused(p, id)));
+    && r.from.every((id) => id === 'sig' ? sigMaxed(p) && !p.sigEvo && !p.evo : lv(p, id) >= pmax(id) && !isFused(p, id)));
   const kettleCards = (S, p) => {
     const cards = [{ id: 'fission', kind: 'fission', n: 'Деление', d: '+1 уровень двум случайным предметам', tag: 'КОТЁЛ' }];
     const rr = readyRecipes(p); for (let k = 0; k < 2 && rr.length; k++) cards.push(cardRecipe(S, p, rr.splice(Math.floor(h2(S.steps + k, p.id) * rr.length), 1)[0]));
@@ -212,7 +215,7 @@
     : (WEAPONS[id] && !WEAPONS[id].from) || (PASSIVES[id] && !PASSIVES[id].from) ? 'it_' + id : 'ic_' + id;
   // what the hero is, for the build panel (Tab): role, Q, R
   const HINFO = {
-    hasan: { role: 'Ближний бой, хрупкий. Хлысты связывают врагов', q: 'Подкрутил усы: усы-лезвия крутятся вокруг 4 с, отбивают плевки', r: 'Усатое торнадо: смерч тянет и рубит толпу' },
+    hasan: { role: 'Ближний бой, хрупкий. Хлысты связывают врагов; усы растут в барбершопе', q: 'Подкрутил усы: усы-лезвия крутятся вокруг 4 с, отбивают плевки', r: 'Усатое торнадо: смерч тянет и рубит толпу' },
     danil: { role: 'Дальний бой. Карточки рикошетят; фотокарточки с элиток', q: 'Фан-чант: конус очаровывает врагов, друзья рядом быстрее', r: 'Камбэк года: кольцо гигантских карт вокруг' },
     vitya: { role: 'Газ задевает и своих. Один — газ сильнее', q: 'Залп по ветру: струя газа назад отталкивает и травит', r: 'Катастрофа: огромное облако через секунду' },
     leha: { role: 'Танк. Гильзы за убийства — пушки и обвесы у барыги', q: 'Прикрыл!: щит спереди блокирует плевки', r: 'До зубов: 7 с с ракетницей' } };
@@ -344,7 +347,7 @@
       atkT: 0, atkN: 0, atkSide: 1, lastAtk: -9, tier: 0, tokens: [], set: -1, hitN: 0, hitSet: [], fastT: -9, stillT: 0,
       m: { dmg: 1, as: 1, area: 1, spd: 1, pick: H.pick, armor: 1, regen: 0, crit: 0.04, cd: 1, extra: 0, rico: 1, pullN: 3, ttl: 1, deo: 1, shield: 0 },
       pick: null, pickT: 0, items: { sig: 1 }, fused: [], sigEvo: null, rerolls: 2, kq: 0, queue: 0, petN: 0, evo: 0, ultLock: 0, wcd: {}, vcd: 0, gasT: -9, buffT: -9, selfRes: 1,
-      inBus: 0, gifts: {}, smol: 0, lsB: 0, album: [], shells: 0, gun: 0, att: {}, shop: 0, nadeT: -9,
+      inBus: 0, gifts: {}, smol: 0, lsB: 0, album: [], shells: 0, gun: 0, att: {}, shop: 0, nadeT: -9, must: 1, mustR: 0, trim: null,
       st: { dmg: 0, ally: 0, allyHit: 0, rev: 0, downs: 0, xp: 0, kills: 0, gasIn: 0 },
       prev: {}, cam: [C[0] - VIEW.W / 2, C[1] - VIEW.H / 2], camV: [0, 0] }; };
   const newPlayer = (id, hero, bot, i) => { const p = mkPlayer(id, hero, bot, i); recalc(p); return p; };
@@ -355,7 +358,7 @@
       map: LV.id, spor: SPORS[cfg.spor] ? cfg.spor : null, daily: cfg.daily ? 1 : 0, bus: null, endless: 0, swarmT: 0, score: 0, drinks: 0, kioskNext: 3, sporWon: 0,
       players: [], enemies: [], proj: [], eproj: [], clouds: [], zones: [], gems: [], marks: [], booms: [], nid: 1, rt: 0, pause: 0, pend: [], clear: 0, clearT: 0,
       wave: 1, waveT: 0, brk: 0, xp: 0, lvl: 1, xpNext: 6, eliteT: 20, chests: [], food: [], spawnAcc: 0, over: 0, won: 0, freeze: 0, kills: 0,
-      comboT: -9, comboK: {}, sayT: -9, banter: 0, ev: [], awards: null, me: 0, solo: 0, cards: [], cardMiss: 0, barkQ: [], dealer: null, boss: null, cut: null, traps: [], bossWave: 0,
+      comboT: -9, comboK: {}, sayT: -9, banter: 0, ev: [], awards: null, me: 0, solo: 0, cards: [], cardMiss: 0, barkQ: [], dealer: null, barber: null, barberW: 0, boss: null, cut: null, traps: [], bossWave: 0,
       found: ((cfg.meta && cfg.meta.found) || []).slice(), unlock: Object.assign({}, cfg.meta && cfg.meta.unlock) };
     heroes.forEach((h, i) => S.players.push(newPlayer(i, h, cfg.humans ? !cfg.humans.includes(i) : 1, i)));
     S.solo = S.players.filter((p) => !p.bot).length <= 1 && S.players.length === 1 ? 1 : 0;
@@ -648,6 +651,7 @@
     if (S.bus && !down && (S.bus.to === 'meleuz' || S.players.every((q) => q.bot || q.out || q.inBus))) {
       const bx = S.bus.x + DOOR[0], by = S.bus.y + DOOR[1], d = dist(bx, by, p.x, p.y) || 1; mx += (bx - p.x) / d * 7; my += (by - p.y) / d * 7; }
     let gb = null, gd = 260; for (const g of S.gems) { const d = dist(g.x, g.y, p.x, p.y); if (d < gd) { gd = d; gb = g; } }
+    if (p.hero === 'hasan' && S.barber && !down) { const d = dist(S.barber.x, S.barber.y + 40, p.x, p.y) || 1; mx += (S.barber.x - p.x) / d * 3; my += (S.barber.y + 40 - p.y) / d * 3; }
     if (p.hero === 'leha' && S.dealer && !down && botWant(S, p) >= 0) { const d = dist(S.dealer.x, S.dealer.y, p.x, p.y) || 1; if (d > 90) { mx += (S.dealer.x - p.x) / d * 3; my += (S.dealer.y - p.y) / d * 3; } }
     for (const c of S.cards) { const d = dist(c.x, c.y, p.x, p.y); if (d < 600 && !down) { mx += (c.x - p.x) / d * 1.6; my += (c.y - p.y) / d * 1.6; break; } }   // photocards: worth a detour
     if (gb && !down) { mx += (gb.x - p.x) / gd * 0.7; my += (gb.y - p.y) / gd * 0.7; }
@@ -927,6 +931,37 @@
   }
 
 
+  // ---------------- «Барбершоп» (HASAN.md): Хасан's own weapon grows at the barber, not from level-ups ----------------
+  // one shop per wave at a random empty spot, gone at the break or after one try. Хасан walks in → the mini-game: scissors sweep left→right
+  // over his mustache, Space on the mark. A good cut: +1 mustache, +reach; a miss: −1 mustache, −reach
+  const CUT_IN = 0.6, CUT_PASS = 1.4, CUT_W = 0.065, BOT_CUT = 0.65;      // intro (s), one sweep (s), half-width of the mark (share of the bar), bots' hit rate
+  const trimPos = (c, t) => (t - c.t0 - CUT_IN) / (c.pass || CUT_PASS);
+  function barberStep(S, t) {
+    const H = S.players.find((p) => p.hero === 'hasan' && !p.out), busy = S.players.some((p) => p.trim);
+    if (!H || S.bus || S.brk > 0 || S.bossWave || S.bossAt || S.boss) { if (S.barber && !busy) S.barber = null; return; }
+    if (!S.barber && S.barberW !== S.wave) { const sp = parkSpot(S, 71 + S.wave * 13, S.dealer); S.barberW = S.wave;
+      if (sp) { S.barber = { x: sp[0], y: sp[1], t0: t }; ev(S, { k: 'barber', x: sp[0], y: sp[1] }); } }
+  }
+  // Хасан at the barber: true while he's inside (no moving, no fighting, untouchable)
+  function hasanTrim(S, p, inp, t) {
+    const B = S.barber;
+    if (!p.trim) { if (!B || dist(p.x, p.y, B.x, B.y + 40) > 95) return false;
+      const mark = 0.3 + h2(S.wave, 61) * 0.55, good = h2(S.wave, 62) < BOT_CUT, extra = clamp((p.must || 1) - 1, 0, MUST_MAX - 1), width = CUT_W * (1 - 0.03 * extra);
+      // Each extra mustache adds 5% speed and removes 3% target width; caps: +25% / -15%.
+      p.trim = { t0: t, mark, pass: CUT_PASS / (1 + 0.05 * extra), width, aim: good ? mark + (h2(S.wave, 63) - 0.5) * width : mark + (h2(S.wave, 63) < 0.5 ? -0.25 : 0.25) };
+      p.x = B.x; p.y = B.y + 40; ev(S, { k: 'trimin', pid: p.id, x: B.x, y: B.y }); }
+    const c = p.trim, pos = trimPos(c, t); p.vx = p.vy = 0; p.inv = Math.max(p.inv, t + 0.3);
+    // a person's client sends where it saw the scissors (+10) — its view runs behind the host, so the host's clock would be late
+    let at = null; if (p.bot) { if (pos >= c.aim) at = pos; } else if (inp.trim) at = Math.min(inp.trim - 10, pos + 0.05);
+    if (at === null && pos < 1.08) return true;
+    const ok = at !== null && Math.abs(at - c.mark) <= (c.width || CUT_W);
+    p.must = clamp((p.must || 1) + (ok ? 1 : -1), 1, MUST_MAX); p.mustR = clamp((p.mustR || 0) + (ok ? 1 : -1), 0, MUST_MAX - 1); recalc(p);
+    p.trim = null; p.inv = t + 1; p.y += 30; S.barber = null;
+    ev(S, { k: 'trim', pid: p.id, ok: ok ? 1 : 0, at: at === null ? -1 : at, mark: c.mark, n: p.must, x: p.x, y: p.y });
+    bark(S, ok ? 'hz_cut_ok' : 'hz_cut_fail', p.x, p.y - 150);
+    return true;
+  }
+
   // ---------------- «Чёрный рынок» (LEHA_MARKET.md): Лёха earns shell casings and buys guns, attachments and supplies from a dealer ----------------
   // guns go in order: the next one only once the gun in hand wears its full kit; a gun bought replaces the old one, kit and all (each gun has its own)
   const GUNS = [{ n: 'ПМ' },
@@ -974,15 +1009,20 @@
     else if (it.k === 'nades') p.nadeT = S.t + 20;
     ev(S, { k: 'buy', pid: p.id, id: it.id || it.k, x: p.x, y: p.y, cost: c });
   }
-  // the dealer parks once per map on an empty patch of grass, off the centre but not out at the edge, and stays there all game; a new sale every wave
+  // a free spot for a set piece (the dealer's car, the barbershop): on grass, off the plaza but not out at the edge, clear of props and of `avoid`
+  const LOWP = ['bench', 'bush', 'flowers', 'bin', 'bollard', 'fence', 'rail'];
+  function parkSpot(S, salt, avoid) {
+    const grass = (x, y) => [-130, 0, 130].every((dx) => [10, -90].every((dy) => !onPave(x + dx, y + dy)))
+      && !PROPS.some((q) => { const low = LOWP.includes(q[0]); return Math.abs(q[1] - x) < (low ? 210 : 250) && q[2] > y - 170 && q[2] < y + (low ? 90 : 320); });     // it's drawn up from (x, y); nothing tall in front
+    for (let k = 0; k < 2000; k++) { const a = h2(k, salt) * 6.283, r = 500 + h2(k, salt + 1) * 1000, x = C[0] + Math.cos(a) * r, y = C[1] + Math.sin(a) * r * 0.75;
+      if (x > WORLD.x0 + 200 && x < WORLD.x1 - 200 && y > WORLD.y0 + 260 && y < WORLD.y1 - 120 && !blocked(x, y, 90) && (k >= 1600 || grass(x, y))
+        && !(avoid && dist(x, y, avoid.x, avoid.y) < 500)) return [x, y]; }
+    return null; }
+  // the dealer parks once per map on an empty patch of grass and stays there all game; a new sale every wave
   function dealerStep(S, t) {
     const L = S.players.find((p) => p.hero === 'leha' && !p.out);
     if (!L || S.bus) { if (S.dealer) for (const p of S.players) p.shop = 0; S.dealer = null; return; }
-    if (!S.dealer) { const grass = (x, y) => [-130, 0, 130].every((dx) => [10, -90].every((dy) => !onPave(x + dx, y + dy))) 
-        && !PROPS.some((q) => Math.abs(q[1] - x) < 210 && q[2] > y - 170 && q[2] < y + (q[0] === 'lamp' || q[0] === 'mlamp' ? 300 : 90)); let spot = null;     // the whole car on grass (it's drawn up from (x, y)), no prop in front of or behind it (lamps are tall)
-      for (let k = 0; k < 2000 && !spot; k++) { const a = h2(k, 41) * 6.283, r = 500 + h2(k, 42) * 1000, x = C[0] + Math.cos(a) * r, y = C[1] + Math.sin(a) * r * 0.75;
-        if (x > WORLD.x0 + 200 && x < WORLD.x1 - 200 && y > WORLD.y0 + 260 && y < WORLD.y1 - 120 && !blocked(x, y, 90) && (k >= 1600 || grass(x, y))) spot = [x, y]; }
-      const [x, y] = spot || [C[0], C[1] + 600]; S.dealer = { x, y, t0: t, w: -1, sale: 'med' }; ev(S, { k: 'dealer', x, y }); }
+    if (!S.dealer) { const [x, y] = parkSpot(S, 41, S.barber) || [C[0], C[1] + 600]; S.dealer = { x, y, t0: t, w: -1, sale: 'med' }; ev(S, { k: 'dealer', x, y }); }
     const E = S.dealer; if (E && E.w !== S.wave) { E.w = S.wave; E.sale = SALES[Math.floor(h1(S.wave * 13) * SALES.length)]; }
   }
 
@@ -1054,7 +1094,7 @@
       if (!blocked(x, y, 40)) { const L2 = ELITES[S.map], ty = L2[Math.floor(h1(S.steps + 9) * L2.length)], hp = ETYPES[ty].hp * 6 * hpScale(S) * (S.spor === 'chonk' ? 2 : 1);
         S.enemies.push(mkEnemy(S, ty, x, y, hp, { elite: 1, r: ETYPES[ty].r * 1.2, shotT: 9e9 }));
         ev(S, { k: 'elite', x, y, type: ty }); } }
-    dealerStep(S, t);
+    dealerStep(S, t); barberStep(S, t);
     // ---- players ----
     for (const p of S.players) {
       const inp = p.bot ? botInput(S, p) : (inps[p.id] || {});
@@ -1077,6 +1117,7 @@
         if (eE && dd < 140) p.shop = p.shop ? 0 : 1; if (dd > 200) p.shop = 0;
         if (p.shop && !p.pick && inp.slot >= 1 && inp.slot <= shopList(p).length) buy(S, p, inp.slot - 1);
         if (p.bot && dd < 140 && t > (p.botBuyT || 0)) { p.botBuyT = t + 0.6; const i = botWant(S, p); if (i >= 0) buy(S, p, i); else if (p.hp < p.hpMax * 0.5) buy(S, p, shopList(p).findIndex((it) => it.k === 'med')); } }
+      if (p.hero === 'hasan' && hasanTrim(S, p, inp, t)) { camStep(p); continue; }
       if (eE && LV.KIOSK && !S.bus && S.wave >= S.kioskNext && dist(p.x, p.y, LV.KIOSK[0], LV.KIOSK[1] + 50) < 120) {
         S.drinks++; S.kioskNext = S.wave + 3; ev(S, { k: 'drink', pid: p.id, x: p.x, y: p.y, n: S.drinks }); }
       if (p.m.leech) { const cap = 4 * lv(p, 'kumys'); p.lsB = Math.min(cap, p.lsB + cap * DT); }
@@ -1268,7 +1309,7 @@
     if (id === 'reroll') { if (p.rerolls > 0) { p.rerolls--; p.pick = rollPick(S, p); p.pickT = S.rt; } return; }
     if (id === 'heal') p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.4);
     else if (id === 'fission') {                                      // +1 level to up to three random items below their cap
-      const up = [...(lv(p, 'sig') < MAXL ? ['sig'] : []), ...(p.sigEvo && lv(p, p.sigEvo) < MAXL ? [p.sigEvo] : []), ...sharedW(p).filter((w) => lv(p, w) < MAXL), ...ownedP(p).filter((q) => lv(p, q) < pmax(q))];
+      const own = p.hero !== 'hasan', up = [...(own && lv(p, 'sig') < MAXL ? ['sig'] : []), ...(own && p.sigEvo && lv(p, p.sigEvo) < MAXL ? [p.sigEvo] : []), ...sharedW(p).filter((w) => lv(p, w) < MAXL), ...ownedP(p).filter((q) => lv(p, q) < pmax(q))];
       const got = []; for (let k = 0; k < 2 && up.length; k++) { const w = up.splice(Math.floor(h2(S.steps + k * 5, p.id) * up.length), 1)[0]; p.items[w]++; got.push(w); }
       if (!got.length) { const gl = Object.keys(GIFTS); for (let k = 0; k < 3; k++) { const g = gl[Math.floor(h2(S.steps + k * 7, p.id + 5) * gl.length)]; p.gifts[g] = gift(p, g) + 1; got.push(g); } }   // all maxed: three gifts
       ev(S, { k: 'fission', pid: p.id, x: p.x, y: p.y, ids: got }); }
@@ -1287,8 +1328,8 @@
   // a level-up: +1 level to something owned, or something new while a slot is free (locked weapons stay out until the meta opens them)
   function rollPick(S, p) {
     const cand = [];
-    if (!p.sigEvo && lv(p, 'sig') < MAXL) cand.push(['sig', 4]);
-    if (p.sigEvo && lv(p, p.sigEvo) < MAXL) cand.push([p.sigEvo, 4]);
+    if (p.hero !== 'hasan' && !p.sigEvo && lv(p, 'sig') < MAXL) cand.push(['sig', 4]);           // Хасан's mustaches level at the barber
+    if (p.hero !== 'hasan' && p.sigEvo && lv(p, p.sigEvo) < MAXL) cand.push([p.sigEvo, 4]);
     for (const id of Object.keys(WEAPONS)) { const l = lv(p, id); if (l) { if (l < MAXL && !isFused(p, id)) cand.push([id, 3]); }
       else if (!WEAPONS[id].from && usedW(p) < MAXW && unlocked(S, id) && S.spor !== 'pacifist') cand.push([id, WEAPONS[id].map === S.map ? 2.2 : 1.4]); }   // the town's own items show up more
     for (const id of Object.keys(PASSIVES)) { const q = PASSIVES[id]; if (q.hero && q.hero !== p.hero) continue; const l = lv(p, id);
@@ -1330,7 +1371,7 @@
     for (const [x, y] of LAMPS) if (onPave(x, y) && dist(x, y, C[0], C[1]) < 200) f.push('lamp in plaza centre'); };
 
   root.SIM = { DT, L, VIEW, WORLD, HINT, C, PLAZA, PATHS, SUBS, PROPS, SOLIDS, POND, LAMPS, WALLS, LV, HEROES, ORDER, ETYPES, UPG, QCD, LEHA_GUNS, WAVE_LEN, BREAK, WAVES,
-    MAPS, MAPN, SPORS, QUESTS, DOOR, useMap, scoreX, PHOTOCARDS, debugHitRaw: debugHit, GUNS, GATT, shopList, priceOf, whyNot, CUTS, lineDur, startBoss, HOLE_R, hotCell, LAS_W, LAS_GROUND, RING_GAP,
+    MAPS, MAPN, SPORS, QUESTS, DOOR, useMap, scoreX, PHOTOCARDS, debugHitRaw: debugHit, GUNS, GATT, shopList, priceOf, whyNot, trimPos, CUT_W, MUST_MAX, CUTS, lineDur, startBoss, HOLE_R, hotCell, LAS_W, LAS_GROUND, RING_GAP,
     onPave, inGas, collide, cardFor, kettleCards, recalc, lv, create, spawn, respawn, outOfPlay, step, at, scriptInput, demoCheck, selfCheck, botInput };
   if (typeof module !== 'undefined') module.exports = root.SIM;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,5 +1,5 @@
 const { encode, decode, roomCode, lobbyId } = require('./wire.cjs');
-const GAME = 'friendpocalypse', PROTOCOL = 'steam-2';
+const GAME = 'friendpocalypse', PROTOCOL = 'steam-3';
 class SteamNet {
   constructor(steam, emit) {
     this.steam = steam; this.emit = emit; this.connections = new Map(); this.members = new Set();

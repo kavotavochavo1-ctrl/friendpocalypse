@@ -23,7 +23,7 @@
   const ET = Object.keys(SIM.ETYPES), r1 = (v) => Math.round(v), r2 = (v) => Math.round(v * 100) / 100;
   const HN = ['hasan', 'danil', 'vitya', 'leha'];
   const PF = ['id', 'hero', 'bot', 'x', 'y', 'vx', 'vy', 'fx', 'fy', 'ax', 'ay', 'dir', 'dist', 'hp', 'hpMax', 'down', 'downT', 'revP', 'out', 'inv', 'hurtT',
-    'qa', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo', 'nick', 'petN', 'sigEvo', 'rerolls', 'inBus', 'nat', 'rootT', 'slowT', 'crisisT', 'shells', 'gun', 'shop', 'nadeT'];
+    'qa', 'qT', 'qCD', 'ult', 'ultT', 'tier', 'lastAtk', 'buffT', 'selfRes', 'ack', 'evo', 'nick', 'petN', 'sigEvo', 'rerolls', 'inBus', 'nat', 'rootT', 'slowT', 'crisisT', 'shells', 'gun', 'shop', 'nadeT', 'must', 'mustR', 'trim'];
   // enemies go as two kinds of rows: FAST (every snapshot: id, x, y, vx, vy, hp, dist, hitT, face) and SLOW (type, hpMax and the effect timers —
   // sent only when they change for this friend, or every SLOW_EVERY snapshots as a resync). A crowd costs ~7 numbers per enemy, not 20.
   const EF = 9, SLOW_EVERY = 40, SF = 11;
@@ -52,7 +52,7 @@
     return { t: S.t, wave: S.wave, waveT: r2(S.waveT), brk: r2(S.brk), xp: S.xp, lvl: S.lvl, xpNext: S.xpNext, kills: S.kills, over: S.over, won: S.won,
       awards: S.awards, comboT: S.comboT, solo: S.solo, kettleBy: S.kettleBy, players, E, ES: ES2, G, B, EB, clouds: S.clouds, zones: S.zones, marks: S.marks, ev, dots: enemyDots,
       pause: S.pause, pend: S.pend, clear: S.clear, clearT: r2(S.clearT), left: S.enemies.length,
-      cards: S.cards, dealer: S.dealer, boss: S.boss && Object.assign({}, S.boss, { hits: 0, said: 0 }), cut: S.cut, traps: S.traps, bossWave: S.bossWave,
+      cards: S.cards, dealer: S.dealer, barber: S.barber, boss: S.boss && Object.assign({}, S.boss, { hits: 0, said: 0 }), cut: S.cut, traps: S.traps, bossWave: S.bossWave,
       map: S.map, bus: S.bus, endless: S.endless, home: S.home, score: S.score, drinks: S.drinks, kioskNext: S.kioskNext, spor: S.spor, daily: S.daily,
       chests: S.chests.map((c) => ({ id: c.id, x: r1(c.x), y: r1(c.y) })), food: S.food.filter((f) => nearP(f.x, f.y)).map((f) => ({ id: f.id, x: r1(f.x), y: r1(f.y) })) };
   }
@@ -356,7 +356,7 @@
       if (fresh) { say(r.nick + ' зашёл в комнату'); act.ping.send({ t: performance.now() }, { target: peerId }); }
       sendRoster(); render();
       if (window.GAME.state() && NET.started && fresh) lateJoin(peerId, r); };
-    act.input.onMessage = (d, { peerId }) => { const pid = peerToPid[peerId]; if (pid === undefined) return; const prev = remote[pid] || {}; if (d.ss) ackSnap[pid] = Math.max(ackSnap[pid] || 0, d.ss); remote[pid] = Object.assign(d, { slot: d.slot || prev.slot || 0 }); };
+    act.input.onMessage = (d, { peerId }) => { const pid = peerToPid[peerId]; if (pid === undefined) return; const prev = remote[pid] || {}; if (d.ss) ackSnap[pid] = Math.max(ackSnap[pid] || 0, d.ss); remote[pid] = Object.assign(d, { slot: d.slot || prev.slot || 0, trim: d.trim || prev.trim || 0 }); };
     setInterval(() => { if (NET.mode !== 'host' || NET.started) return; for (const r of roster) if (!r.self) act.ping.send({ t: performance.now() }, { target: r.peer }); sendRoster(); }, 1000);
     render();
   }
@@ -388,7 +388,7 @@
   }
 
   // ---------------- per-frame hooks used by index.html ----------------
-  NET.inputs = (local) => { const out = { 0: local }; for (const pid in remote) { out[pid] = Object.assign({}, remote[pid]); ackOf[pid] = remote[pid].seq || 0; remote[pid].slot = 0; } return out; };
+  NET.inputs = (local) => { const out = { 0: local }; for (const pid in remote) { out[pid] = Object.assign({}, remote[pid]); ackOf[pid] = remote[pid].seq || 0; remote[pid].slot = 0; remote[pid].trim = 0; } return out; };
   const inflight = {}, snapSq = {}, ackSnap = {};
   NET.hostTick = async (S) => { const now = performance.now(); if (now - lastSnap < 1000 / SNAP_HZ) return; lastSnap = now;
     for (const peer in peerToPid) { if (peer === selfId) continue; const pid = peerToPid[peer];
@@ -400,11 +400,11 @@
   let lastIn = 0, latch = {};
   // ---- client: numbered input + local prediction of the own hero (moves at once; the host's answer reconciles it) ----
   let lastSent = '', lastSq = 0;
-  NET.clientInput = (inp) => { for (const k of ['q', 'r', 'e']) if (inp[k]) latch[k] = 1; if (inp.slot) latch.slot = inp.slot;
+  NET.clientInput = (inp) => { for (const k of ['q', 'r', 'e']) if (inp[k]) latch[k] = 1; if (inp.slot) latch.slot = inp.slot; if (inp.trim) latch.trim = inp.trim;
     predict(inp);
     if (!act.input) return;
     const d = { left: inp.left ? 1 : 0, right: inp.right ? 1 : 0, up: inp.up ? 1 : 0, down: inp.down ? 1 : 0 };
-    for (const k of ['q', 'r', 'e']) d[k] = inp[k] || latch[k] ? 1 : 0; d.slot = latch.slot || 0;
+    for (const k of ['q', 'r', 'e']) d[k] = inp[k] || latch[k] ? 1 : 0; d.slot = latch.slot || 0; d.trim = latch.trim || 0;
     const key = JSON.stringify(d), now = performance.now();
     if (key === lastSent && now - lastIn < 1000 / IN_HZ) return;                     // unchanged: heartbeat only
     lastIn = now; lastSent = key; latch = {}; d.seq = ++seq; d.ss = lastSq; if (LAG) setTimeout(() => act.input.send(d), LAG); else act.input.send(d);
@@ -413,7 +413,7 @@
   function predict(inp) {
     const me = meSnap(), now = performance.now(); if (!me) return;
     // level-up pause: the world (and you) stand still — sit on the host's position, or reconcile re-adds the same offset every snapshot
-    const b = snaps[snaps.length - 1]; if (pred && b.S.pause) { pred.x = me.x; pred.y = me.y; pred.vx = pred.vy = 0; corr = [0, 0]; hist = []; lastPred = now; return; }
+    const b = snaps[snaps.length - 1]; if (pred && (b.S.pause || me.trim)) { pred.x = me.x; pred.y = me.y; pred.vx = pred.vy = 0; corr = [0, 0]; hist = []; lastPred = now; return; }
     if (!pred || me.down || me.out) { pred = { x: me.x, y: me.y, vx: 0, vy: 0, dist: me.dist || 0, dir: me.dir || 0 }; hist = []; corr = [0, 0]; lastPred = now; return; }
     let dt = Math.min(0.1, (now - lastPred) / 1000); lastPred = now;
     const H = SIM.HEROES[me.hero], spd = H.spd * ((me.m && me.m.spd) || 1) * (me.hero === 'leha' ? 1 - 0.04 * (me.tier || 0) : 1);

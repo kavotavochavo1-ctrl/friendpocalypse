@@ -240,6 +240,13 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         for (let j = 0; j < 5; j++) L.glow(x - ww / 2 + ww * (0.575 + j * 0.037), y - hh + hh * (0.48 - 0.008 * j + 0.012 * Math.sin(j * 1.7)), 14, [1, 0.85, 0.5], 0.55 + 0.2 * Math.sin(GT * 4 + j), 2);
         const near = me.hero === 'leha' && Math.hypot(me.x - Dl.x, me.y - Dl.y) < 140, s2 = me.hero === 'leha' ? (near ? (me.shop ? '' : 'E — ЧЁРНЫЙ РЫНОК') : 'БАРЫГА') : 'БАРЫГА (для Лёхи)';
         if (s2 && hudFree(x, y - hh - 20)) lab('dlr', s2, x, y - hh - 20 + 4 * Math.sin(GT * 3), { size: 22, al: 0.5, col: near ? '#9fffa0' : '#ffd76a', font: FONT }); }]); }
+    // «Барбершоп»: Хасан's stop this wave
+    if (ST.barber && vis(ST.barber.x, ST.barber.y, 400)) { const Bb = ST.barber;
+      Y.push([Bb.y, () => { const x = sx(Bb.x), y = sy(Bb.y), ww = 300, hh = L.hsz ? ww * G.tex('barber').h / G.tex('barber').w : 300, arr = SS(0, 0.6, GT - Bb.t0);
+        L.shadow(x, y - 4, ww * 0.42, 26, 0.55 * arr); L.sprite('barber', x - ww / 2, y - hh + (1 - arr) * 30, { w: ww, h: hh, u: Object.assign(shade(x, y - 80), { alpha: arr }) });
+        L.glow(x + ww * 0.05, y - hh * 0.32, 80, [1, 0.8, 0.5], (0.3 + 0.1 * Math.sin(GT * 3)) * arr, 2);
+        const s2 = me.hero === 'hasan' ? (me.trim ? '' : 'БАРБЕРШОП — зайди!') : 'БАРБЕРШОП (для Хасана)';
+        if (s2 && hudFree(x, y - hh - 20)) lab('bbr', s2, x, y - hh - 20 + 4 * Math.sin(GT * 3), { size: 22, al: 0.5, col: '#ffd76a', font: FONT }); }]); }
     // the PAZik: parked with its door open, a glow and the head count over it
     if (ST.bus && vis(ST.bus.x, ST.bus.y, 600)) { const b = ST.bus;
       Y.push([b.y, () => { const [bw, bh] = sz('bus_paz'), x = sx(b.x), y = sy(b.y) + 1.5 * Math.sin(GT * 30) * SS(1.2, 0, GT - b.t0), dx = x + SIM.DOOR[0], dy = y + SIM.DOOR[1];
@@ -287,7 +294,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         if (e.hp < e.hpMax && (e.elite || T.sc >= 1.5 || GT - e.hitT < 1.5)) { const bw = 44 * Math.max(1, T.sc * 0.8); L.solid(x - bw / 2 - 2, y - h - 10, bw + 4, 8, [0.08, 0.03, 0.04]); L.solid(x - bw / 2, y - h - 8, bw * Math.max(0, e.hp / e.hpMax), 4, [0.95, 0.22, 0.32]); }
       }]); }
     // players
-    for (const p of ST.players) { if (p.out || p.inBus || p.nat || !vis(p.x, p.y, 160)) continue;
+    for (const p of ST.players) { if (p.out || p.inBus || p.nat || p.trim || !vis(p.x, p.y, 160)) continue;
       Y.push([p.y, () => { drawHero(p, sx(p.x), sy(p.y), GT, t, p.id === me.id, shade, ST); if (GT < (p.rootT || 0) && ST.boss) spr('trap_shut', sx(p.x) + 8, sy(p.y) - 10, 54, 40); }]);
       // «Прикрыл!»: a riot shield held in front — behind him when he walks up, an edge-on slab when he walks sideways
       if (p.hero === 'leha' && !p.down && GT - p.qT < 4 + ((p.m && p.m.shield) || 0)) { const qa = GT - p.qT, dur = 4 + ((p.m && p.m.shield) || 0), up = SS(0, 0.15, qa) * SS(dur, dur - 0.3, qa);
@@ -709,6 +716,24 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
         Object.assign({ size: 15, col: why === 'МАЛО ГИЛЬЗ' ? '#ff7a6a' : why === 'КУПЛЕНО' ? '#9fffa0' : why ? '#8a7a6a' : sale ? '#ff9a6a' : '#ffe066' }, F)); });
   }
 
+  // ---- «Барбершоп»: Хасан in the chair — scissors sweep over his mustache, Space on the red mark ----
+  let trimSeen = null;
+  S.trimAt = () => trimSeen;                                   // where the scissors are on this screen (index.html sends it with Space)
+  function drawTrim(ST, me, GT, F) {
+    const c = me.trim, pos = SIM.trimPos(c, GT), w = 1000, h = 206, x0 = W / 2 - w / 2, y0 = H / 2 - 110, n = me.must || 1;
+    trimSeen = pos;
+    panel('trim', x0 - 40, y0 - 170, w + 80, h + 290, 0.94);
+    lab('trt', 'БАРБЕРШОП: подрежь усы!', W / 2, y0 - 128, Object.assign({ size: 34, al: 0.5, col: '#ffd76a' }, F));
+    const mx = x0 + c.mark * w, mw = (c.width || SIM.CUT_W) * 2 * w;
+    L.rrect(mx - mw / 2, y0 - 24, mw, h + 48, 8, [1, 0.3, 0.25], [0.75, 0.1, 0.1], 0.35 + 0.12 * Math.sin(GT * 8));
+    L.sprite('bb_must', x0, y0, { w, h });
+    L.solid(mx - 2, y0 - 34, 4, h + 68, [1, 0.9, 0.35], 0, 0, 0, 0.9);
+    const sw = 110, sh = sw * G.tex('bb_scis').h / G.tex('bb_scis').w, px = x0 + Math.max(0, Math.min(1.08, pos)) * w;
+    L.sprite('bb_scis', px - sw / 2, y0 + h * 0.55 - sh, { w: sw, h: sh });
+    lab('trh', pos < 0 ? 'Готовься…' : 'ПРОБЕЛ — стричь!', W / 2, y0 + h + 56, Object.assign({ size: 30, al: 0.5, col: pos < 0 ? '#9fd0ff' : '#ffffff' }, F));
+    lab('trn', `Усов: ${n} · точно — ${Math.min(SIM.MUST_MAX, n + 1)} и дальше, мимо — ${Math.max(1, n - 1)} и ближе`, W / 2, y0 + h + 96, Object.assign({ size: 17, al: 0.5, col: '#c8b8a0' }, F));
+  }
+
   // ---- the build panel: Tab (held) or while choosing an upgrade — weapons, passives and what the hero does ----
   function drawBuild(ST, me, GT, F) {
     const U = SIM.UPG, it = me.items || {}, fused = me.fused || [], inF = (k) => fused.some((f) => f.includes(k)), pick = !!me.pick;
@@ -738,6 +763,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     const HI = U.HINFO[me.hero];
     wrap(HI.role, 27).slice(0, 3).forEach((ln, j) => lab('bhr' + j, ln, cx3, y0 + 82 + j * 17, Object.assign({ size: 15, col: '#f6e7c8' }, F)));
     row('bhq', cx3, y0 + 132, 'ic_' + me.hero + '_q', 'Q', 0, 0, HI.q, '#ffd76a'); row('bhu', cx3, y0 + 190, 'ic_' + me.hero + '_r', 'R', 0, 0, HI.r, '#ffd76a');
+    if (me.hero === 'hasan') lab('bhs', `Усы: ${me.must || 1} из ${SIM.MUST_MAX} · дальность +${8 * (me.mustR || 0)}% · растут в барбершопе`, cx3, y0 + 254, Object.assign({ size: 14, col: '#ffe066' }, F));
     if (me.hero === 'leha') { const g = me.gun || 0; lab('bhl', `Гильзы: ${me.shells || 0} · ${SIM.GUNS[g].n}, обвес:`, cx3, y0 + 254, Object.assign({ size: 14, col: '#ffe066' }, F));
       [...SIM.GATT[g], { id: 'vest', icon: 'mk_vest', max: 3 }].forEach((a, j) => { const l = (me.att && me.att[a.id]) || 0; L.sprite(a.icon, cx3 + j * 80, y0 + 266, { w: 32, h: 32, u: { grade: l ? [1, 1, 0, 1] : [0.4, 0.35, 0, 1] } });
         if (a.max) for (let q = 0; q < a.max; q++) L.solid(cx3 + j * 80 + 36, y0 + 270 + q * 9, 10, 5, q < l ? [1, 0.85, 0.35] : [0.3, 0.2, 0.2]); }); }
@@ -779,6 +805,7 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
       for (let i = 0; i < 4; i++) slot(266 + i * 56, ps[i] ? [ps[i]] : null); }
     if (me.hero === 'danil') { const N = SIM.PHOTOCARDS.length, n = (me.album || []).length;               // the photocard album, at a glance
       for (let k = 0; k < N; k++) { if (k < n) L.sprite('pc_' + me.album[k], 300 + k * 22, 136, { w: 18, h: 26 }); else L.rrect(300 + k * 22, 138, 16, 24, 3, [0.25, 0.17, 0.2], [0.17, 0.1, 0.13]); } }
+    if (me.hero === 'hasan') { L.sprite('bb_must', 300, 140, { w: 60, h: 12 }); lab('mst', '×' + (me.must || 1), 366, 150, Object.assign({ size: 16, col: '#f6e7c8' }, F)); }
     if (me.hero === 'leha') { lab('gun', SIM.LEHA_GUNS[GT - me.ultT < 7 ? 4 : me.tier || 0], 300, 150, Object.assign({ size: 18, col: '#c9d68a' }, F));
       L.sprite('mk_shells', 430, 136, { w: 24, h: 24 }); lab('shl', String(me.shells || 0), 458, 150, Object.assign({ size: 16, col: '#ffe066' }, F)); }
     // ---- allies (left column) ----
@@ -819,17 +846,20 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     for (const [x0, y0, x1, y1] of SIM.WALLS || []) L.rrect(MX + x0 * ks, MY + y0 * ks, (x1 - x0) * ks, (y1 - y0) * ks, 2, [0.55, 0.5, 0.45], [0.4, 0.35, 0.3]);
     { const [px, py, rx, ry] = SIM.POND; L.rrect(MX + (px - rx) * ks, MY + (py - ry) * ks, rx * 2 * ks, ry * 2 * ks, ry * ks, [0.15, 0.3, 0.35], [0.1, 0.22, 0.28]); }
     if (SIM.LV.KIOSK && ST.wave >= (ST.kioskNext ?? 3) && !ST.bus) L.solid(MX + SIM.LV.KIOSK[0] * ks - 4, MY + SIM.LV.KIOSK[1] * ks - 4, 8, 8, [0.4, 1, 0.75]);
+    if (ST.barber) L.rrect(MX + ST.barber.x * ks - 6, MY + ST.barber.y * ks - 6, 12, 12, 3, [0.95, 0.35, 0.35], [0.3, 0.4, 0.95], 0.6 + 0.4 * Math.sin(GT * 6));
     if (ST.dealer) L.rrect(MX + ST.dealer.x * ks - 6, MY + ST.dealer.y * ks - 5, 12, 10, 3, [1, 0.8, 0.3], [0.8, 0.5, 0.1], 0.6 + 0.4 * Math.sin(GT * 6));
     if (ST.bus) L.rrect(MX + ST.bus.x * ks - 9, MY + ST.bus.y * ks - 6, 18, 10, 3, [1, 0.85, 0.3], [0.9, 0.5, 0.2], 0.6 + 0.4 * Math.sin(GT * 6));
     if (ST.dots) for (const d of ST.dots) L.solid(MX + d[0] * 8 * ks - 1.5, MY + d[1] * 8 * ks - 1.5, 3, 3, [0.95, 0.25, 0.3]);
     else for (const e of ST.enemies) L.solid(MX + e.x * ks - 1.5, MY + e.y * ks - 1.5, 3, 3, [0.95, 0.25, 0.3]);
     for (const p of ST.players) if (!p.out && !p.inBus) { const c = p.id === me.id ? [0.4, 1, 0.4] : hcol(p.hero); L.solid(MX + p.x * ks - 4, MY + p.y * ks - 4, 8, 8, p.down && Math.floor(GT * 4) % 2 ? [1, 0.2, 0.2] : c, Math.PI / 4, 4, 4); }
     L.rrect(MX + me.cam[0] * ks, MY + me.cam[1] * ks, W * ks, H * ks, 2, [1, 1, 1], [1, 1, 1], 0.08);
-    if (ST.dealer && me.hero === 'leha' && !me.down && !ST.over && SIM.shopList(me).some((it) => it.k !== 'med' && it.k !== 'nades' && !SIM.whyNot(ST, me, it))) { const bx = sx(ST.dealer.x), by = sy(ST.dealer.y) - 80;
+    const offArrow = (wx, wy, slot, name) => { const bx = sx(wx), by = sy(wy) - 80;
       if (bx < 40 || bx > W - 40 || by < 40 || by > H - 40) { const a = Math.atan2(by - H / 2, bx - W / 2), r = Math.min((W / 2 - 90) / Math.abs(Math.cos(a) || 1e-3), (H / 2 - 90) / Math.abs(Math.sin(a) || 1e-3));
         const ax = W / 2 + Math.cos(a) * r, ay2 = H / 2 + Math.sin(a) * r, pu = 0.7 + 0.3 * Math.sin(GT * 6);
         L.glow(ax, ay2, 46, [1, 0.8, 0.3], 0.45 * pu, 2); L.solid(ax - 22, ay2 - 7, 44, 14, [1, 0.8, 0.3], a, 22, 7, pu); L.solid(ax + Math.cos(a) * 16 - 12, ay2 + Math.sin(a) * 16 - 12, 24, 24, [1, 0.8, 0.3], a + Math.PI / 4, 12, 12, pu);
-        lab('dlar', 'БАРЫГА', ax - Math.cos(a) * 58, ay2 - Math.sin(a) * 38, Object.assign({ size: 15, al: 0.5, col: '#ffd76a' }, F)); } }
+        lab(slot, name, ax - Math.cos(a) * 58, ay2 - Math.sin(a) * 38, Object.assign({ size: 15, al: 0.5, col: '#ffd76a' }, F)); } };
+    if (ST.dealer && me.hero === 'leha' && !me.down && !ST.over && SIM.shopList(me).some((it) => it.k !== 'med' && it.k !== 'nades' && !SIM.whyNot(ST, me, it))) offArrow(ST.dealer.x, ST.dealer.y, 'dlar', 'БАРЫГА');
+    if (ST.barber && me.hero === 'hasan' && !me.down && !me.trim && !ST.over) offArrow(ST.barber.x, ST.barber.y, 'bbar', 'БАРБЕРШОП');
     // ---- the bus is off-screen: an arrow at the edge points to it ----
     if (ST.bus && !me.inBus && !me.out && !ST.over) { const bx = sx(ST.bus.x), by = sy(ST.bus.y) - 80;
       if (bx < 40 || bx > W - 40 || by < 40 || by > H - 40) { const a = Math.atan2(by - H / 2, bx - W / 2), r = Math.min((W / 2 - 70) / Math.abs(Math.cos(a) || 1e-3), (H / 2 - 70) / Math.abs(Math.sin(a) || 1e-3));
@@ -923,6 +953,11 @@ void main(){ vec2 d = v_uv * 2.0 - 1.0; float r = length(d); if (r > 1.0) discar
     if (!ST.over) drawBossHUD(ST, me, GT, sx, sy, F);
     if (BR) drawBuild(ST, me, GT, F);
     if (me.shop && ST.dealer && !me.pick && !ST.over && !ST.cut) drawShop(ST, me, GT, F);
+    trimSeen = null; if (me.trim && !me.pick && !ST.over && !ST.cut) drawTrim(ST, me, GT, F);
+    { const tr = [...ST.ev].reverse().find((v) => v.k === 'trim' && v.pid === me.id && GT - v.t < 2.4 && GT >= v.t);
+      if (tr) { const a = GT - tr.t, k = SS(0, 0.15, a) * SS(2.4, 1.9, a), s2 = tr.ok ? `ИДЕАЛЬНО! Усов: ${tr.n}, бьют дальше` : `ПОРЕЗАЛ! Усов: ${tr.n}, бьют ближе`;
+        const tw = labW('trb', s2, Object.assign({ size: 40 }, F)); L.rrect(W / 2 - tw / 2 - 40, H * 0.3 - 42, tw + 80, 84, 16, tr.ok ? [0.12, 0.42, 0.16] : [0.5, 0.06, 0.06], tr.ok ? [0.05, 0.2, 0.08] : [0.25, 0.02, 0.03], 0.88 * k);
+        L.uiBox('trb', W / 2 - tw / 2 - 40, H * 0.3 - 42, tw + 80, 84); lab('trb', s2, W / 2, H * 0.3, Object.assign({ size: 40, al: 0.5, col: tr.ok ? '#b8ffb0' : '#ffd0c8', a: k }, F)); } }
     if (ST.cut && !ST.over) drawCut(ST, F);
     // demo caption
   }
