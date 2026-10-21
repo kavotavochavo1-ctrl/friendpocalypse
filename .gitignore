@@ -1,0 +1,9 @@
+node_modules/
+release/
+package/
+*.tgz
+.vendor-source/
+.qa/
+vendor/*.dll
+vendor/**/*.dll
+.audit-steam/

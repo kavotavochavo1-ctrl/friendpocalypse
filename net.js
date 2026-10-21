@@ -3,6 +3,8 @@
 // Client: sends its input (30 Hz, presses latched so quick taps are never lost) and renders snapshots interpolated by id.
 // Rooms are links: ?room=CODE. Whoever creates the room hosts; up to 8 players; free hero slots can be bots.
 (function () {
+  const STEAM = !!window.FP_STEAM;
+  let connecting = false;
   const LAG = +new URLSearchParams(location.search).get('lag') || 0;        // dev: ?lag=120 adds 120 ms each way on a client (to test prediction)
   const APP = 'friendpocalypse-v1', SNAP_HZ = 20, IN_HZ = 30, TRYSTERO = 'https://cdn.jsdelivr.net/npm/trystero@0.26.0/+esm';
   const HEROES = ['hasan', 'danil', 'vitya', 'leha'], NAMES = { hasan: 'Хасан', danil: 'Данил', vitya: 'Витя', leha: 'Лёха' };
@@ -37,7 +39,7 @@
       row[PF.indexOf('hero')] = HN.indexOf(o.hero); row[PF.indexOf('ack')] = ackOf[o.id] || 0;
       return [row, [r2(o.m.area), r2(o.m.cd), r2(o.m.shield), r2(o.m.spd)], o.album, o.id === pid ? o.pick : 0, o.id === pid ? o.cam.map(r1) : 0, o.id === pid ? o.items : 0, o.id === pid ? o.fused : 0, o.id === pid ? o.gifts : 0, o.id === pid ? o.att : 0]; });
     let cache = slowSent[pid]; if (!cache || cache.S !== S) cache = slowSent[pid] = { S, m: new Map(), n: 0 };
-    const full = cache.n++ % SLOW_EVERY === 0, E = [], ES2 = [];
+    const full = STEAM || cache.n++ % SLOW_EVERY === 0, E = [], ES2 = [];
     for (const e of S.enemies) { if (!nearP(e.x, e.y)) continue; E.push(e.id, r1(e.x), r1(e.y), r1(e.vx), r1(e.vy), r1(e.hp), r1(e.dist % 10000), r2(e.hitT), e.face);
       const sr = slowRow(e), key = sr.join(','); if (full || cache.m.get(e.id) !== key) { cache.m.set(e.id, key); ES2.push(e.id, ...sr); } }
     if (cache.m.size > 600) for (const id of cache.m.keys()) { if (!S.enemies.some((e) => e.id === id)) cache.m.delete(id); }
@@ -149,17 +151,18 @@
     roster.filter((r) => r.hero === h).map((r) => `<span>${esc(r.nick || '?')}</span>`).join('')}</div><img src="assets/portrait_${h}.png"><b>${NAMES[h]}</b><small>${DESC[h]}</small></div>`).join('');
   function shell() {
     const inRoom = NET.mode !== 'off', isHost = NET.mode === 'host';
-    const link = location.origin + location.pathname + '?room=' + (NET.code || '');
+    const link = STEAM ? NET.code || '' : location.origin + location.pathname + '?room=' + (NET.code || '');
     el.innerHTML = `<div class="box ${inRoom ? 'room' : ''}"><h1>FRIENDPOCALYPSE</h1>
-      <div class="sub">${!inRoom ? 'Выбери героя и ник' : isHost ? `Комната <span class="code">${NET.code}</span> — ты хост. Кинь друзьям ссылку или код.` : `Комната <span class="code">${esc(NET.code)}</span>`}</div>
+      <div class="sub">${!inRoom ? 'Выбери героя и ник' : isHost ? `Комната <span class="code">${esc(NET.code)}</span> — ты хост. ${STEAM ? 'Отправь код или приглашение Steam.' : 'Кинь друзьям ссылку или код.'}` : `Комната <span class="code">${esc(NET.code)}</span>`}</div>
+      ${STEAM ? '<div id="steam-panel"></div>' : ''}
       <div class="row" style="margin-top:0"><label>Ник: <input id="nick" maxlength="12" value="${esc(NET.nick)}" style="min-width:160px;flex:0 1 200px"></label>
-        ${isHost ? `<input id="lnk" readonly value="${esc(link)}"><button id="cp" class="alt">Копировать ссылку</button>` : ''}</div>
+        ${isHost ? `<input id="lnk" aria-label="Код комнаты" readonly value="${esc(link)}"><button id="cp" class="alt">${STEAM ? 'Копировать код' : 'Копировать ссылку'}</button>` : ''}</div>
       <div class="heroes" id="heroes" style="margin-top:14px"></div>
       ${inRoom ? `<div class="plist" id="plist"></div><div class="status" id="status"></div>
         <div class="row"><button id="rdy" class="big"></button>${isHost ? `<label><input type="checkbox" id="bots" ${NET.bots ? 'checked' : ''} style="min-width:0;flex:0"> Боты на свободных героях</label><button id="go" class="big ok"></button>` : ''}
           <button id="alm" class="alt">Альманах</button><button id="rec" class="alt">Рекорды</button><button id="opts" class="alt">Настройки</button><button id="leave" class="alt">Выйти</button></div>`
       : `<div class="row"><button id="solo" class="big">Играть (с ботами)</button><button id="soloalone" class="alt">Соло без ботов</button><button id="mk" class="alt">Создать комнату для друзей</button><button id="alm" class="alt">Альманах</button><button id="rec" class="alt">Рекорды</button><button id="opts" class="alt">Настройки</button></div>
-        <div class="row"><input id="code" maxlength="5" placeholder="КОД КОМНАТЫ ОТ ДРУГА" style="text-transform:uppercase;flex:0 1 260px"><button id="join" class="alt">Войти в комнату</button></div>`}
+        <div class="row"><input id="code" aria-label="Код комнаты от друга" maxlength="${STEAM ? 64 : 5}" placeholder="${STEAM ? 'STEAM-КОД FP-…' : 'КОД КОМНАТЫ ОТ ДРУГА'}" style="text-transform:uppercase;flex:0 1 300px"><button id="join" class="alt">Войти в комнату</button></div>`}
       <div class="row" id="rules"></div>
       <div class="note">WASD — бег · Q — способность · R — ульта · E — ларёк / встать · 1/2/3 — улучшение · M — музыка · F3 — пинг и FPS</div></div>`;
     const $ = (id) => el.querySelector('#' + id);
@@ -167,15 +170,26 @@
     $('nick').onkeydown = (e) => e.stopPropagation();
     if ($('solo')) $('solo').onclick = () => startLocal(false);
     if ($('soloalone')) $('soloalone').onclick = () => startLocal(true);
-    if ($('mk')) $('mk').onclick = () => host();
+    if ($('mk')) $('mk').onclick = () => connectRoom(() => host());
     $('opts').onclick = () => SETTINGS.show(); $('alm').onclick = () => almanac(true); $('rec').onclick = () => records(true);
-    if ($('join')) { const go = () => { const c = $('code').value.trim().toUpperCase(); if (c.length >= 4) client(c); else say('Код комнаты — 5 символов'); };
+    if ($('join')) { const go = () => { const c = $('code').value.trim(); if (c.length >= 4) connectRoom(() => client(STEAM ? c : c.toUpperCase())); else say(STEAM ? 'Вставь Steam-код комнаты вида FP-…' : 'Код комнаты — 5 символов'); };
       $('join').onclick = go; $('code').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') go(); }; }
-    if ($('cp')) $('cp').onclick = () => { navigator.clipboard.writeText(link).then(() => say('Ссылка скопирована — кидай друзьям')); };
+    if ($('cp')) $('cp').onclick = () => { navigator.clipboard.writeText(link).then(() => say(STEAM ? 'Код скопирован — отправь друзьям' : 'Ссылка скопирована — кидай друзьям')).catch(() => say('Выдели и скопируй код из поля')); };
     if ($('bots')) $('bots').onchange = (e) => { NET.bots = e.target.checked; sendRoster(); };
     if ($('go')) $('go').onclick = () => { if (allReady()) hostStart(); };
     if ($('rdy')) $('rdy').onclick = () => { NET.ready = !NET.ready; if (isHost && me()) { me().ready = NET.ready ? 1 : 0; sendRoster(); } else hello(); dyn(); };
     if ($('leave')) $('leave').onclick = () => { try { room && room.leave(); } catch (e) {} location.href = location.pathname; };
+    if (STEAM) SteamUI.mount();
+  }
+  async function connectRoom(fn) {
+    if (connecting) return;
+    connecting = true;
+    try { await fn(); }
+    catch (e) {
+      try { await room?.leave(); } catch {} room = null; act = {}; roster = []; peerToPid = {}; remote = {};
+      NET.mode = 'off'; NET.hostPeer = null; NET.started = false; NET.open = true; screen = ''; render();
+      say(e.message || String(e), 0);
+    } finally { connecting = false; }
   }
   const netCls = (r) => r.host ? 'g' : r.ping == null ? 'y' : r.ping < 120 ? 'g' : r.ping < 250 ? 'y' : 'r';
   const netTxt = (r) => r.host ? 'хост' : r.ping == null ? 'подключается…' : r.ping + ' мс';
@@ -195,7 +209,7 @@
     let st = '', warn = false;
     if (!connected) { const s = Math.floor((performance.now() - (NET.joinT || performance.now())) / 1000);
       st = `Ищем хоста… ${s} с`; if (s >= 20) { warn = true; st += '<br>Не получается связаться. Проверь код, хост должен быть в этой комнате. Помогает выключить VPN или зайти с другой сети (мобильный интернет).'; } }
-    else if (roster.length <= 1) st = isHost ? 'Ждём друзей… Отправь им ссылку. Можно стартовать и одному с ботами.' : 'Ждём список игроков от хоста…';
+    else if (roster.length <= 1) st = isHost ? `Ждём друзей… Отправь им ${STEAM ? 'код или приглашение Steam' : 'ссылку'}. Можно стартовать и одному с ботами.` : 'Ждём список игроков от хоста…';
     else if (waiting.length) st = `Ждём готовности: ${waiting.join(', ')}`;
     else st = isHost ? 'Все готовы — жми СТАРТ!' : 'Все готовы — ждём, когда хост нажмёт старт';
     $('status').innerHTML = st; $('status').className = 'status' + (warn ? ' warn' : '');
@@ -220,7 +234,7 @@
     $('daily').onchange = (e) => { NET.daily = e.target.checked; $('spor').disabled = NET.daily; rules(); if (NET.mode === 'host') sendRoster(); };
     $('spor').disabled = NET.daily; rules(); }
   setInterval(() => { if (NET.open && NET.mode !== 'off') dyn(); }, 1000);                 // timers and pings tick in the room
-  const startLocal = (alone) => { NET.open = false; render(); window.GAME.start(Object.assign({ hero: NET.hero, solo: alone }, runCfg())); };
+  const startLocal = (alone) => { if (!window.GAME) { setTimeout(() => startLocal(alone), 50); return; } NET.open = false; render(); window.GAME.start(Object.assign({ hero: NET.hero, solo: alone }, runCfg())); };
 
   // ---------------- meta between runs: the almanac of recipes found + unlocked weapons (localStorage) ----------------
   NET.meta = () => { try { const m = JSON.parse(localStorage.getItem('fp_meta') || '{}'); return { found: m.found || [], unlock: m.unlock || {} }; } catch (e) { return { found: [], unlock: {} }; } };
@@ -309,24 +323,31 @@
     { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' }] };
   async function joinRoomCode(code) {
     say('Подключаюсь к комнате…', 0); NET.code = code; NET.joinT = performance.now(); render();
-    let T; try { T = await import(TRYSTERO); } catch (e) { say('Не удалось загрузить сетевой модуль — проверь интернет', 0); throw e; }
-    selfId = T.selfId;
-    room = T.joinRoom({ appId: APP, rtcConfig: RTC }, 'room-' + code);
+    if (STEAM) {
+      room = await SteamRoom.open(NET.mode === 'host', code); selfId = room.selfId; NET.code = room.code;
+    } else {
+      let T; try { T = await import(TRYSTERO); } catch (e) { say('Не удалось загрузить сетевой модуль — проверь интернет', 0); throw e; }
+      selfId = T.selfId;
+      room = T.joinRoom({ appId: APP, rtcConfig: RTC }, 'room-' + code);
+    }
     for (const n of ['hello', 'roster', 'start', 'snap', 'input', 'bye', 'ping', 'pong', 'back']) act[n] = room.makeAction(n);
     act.ping.onMessage = (d, { peerId }) => act.pong.send(d, { target: peerId });                     // everyone answers pings
     act.pong.onMessage = (d, { peerId }) => { const rtt = Math.round(performance.now() - d.t); if (NET.mode === 'client') NET.dbg.rtt = rtt;
       const r = roster.find((x) => x.peer === peerId); if (r) r.ping = rtt; };
     room.onPeerJoin = (id) => { if (NET.mode === 'client') hello(); };
     room.onPeerLeave = (id) => { if (NET.mode === 'host') { const r = roster.find((x) => x.peer === id); roster = roster.filter((x) => x.peer !== id); sendRoster(); render();
-        const pid = peerToPid[id]; if (pid !== undefined && window.GAME.state()) { const p = window.GAME.state().players.find((o) => o.id === pid); if (p) p.bot = 1; } if (r) say(esc(r.nick || NAMES[r.hero]) + ' вышел' + (NET.started ? ' — его ведёт бот' : '')); }
+        const pid = peerToPid[id]; if (pid !== undefined && window.GAME?.state()) { const p = window.GAME.state().players.find((o) => o.id === pid); if (p) p.bot = 1; }
+        delete peerToPid[id]; delete remote[pid]; delete inflight[id]; delete snapSq[id]; delete ackSnap[pid]; delete slowSent[pid];
+        if (r) say(esc(r.nick || NAMES[r.hero]) + ' вышел' + (NET.started ? ' — его ведёт бот' : '')); }
       else if (NET.mode === 'client' && id === NET.hostPeer) { hostGone = true; NET.hostPeer = null; say('Хост вышел из игры', 0); if (!NET.started) render(); } };
     say('', 1);
+    if (STEAM) { screen = ''; render(); }
   }
   // host → everyone: the roster (with the host's measured ping to each friend)
   const sendRoster = () => act.roster && act.roster.send({ bots: NET.bots ? 1 : 0, spor: NET.spor, daily: NET.daily ? 1 : 0, list: roster.map((r) => ({ peer: r.peer, hero: r.hero, nick: r.nick, ready: r.ready ? 1 : 0, host: r.host ? 1 : 0, ping: r.ping })) });
   async function host() {
     NET.code = Math.random().toString(36).slice(2, 7).toUpperCase(); NET.mode = 'host'; NET.ready = true;
-    history.replaceState(null, '', '?room=' + NET.code + '&host=1');
+    if (!STEAM) history.replaceState(null, '', '?room=' + NET.code + '&host=1');
     await joinRoomCode(NET.code);
     roster = [{ peer: selfId, hero: NET.hero, nick: NET.nick, host: 1, ready: 1, self: 1 }];
     act.hello.onMessage = (d, { peerId }) => { let r = roster.find((x) => x.peer === peerId); const fresh = !r;
@@ -340,6 +361,7 @@
     render();
   }
   function hostStart() {
+    if (!window.GAME) { setTimeout(hostStart, 50); return; }
     const heroes = roster.map((r) => r.hero), humans = roster.map((_, i) => i);
     if (NET.bots) for (const h of HEROES) if (!heroes.includes(h) && heroes.length < 8) heroes.push(h);
     const S = SIM.create(Object.assign({ heroes, humans, meta: NET.meta() }, runCfg())); S.solo = roster.length === 1 && heroes.length === 1 ? 1 : 0; S.me = 0; S.wt0 = 0;
@@ -359,7 +381,8 @@
       roster = d.list.map((r) => Object.assign(r, { self: r.peer === selfId })); render(); };
     act.start.onMessage = (d, { peerId }) => { NET.hostPeer = peerId; myPid = d.pid; NET.started = true; NET.open = false; render(); snaps = []; document.getElementById('hint').style.opacity = 0; };
     act.back.onMessage = () => { NET.started = false; NET.ready = false; snaps = []; pred = null; SCENE.state = null; NET.open = true; render(); hello(); };   // host went back to the room
-    act.snap.onMessage = async (d) => { if (LAG && !d.__lag) { setTimeout(() => act.snap.onMessage(Object.assign(d, { __lag: 1 })), LAG); return; } NET.dbg.got++; NET.dbg.bytes = d.byteLength || d.length || 0; let S; try { S = restore(await unpack(d instanceof Uint8Array ? d : new Uint8Array(d))); } catch (e) { NET.dbg.err = String(e); return; } lastSq = Math.max(lastSq, S.sq || 0); snaps.push({ at: performance.now(), S }); if (snaps.length > 3) snaps.shift(); reconcile(S); };
+    act.snap.onMessage = async (d) => { if (LAG && !d.__lag) { setTimeout(() => act.snap.onMessage(Object.assign(d, { __lag: 1 })), LAG); return; } NET.dbg.got++; NET.dbg.bytes = d.byteLength || d.length || 0; let S; try { const data = await unpack(d instanceof Uint8Array ? d : new Uint8Array(d)); if ((data.sq || 0) <= lastSq) return; S = restore(data); } catch (e) { NET.dbg.err = String(e); return; } lastSq = Math.max(lastSq, S.sq || 0); snaps.push({ at: performance.now(), S }); if (snaps.length > 3) snaps.shift(); reconcile(S); };
+    if (STEAM) await room.connect();
     hello();
     render();
   }
@@ -370,7 +393,7 @@
   NET.hostTick = async (S) => { const now = performance.now(); if (now - lastSnap < 1000 / SNAP_HZ) return; lastSnap = now;
     for (const peer in peerToPid) { if (peer === selfId) continue; const pid = peerToPid[peer];
       // backpressure: at most ~3 snapshots (~150 ms) on the wire per friend (acked through his input messages) — drop, never queue
-      if (inflight[peer] || (snapSq[peer] || 0) - (ackSnap[pid] || 0) > 3) { NET.dbg.skipped = (NET.dbg.skipped || 0) + 1; continue; }
+      if (inflight[peer] || (!STEAM && (snapSq[peer] || 0) - (ackSnap[pid] || 0) > 3)) { NET.dbg.skipped = (NET.dbg.skipped || 0) + 1; continue; }
       inflight[peer] = 1;
       try { const snap = snapshot(S, pid); snap.sq = snapSq[peer] = (snapSq[peer] || 0) + 1; evSince[pid] = S.t; const u8 = await pack(snap); NET.dbg.bytes = u8.length; NET.dbg.sent++;
         Promise.resolve(act.snap.send(u8, { target: peer })).catch(() => {}).finally(() => (inflight[peer] = 0)); } catch (e) { NET.dbg.err = String(e); inflight[peer] = 0; } } };
@@ -442,8 +465,17 @@ enemies ${S.enemies.length}` : ''); };
 
   const code = q.get('room');
   if (code && q.get('host')) { NET.mode = 'off'; history.replaceState(null, '', location.pathname); }   // a reload ends the old room
-  else if (code) client(code.toUpperCase());
+  else if (code) connectRoom(() => client(code.toUpperCase()));
   render();
   const whenGame = (f) => (window.GAME ? f() : setTimeout(() => whenGame(f), 50));     // index.html defines GAME after the assets load
+  if (STEAM) {
+    const accept = code => whenGame(() => connectRoom(async () => {
+      if (NET.mode !== 'off' || NET.started) { say('Приглашение получено. Выйди из текущей комнаты и вставь код: ' + code, 0); return; }
+      await client(code);
+    }));
+    FP_STEAM.onEvent(e => { if (e.type === 'invite') accept(e.code); if (e.type === 'error') say(e.message, 0); });
+    FP_STEAM.call('pendingInvite').then(code => { if (code) accept(code); });
+    FP_STEAM.call('status').then(s => { if (s.available && !localStorage.getItem('fp_name')) { NET.nick = cleanNick(s.name) || NET.nick; screen = ''; render(); } });
+  }
   if (q.has('play') && !code) whenGame(() => { startLocal(false); if (q.has('wave')) { const S = window.GAME.state(); S.wave = +q.get('wave'); S.lvl = 2 + S.wave * 2; } });   // ?play[&wave=N]: quick start / tests
 })();
